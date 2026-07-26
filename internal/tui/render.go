@@ -15,9 +15,10 @@ var (
 	dimStyle    = lipgloss.NewStyle().Foreground(lipgloss.Color("8"))
 	errStyle    = lipgloss.NewStyle().Foreground(lipgloss.Color("9"))
 
-	tabActiveStyle = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("12"))
-	cursorStyle    = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("12"))
-	labelStyle     = lipgloss.NewStyle().Foreground(lipgloss.Color("8"))
+	tabActiveStyle   = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("12"))
+	cursorStyle      = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("12"))
+	labelStyle       = lipgloss.NewStyle().Foreground(lipgloss.Color("8"))
+	groupHeaderStyle = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("13"))
 )
 
 // renderTabBar renders the top-level tab bar with the active tab highlighted.
@@ -66,30 +67,73 @@ const colSep = "  "
 // marked with a cursor (selected < 0 for none).
 func renderTable(sessions []api.SessionView, width, selected int) string {
 	cols := visibleColumns(width)
-
 	var b strings.Builder
+	b.WriteString(renderHeaderRow(cols) + "\n")
+	for idx, s := range sessions {
+		b.WriteString(renderRow(cols, s, idx == selected) + "\n")
+	}
+	return b.String()
+}
+
+func renderHeaderRow(cols []column) string {
 	headers := make([]string, len(cols))
 	for i, c := range cols {
 		headers[i] = pad(c.header, c.width)
 	}
-	b.WriteString("  " + headerStyle.Render(strings.Join(headers, colSep)) + "\n")
+	return "  " + headerStyle.Render(strings.Join(headers, colSep))
+}
 
+func renderRow(cols []column, s api.SessionView, selected bool) string {
+	cells := make([]string, len(cols))
+	for i, c := range cols {
+		cell := pad(c.cell(s), c.width)
+		if c.styled {
+			cell = statusStyle(s.Status).Render(cell)
+		}
+		cells[i] = cell
+	}
+	gutter := "  "
+	if selected {
+		gutter = cursorStyle.Render("❯ ")
+	}
+	return gutter + strings.Join(cells, colSep)
+}
+
+// renderGroupedTable renders sessions grouped by gb, with a header and token
+// subtotal per group. gb == groupNone falls back to a flat table.
+func renderGroupedTable(sessions []api.SessionView, width, selected int, gb groupBy) string {
+	if gb == groupNone {
+		return renderTable(sessions, width, selected)
+	}
+
+	subtotal := map[string]int64{}
+	count := map[string]int{}
+	for _, s := range sessions {
+		k := groupKey(s, gb)
+		subtotal[k] += totalTokens(s)
+		count[k]++
+	}
+
+	cols := visibleColumns(width)
+	var b strings.Builder
+	b.WriteString(renderHeaderRow(cols) + "\n")
+	lastKey, first := "", true
 	for idx, s := range sessions {
-		cells := make([]string, len(cols))
-		for i, c := range cols {
-			cell := pad(c.cell(s), c.width)
-			if c.styled {
-				cell = statusStyle(s.Status).Render(cell)
-			}
-			cells[i] = cell
+		k := groupKey(s, gb)
+		if first || k != lastKey {
+			b.WriteString(groupHeaderStyle.Render(fmt.Sprintf("▸ %s  (%d · %s)", orDash(k), count[k], humanizeTokens(subtotal[k]))) + "\n")
+			lastKey, first = k, false
 		}
-		gutter := "  "
-		if idx == selected {
-			gutter = cursorStyle.Render("❯ ")
-		}
-		b.WriteString(gutter + strings.Join(cells, colSep) + "\n")
+		b.WriteString(renderRow(cols, s, idx == selected) + "\n")
 	}
 	return b.String()
+}
+
+func groupKey(s api.SessionView, gb groupBy) string {
+	if gb == groupProject {
+		return projectName(s.ProjectDir)
+	}
+	return s.Machine
 }
 
 // renderDetail renders a full-session detail panel.

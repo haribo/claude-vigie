@@ -41,6 +41,22 @@ var sortNames = map[sortKey]string{
 	sortName:     "name",
 }
 
+// groupBy identifies how sessions are grouped in the table.
+type groupBy int
+
+const (
+	groupNone groupBy = iota
+	groupMachine
+	groupProject
+	groupByCount
+)
+
+var groupNames = map[groupBy]string{
+	groupNone:    "off",
+	groupMachine: "machine",
+	groupProject: "project",
+}
+
 type model struct {
 	fetch     func() ([]api.SessionView, error)
 	sessions  []api.SessionView
@@ -54,6 +70,7 @@ type model struct {
 	filter    string
 	filtering bool
 	sortKey   sortKey
+	groupBy   groupBy
 }
 
 type sessionsMsg struct {
@@ -127,6 +144,8 @@ func (m model) handleViewKey(msg tea.KeyMsg) model {
 		m.filtering = true
 	case "s":
 		m.sortKey = (m.sortKey + 1) % sortKeyCount
+	case "g":
+		m.groupBy = (m.groupBy + 1) % groupByCount
 	case "down", "j":
 		if m.cursor < len(m.visibleSessions())-1 {
 			m.cursor++
@@ -173,6 +192,12 @@ func (m model) visibleSessions() []api.SessionView {
 		}
 	}
 	sortSessions(out, m.sortKey)
+	if m.groupBy != groupNone {
+		gb := m.groupBy
+		sort.SliceStable(out, func(i, j int) bool {
+			return groupKey(out[i], gb) < groupKey(out[j], gb)
+		})
+	}
 	return out
 }
 
@@ -196,7 +221,7 @@ func (m model) View() string {
 		b.WriteString(dimStyle.Render("Machines — coming soon"))
 	}
 
-	b.WriteString("\n" + dimStyle.Render("1/2/3 tabs · ↑↓ select · enter detail · / filter · s sort · r refresh · q quit"))
+	b.WriteString("\n" + dimStyle.Render("1/2/3 tabs · ↑↓ select · enter detail · / filter · s sort · g group · r refresh · q quit"))
 	return b.String()
 }
 
@@ -220,13 +245,16 @@ func (m model) viewSessions() string {
 	if len(vis) == 0 {
 		b.WriteString(dimStyle.Render("no sessions match the filter"))
 	} else {
-		b.WriteString(renderTable(vis, m.width, cursor))
+		b.WriteString(renderGroupedTable(vis, m.width, cursor, m.groupBy))
 	}
 	return b.String()
 }
 
 func (m model) renderControls() string {
 	s := labelStyle.Render("sort ") + sortNames[m.sortKey]
+	if m.groupBy != groupNone {
+		s += "    " + labelStyle.Render("group ") + groupNames[m.groupBy]
+	}
 	switch {
 	case m.filtering:
 		s += "    " + labelStyle.Render("filter ") + m.filter + "▌"
