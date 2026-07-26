@@ -16,6 +16,8 @@ var (
 	errStyle    = lipgloss.NewStyle().Foreground(lipgloss.Color("9"))
 
 	tabActiveStyle = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("12"))
+	cursorStyle    = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("12"))
+	labelStyle     = lipgloss.NewStyle().Foreground(lipgloss.Color("8"))
 )
 
 // renderTabBar renders the top-level tab bar with the active tab highlighted.
@@ -60,8 +62,9 @@ var columns = []column{
 const colSep = "  "
 
 // renderTable renders the sessions, dropping low-priority columns to fit width
-// (width <= 0 means unknown: show everything).
-func renderTable(sessions []api.SessionView, width int) string {
+// (width <= 0 means unknown: show everything). The row at index selected is
+// marked with a cursor (selected < 0 for none).
+func renderTable(sessions []api.SessionView, width, selected int) string {
 	cols := visibleColumns(width)
 
 	var b strings.Builder
@@ -69,9 +72,9 @@ func renderTable(sessions []api.SessionView, width int) string {
 	for i, c := range cols {
 		headers[i] = pad(c.header, c.width)
 	}
-	b.WriteString(headerStyle.Render(strings.Join(headers, colSep)) + "\n")
+	b.WriteString("  " + headerStyle.Render(strings.Join(headers, colSep)) + "\n")
 
-	for _, s := range sessions {
+	for idx, s := range sessions {
 		cells := make([]string, len(cols))
 		for i, c := range cols {
 			cell := pad(c.cell(s), c.width)
@@ -80,9 +83,49 @@ func renderTable(sessions []api.SessionView, width int) string {
 			}
 			cells[i] = cell
 		}
-		b.WriteString(strings.Join(cells, colSep) + "\n")
+		gutter := "  "
+		if idx == selected {
+			gutter = cursorStyle.Render("❯ ")
+		}
+		b.WriteString(gutter + strings.Join(cells, colSep) + "\n")
 	}
 	return b.String()
+}
+
+// renderDetail renders a full-session detail panel.
+func renderDetail(s api.SessionView) string {
+	name := s.Title
+	if name == "" {
+		name = s.ID
+	}
+	lines := []string{
+		detailField("Name", name),
+		detailField("Session", s.ID),
+		detailField("Machine", s.Machine),
+		detailField("Directory", s.ProjectDir),
+		detailField("Branch", orDash(s.GitBranch)),
+		detailField("Model", orDash(s.Model)),
+		detailField("Status", s.Status),
+		detailField("Last tool", orDash(s.LastTool)),
+		detailField("Started", orDash(s.StartedAt)),
+		detailField("Last seen", orDash(s.LastSeenAt)),
+		detailField("Ended", orDash(s.EndedAt)),
+		"",
+		detailField("Input", humanizeTokens(s.Usage.InputTokens)),
+		detailField("Output", humanizeTokens(s.Usage.OutputTokens)),
+		detailField("Cache create", humanizeTokens(s.Usage.CacheCreationTokens)),
+		detailField("Cache read", humanizeTokens(s.Usage.CacheReadTokens)),
+		detailField("Total", humanizeTokens(totalTokens(s))),
+	}
+	panel := lipgloss.NewStyle().
+		Border(lipgloss.RoundedBorder()).
+		Padding(0, 1).
+		Render(strings.Join(lines, "\n"))
+	return panel
+}
+
+func detailField(label, value string) string {
+	return labelStyle.Render(pad(label+":", 14)) + value
 }
 
 // visibleColumns returns the columns that fit in width, dropping the

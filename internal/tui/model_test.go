@@ -5,6 +5,8 @@ import (
 	"testing"
 
 	tea "github.com/charmbracelet/bubbletea"
+
+	"github.com/haribo/claude-fleet/internal/api"
 )
 
 func TestRenderTabBar(t *testing.T) {
@@ -42,6 +44,47 @@ func TestViewHasTabBar(t *testing.T) {
 	for _, want := range []string{"Sessions", "Usage", "Machines"} {
 		if !strings.Contains(out, want) {
 			t.Errorf("view missing tab %q", want)
+		}
+	}
+}
+
+func TestCursorAndDetail(t *testing.T) {
+	key := func(s string) tea.KeyMsg { return tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune(s)} }
+	named := func(t tea.KeyType) tea.KeyMsg { return tea.KeyMsg{Type: t} }
+	var m tea.Model = model{sessions: []api.SessionView{{ID: "a"}, {ID: "b"}, {ID: "c"}}}
+
+	m, _ = m.Update(key("j")) // down
+	m, _ = m.Update(key("j"))
+	m, _ = m.Update(key("j")) // clamp at last (index 2)
+	if m.(model).cursor != 2 {
+		t.Errorf("cursor = %d, want 2 (clamped)", m.(model).cursor)
+	}
+	m, _ = m.Update(key("k")) // up
+	if m.(model).cursor != 1 {
+		t.Errorf("cursor = %d, want 1", m.(model).cursor)
+	}
+
+	m, _ = m.Update(named(tea.KeyEnter))
+	if !m.(model).detail {
+		t.Error("enter did not open detail")
+	}
+	m, _ = m.Update(named(tea.KeyEsc))
+	if m.(model).detail {
+		t.Error("esc did not close detail")
+	}
+}
+
+func TestRenderDetailContainsFields(t *testing.T) {
+	out := renderDetail(api.SessionView{
+		ID: "5c483c16-x", Title: "claude-fleet", Machine: "minet",
+		ProjectDir: "/home/haribo/dev/claude-fleet", GitBranch: "develop",
+		Model: "claude-opus-4-8", Status: "working", LastTool: "Bash",
+		Usage:     api.Usage{InputTokens: 100, OutputTokens: 200},
+		StartedAt: "2026-07-26T10:00:00Z", LastSeenAt: "2026-07-26T10:05:00Z",
+	})
+	for _, want := range []string{"claude-fleet", "5c483c16-x", "minet", "/home/haribo/dev/claude-fleet", "develop", "Bash", "Started", "Output"} {
+		if !strings.Contains(out, want) {
+			t.Errorf("detail missing %q:\n%s", want, out)
 		}
 	}
 }
