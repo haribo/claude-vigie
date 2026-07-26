@@ -25,6 +25,7 @@ func (s *Server) handleSessions(w http.ResponseWriter, r *http.Request) {
 func toView(s store.Session) api.SessionView {
 	return api.SessionView{
 		ID:         s.ID,
+		Title:      s.Title,
 		Machine:    s.Machine,
 		ProjectDir: s.ProjectDir,
 		GitBranch:  s.GitBranch,

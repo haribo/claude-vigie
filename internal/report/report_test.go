@@ -21,28 +21,33 @@ func writeConfig(t *testing.T, serverURL string) {
 	}
 }
 
-func TestAggregateUsage(t *testing.T) {
+func TestParseTranscript(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "t.jsonl")
 	lines := []string{
+		`{"type":"ai-title","aiTitle":"auto title"}`,
 		`{"type":"user","message":{"role":"user"}}`,
 		`{"type":"assistant","message":{"id":"m1","model":"claude-opus-4-8","usage":{"input_tokens":100,"output_tokens":40,"cache_read_input_tokens":10}}}`,
 		`{"type":"assistant","message":{"id":"m1","model":"claude-opus-4-8","usage":{"input_tokens":100,"output_tokens":40}}}`, // duplicate id: ignored
 		`{"type":"assistant","message":{"id":"m2","model":"claude-opus-4-8","usage":{"input_tokens":200,"output_tokens":60,"cache_creation_input_tokens":5}}}`,
+		`{"type":"custom-title","customTitle":"my-session"}`,
 		`not json`,
 	}
 	if err := os.WriteFile(path, []byte(strings.Join(lines, "\n")+"\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
 
-	u, model, err := aggregateUsage(path)
+	u, model, title, err := parseTranscript(path)
 	if err != nil {
-		t.Fatalf("aggregateUsage: %v", err)
+		t.Fatalf("parseTranscript: %v", err)
 	}
 	if u.InputTokens != 300 || u.OutputTokens != 100 || u.CacheReadTokens != 10 || u.CacheCreationTokens != 5 {
 		t.Errorf("usage = %+v, want in=300 out=100 cacheRead=10 cacheCreate=5", *u)
 	}
 	if model != "claude-opus-4-8" {
 		t.Errorf("model = %q", model)
+	}
+	if title != "my-session" {
+		t.Errorf("title = %q, want my-session (customTitle takes priority over aiTitle)", title)
 	}
 }
 
@@ -82,8 +87,9 @@ func TestRunStopSendsAggregatedUsage(t *testing.T) {
 	writeConfig(t, srv.URL)
 
 	transcript := filepath.Join(t.TempDir(), "t.jsonl")
-	if err := os.WriteFile(transcript, []byte(
-		`{"type":"assistant","message":{"id":"m1","model":"claude-opus-4-8","usage":{"input_tokens":500,"output_tokens":120}}}`+"\n"), 0o600); err != nil {
+	content := `{"type":"custom-title","customTitle":"my-conv"}` + "\n" +
+		`{"type":"assistant","message":{"id":"m1","model":"claude-opus-4-8","usage":{"input_tokens":500,"output_tokens":120}}}` + "\n"
+	if err := os.WriteFile(transcript, []byte(content), 0o600); err != nil {
 		t.Fatal(err)
 	}
 
@@ -99,6 +105,9 @@ func TestRunStopSendsAggregatedUsage(t *testing.T) {
 	}
 	if got.Model != "claude-opus-4-8" {
 		t.Errorf("model = %q", got.Model)
+	}
+	if got.Title != "my-conv" {
+		t.Errorf("title = %q, want my-conv", got.Title)
 	}
 }
 
