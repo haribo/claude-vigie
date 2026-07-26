@@ -39,13 +39,18 @@ app-build:
 app-clean:
     rm -rf bin/
 
-# Build and run the server (daemon)
+# Build and run the server in the foreground
 app-serve: app-build
-    ./bin/claude-fleetd serve
+    mkdir -p {{fleet_data}}
+    ./bin/claude-fleetd serve --addr {{fleet_addr}} --db {{fleet_db}}
 
 # Build and run the terminal client
 app-tui: app-build
     ./bin/claude-fleet tui
+
+# Build and run the watcher in the foreground
+app-watch: app-build
+    ./bin/claude-fleet watch
 
 # =============================================================================
 # CODE
@@ -134,11 +139,6 @@ install: app-build
     cp -f bin/claude-fleetd {{home_bin}}/.claude-fleetd.tmp && mv -f {{home_bin}}/.claude-fleetd.tmp {{home_bin}}/claude-fleetd
     @echo "installed claude-fleet + claude-fleetd into {{home_bin}}"
 
-# Run the fleet server locally in the foreground
-fleet-serve: app-build
-    mkdir -p {{fleet_data}}
-    ./bin/claude-fleetd serve --addr {{fleet_addr}} --db {{fleet_db}}
-
 # Print the local fleet auth token
 fleet-token: app-build
     @./bin/claude-fleetd token --db {{fleet_db}}
@@ -150,10 +150,6 @@ fleet-connect: app-build
 # Disconnect this machine (remove our hooks)
 fleet-disconnect: app-build
     ./bin/claude-fleet init --uninstall
-
-# Watch ALL local sessions and report them (covers already-open sessions)
-fleet-watch: app-build
-    ./bin/claude-fleet watch
 
 # Install & start the SERVER as a systemd --user service (host only, Linux)
 fleet-server-install: install

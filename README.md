@@ -69,7 +69,7 @@ Install the binaries and connect a machine with `just`:
 just install         # build + copy claude-fleet & claude-fleetd into ~/.local/bin
 
 # on the host that runs the server:
-just fleet-serve     # runs claude-fleetd on 127.0.0.1:8080 (foreground)
+just app-serve       # runs claude-fleetd (foreground; add fleet_port=9090 for another port)
 
 # on each machine running Claude Code (another terminal):
 just fleet-connect   # writes config + hooks; reads the token from the local db
@@ -85,7 +85,7 @@ sessions (including ones already open), run the watcher, which scans
 `~/.claude/projects/` and reports every recent session:
 
 ```bash
-just fleet-watch     # keep running; covers all local sessions
+just app-watch       # keep running; covers all local sessions
 ```
 
 The hooks refine real-time status; the watcher guarantees coverage.
