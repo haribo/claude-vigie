@@ -17,6 +17,7 @@ import (
 
 	"github.com/haribo/claude-fleet/internal/api"
 	"github.com/haribo/claude-fleet/internal/config"
+	"github.com/haribo/claude-fleet/internal/transcript"
 )
 
 // hookPayload is the JSON Claude Code passes to a command hook on stdin.
@@ -58,10 +59,10 @@ func Run(event string, stdin io.Reader) error {
 	}
 	// The transcript is only worth reading at turn/session boundaries.
 	if event == "Stop" || event == "SessionEnd" {
-		if u, model, title, err := parseTranscript(p.TranscriptPath); err == nil {
-			req.Usage = u
-			req.Model = model
-			req.Title = title
+		if info, err := transcript.Parse(p.TranscriptPath); err == nil {
+			req.Usage = &info.Usage
+			req.Model = info.Model
+			req.Title = info.Title
 		}
 	}
 
