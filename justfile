@@ -151,3 +151,14 @@ fleet-disconnect: app-build
 # Watch ALL local sessions and report them (covers already-open sessions)
 fleet-watch: app-build
     ./bin/claude-fleet watch
+
+# Install & start systemd --user services (server + watcher, Linux)
+fleet-service-install: install
+    scripts/install-systemd.sh {{home_bin}} {{fleet_addr}} {{fleet_db}}
+
+# Stop & remove the systemd --user services
+fleet-service-uninstall:
+    -systemctl --user disable --now claude-fleetd.service claude-fleet-watch.service
+    rm -f ~/.config/systemd/user/claude-fleetd.service ~/.config/systemd/user/claude-fleet-watch.service
+    systemctl --user daemon-reload
+    @echo "removed claude-fleet user services"
