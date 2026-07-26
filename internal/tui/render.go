@@ -14,7 +14,23 @@ var (
 	headerStyle = lipgloss.NewStyle().Bold(true)
 	dimStyle    = lipgloss.NewStyle().Foreground(lipgloss.Color("8"))
 	errStyle    = lipgloss.NewStyle().Foreground(lipgloss.Color("9"))
+
+	tabActiveStyle = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("12"))
 )
+
+// renderTabBar renders the top-level tab bar with the active tab highlighted.
+func renderTabBar(active tab) string {
+	parts := make([]string, len(tabNames))
+	for i, name := range tabNames {
+		label := fmt.Sprintf("%d %s", i+1, name)
+		if tab(i) == active {
+			parts[i] = tabActiveStyle.Render("[" + label + "]")
+		} else {
+			parts[i] = dimStyle.Render(" " + label + " ")
+		}
+	}
+	return strings.Join(parts, " ")
+}
 
 type column struct {
 	header string
