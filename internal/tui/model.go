@@ -16,6 +16,7 @@ type model struct {
 	sessions []api.SessionView
 	err      error
 	updated  string
+	width    int
 }
 
 type sessionsMsg struct {
@@ -42,6 +43,8 @@ func tickCmd() tea.Cmd {
 
 func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
+	case tea.WindowSizeMsg:
+		m.width = msg.Width
 	case tea.KeyMsg:
 		switch msg.String() {
 		case "q", "ctrl+c":
@@ -78,7 +81,7 @@ func (m model) View() string {
 	case len(m.sessions) == 0:
 		b.WriteString(dimStyle.Render("no sessions yet") + "\n")
 	default:
-		b.WriteString(renderTable(m.sessions))
+		b.WriteString(renderTable(m.sessions, m.width))
 	}
 
 	b.WriteString("\n" + dimStyle.Render("q quit · r refresh"))

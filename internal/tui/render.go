@@ -16,19 +16,90 @@ var (
 	errStyle    = lipgloss.NewStyle().Foreground(lipgloss.Color("9"))
 )
 
-var columns = []struct {
-	name  string
-	width int
-}{
-	{"STATUS", 13},
-	{"SESSION", 9},
-	{"MACHINE", 10},
-	{"PROJECT", 18},
-	{"BRANCH", 16},
-	{"MODEL", 12},
-	{"OUT", 8},
-	{"TOTAL", 9},
-	{"SEEN", 8},
+type column struct {
+	header string
+	width  int
+	// drop is the priority for hiding on narrow terminals: 0 = always kept,
+	// higher = dropped first.
+	drop   int
+	styled bool // color the cell by session status
+	cell   func(api.SessionView) string
+}
+
+// columns in display order: stable identity on the left, dynamic state on the
+// right, with the colored status last.
+var columns = []column{
+	{"NAME", 22, 0, false, sessionName},
+	{"SESSION", 9, 8, false, func(s api.SessionView) string { return shortID(s.ID) }},
+	{"DIR", 16, 0, false, func(s api.SessionView) string { return projectName(s.ProjectDir) }},
+	{"BRANCH", 16, 7, false, func(s api.SessionView) string { return orDash(s.GitBranch) }},
+	{"MACHINE", 10, 4, false, func(s api.SessionView) string { return s.Machine }},
+	{"MODEL", 12, 5, false, func(s api.SessionView) string { return shortModel(s.Model) }},
+	{"OUT", 8, 3, false, func(s api.SessionView) string { return humanizeTokens(s.Usage.OutputTokens) }},
+	{"TOTAL", 9, 2, false, func(s api.SessionView) string { return humanizeTokens(totalTokens(s)) }},
+	{"SEEN", 8, 6, false, func(s api.SessionView) string { return clockTime(s.LastSeenAt) }},
+	{"STATUS", 13, 0, true, func(s api.SessionView) string { return s.Status }},
+}
+
+const colSep = "  "
+
+// renderTable renders the sessions, dropping low-priority columns to fit width
+// (width <= 0 means unknown: show everything).
+func renderTable(sessions []api.SessionView, width int) string {
+	cols := visibleColumns(width)
+
+	var b strings.Builder
+	headers := make([]string, len(cols))
+	for i, c := range cols {
+		headers[i] = pad(c.header, c.width)
+	}
+	b.WriteString(headerStyle.Render(strings.Join(headers, colSep)) + "\n")
+
+	for _, s := range sessions {
+		cells := make([]string, len(cols))
+		for i, c := range cols {
+			cell := pad(c.cell(s), c.width)
+			if c.styled {
+				cell = statusStyle(s.Status).Render(cell)
+			}
+			cells[i] = cell
+		}
+		b.WriteString(strings.Join(cells, colSep) + "\n")
+	}
+	return b.String()
+}
+
+// visibleColumns returns the columns that fit in width, dropping the
+// highest-drop columns first. Columns with drop == 0 are always kept.
+func visibleColumns(width int) []column {
+	cols := append([]column(nil), columns...)
+	if width <= 0 {
+		return cols
+	}
+	for tableWidth(cols) > width {
+		idx, maxDrop := -1, 0
+		for i, c := range cols {
+			if c.drop > maxDrop {
+				idx, maxDrop = i, c.drop
+			}
+		}
+		if idx < 0 {
+			break // only mandatory columns remain
+		}
+		cols = append(cols[:idx], cols[idx+1:]...)
+	}
+	return cols
+}
+
+func tableWidth(cols []column) int {
+	w := 0
+	for i, c := range cols {
+		if i > 0 {
+			w += len(colSep)
+		}
+		w += c.width
+	}
+	return w
 }
 
 func statusStyle(status string) lipgloss.Style {
@@ -44,33 +115,17 @@ func statusStyle(status string) lipgloss.Style {
 	}
 }
 
-// renderTable renders the sessions as a fixed-width table.
-func renderTable(sessions []api.SessionView) string {
-	var b strings.Builder
-
-	headerCells := make([]string, len(columns))
-	for i, c := range columns {
-		headerCells[i] = pad(c.name, c.width)
+// sessionName is the conversation title, falling back to the short session id.
+func sessionName(s api.SessionView) string {
+	if s.Title != "" {
+		return s.Title
 	}
-	b.WriteString(headerStyle.Render(strings.Join(headerCells, "  ")) + "\n")
+	return shortID(s.ID)
+}
 
-	for _, s := range sessions {
-		total := s.Usage.InputTokens + s.Usage.OutputTokens +
-			s.Usage.CacheCreationTokens + s.Usage.CacheReadTokens
-		cells := []string{
-			statusStyle(s.Status).Render(pad(s.Status, columns[0].width)),
-			pad(shortID(s.ID), columns[1].width),
-			pad(s.Machine, columns[2].width),
-			pad(projectName(s.ProjectDir), columns[3].width),
-			pad(orDash(s.GitBranch), columns[4].width),
-			pad(shortModel(s.Model), columns[5].width),
-			pad(humanizeTokens(s.Usage.OutputTokens), columns[6].width),
-			pad(humanizeTokens(total), columns[7].width),
-			pad(clockTime(s.LastSeenAt), columns[8].width),
-		}
-		b.WriteString(strings.Join(cells, "  ") + "\n")
-	}
-	return b.String()
+func totalTokens(s api.SessionView) int64 {
+	return s.Usage.InputTokens + s.Usage.OutputTokens +
+		s.Usage.CacheCreationTokens + s.Usage.CacheReadTokens
 }
 
 // humanizeTokens renders a token count compactly (e.g. 1234 -> "1.2k").
@@ -98,6 +153,23 @@ func clockTime(rfc string) string {
 	return rfc
 }
 
+// shortID returns the first 8 characters of a session id.
+func shortID(id string) string {
+	r := []rune(id)
+	if len(r) > 8 {
+		return string(r[:8])
+	}
+	return id
+}
+
+// projectName returns the final path segment of a project directory.
+func projectName(dir string) string {
+	if dir == "" {
+		return "-"
+	}
+	return filepath.Base(dir)
+}
+
 func orDash(s string) string {
 	if s == "" {
 		return "-"
@@ -120,21 +192,4 @@ func truncate(s string, maxRunes int) string {
 		return s
 	}
 	return string(r[:maxRunes-1]) + "…"
-}
-
-// shortID returns the first 8 characters of a session id.
-func shortID(id string) string {
-	r := []rune(id)
-	if len(r) > 8 {
-		return string(r[:8])
-	}
-	return id
-}
-
-// projectName returns the final path segment of a project directory.
-func projectName(dir string) string {
-	if dir == "" {
-		return "-"
-	}
-	return filepath.Base(dir)
 }
