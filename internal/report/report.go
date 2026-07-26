@@ -56,11 +56,12 @@ func Run(event string, stdin io.Reader) error {
 		LastTool:   p.ToolName,
 		Timestamp:  time.Now().UTC().Format(time.RFC3339),
 	}
-	// Token usage is only worth reading at turn/session boundaries.
+	// The transcript is only worth reading at turn/session boundaries.
 	if event == "Stop" || event == "SessionEnd" {
-		if u, model, err := aggregateUsage(p.TranscriptPath); err == nil {
+		if u, model, title, err := parseTranscript(p.TranscriptPath); err == nil {
 			req.Usage = u
 			req.Model = model
+			req.Title = title
 		}
 	}
 

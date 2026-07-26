@@ -11,8 +11,10 @@ import (
 
 // transcriptLine is the subset of a transcript JSONL line we care about.
 type transcriptLine struct {
-	Type    string `json:"type"`
-	Message struct {
+	Type        string `json:"type"`
+	CustomTitle string `json:"customTitle"` // set via /rename (priority)
+	AiTitle     string `json:"aiTitle"`     // auto-generated (fallback)
+	Message     struct {
 		ID    string `json:"id"`
 		Model string `json:"model"`
 		Usage struct {
@@ -28,19 +30,20 @@ type transcriptLine struct {
 // large (embedded tool output), so allow well beyond bufio's 64K default.
 const maxTranscriptLine = 16 * 1024 * 1024
 
-// aggregateUsage sums token usage across assistant messages in the transcript,
-// deduplicating by message id (retries repeat a line), and returns the last
-// model seen. Each assistant line is a distinct API call, so summing reflects
-// the tokens actually consumed over the session.
-func aggregateUsage(path string) (*api.Usage, string, error) {
+// parseTranscript sums token usage across assistant messages (deduplicating by
+// message id, since retries repeat a line), and returns the last model and the
+// conversation title (customTitle from /rename, falling back to aiTitle). Each
+// assistant line is a distinct API call, so summing reflects the tokens
+// actually consumed over the session.
+func parseTranscript(path string) (usage *api.Usage, model, title string, err error) {
 	f, err := os.Open(path)
 	if err != nil {
-		return nil, "", fmt.Errorf("opening transcript: %w", err)
+		return nil, "", "", fmt.Errorf("opening transcript: %w", err)
 	}
 	defer func() { _ = f.Close() }()
 
 	var u api.Usage
-	var model string
+	var customTitle, aiTitle string
 	seen := make(map[string]bool)
 
 	sc := bufio.NewScanner(f)
@@ -49,6 +52,12 @@ func aggregateUsage(path string) (*api.Usage, string, error) {
 		var line transcriptLine
 		if err := json.Unmarshal(sc.Bytes(), &line); err != nil {
 			continue // skip malformed lines rather than fail the whole report
+		}
+		if line.CustomTitle != "" {
+			customTitle = line.CustomTitle
+		}
+		if line.AiTitle != "" {
+			aiTitle = line.AiTitle
 		}
 		if line.Type != "assistant" {
 			continue
@@ -69,7 +78,12 @@ func aggregateUsage(path string) (*api.Usage, string, error) {
 		}
 	}
 	if err := sc.Err(); err != nil {
-		return nil, "", fmt.Errorf("reading transcript: %w", err)
+		return nil, "", "", fmt.Errorf("reading transcript: %w", err)
 	}
-	return &u, model, nil
+
+	title = customTitle
+	if title == "" {
+		title = aiTitle
+	}
+	return &u, model, title, nil
 }

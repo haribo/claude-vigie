@@ -13,6 +13,7 @@ type ReportRequest struct {
 	ProjectDir string `json:"project_dir"`
 	GitBranch  string `json:"git_branch,omitempty"`
 	Model      string `json:"model,omitempty"`
+	Title      string `json:"title,omitempty"` // conversation title (/rename or auto)
 	LastTool   string `json:"last_tool,omitempty"`
 	Usage      *Usage `json:"usage,omitempty"` // present on Stop / SessionEnd
 	Timestamp  string `json:"timestamp"`       // RFC3339, event time
@@ -29,6 +30,7 @@ type Usage struct {
 // SessionView is a session as returned by /api/sessions.
 type SessionView struct {
 	ID         string `json:"id"`
+	Title      string `json:"title,omitempty"`
 	Machine    string `json:"machine"`
 	ProjectDir string `json:"project_dir"`
 	GitBranch  string `json:"git_branch,omitempty"`
