@@ -69,7 +69,7 @@ just code-check     # fmt + lint + build + test (run before every PR)
 - [x] SQLite store (sessions, events)
 - [x] Server: `/api/report`, `/api/sessions`, Bearer auth
 - [ ] Server: SSE realtime stream
-- [ ] Reporter: hook payload + transcript parsing
+- [x] Reporter: hook payload + transcript parsing
 - [ ] `init`: merge hooks into `settings.json`, write config
 - [ ] Web dashboard (embedded)
 - [ ] Terminal client (Bubble Tea)
