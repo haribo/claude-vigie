@@ -35,11 +35,14 @@ func (s *Server) handleReport(w http.ResponseWriter, r *http.Request) {
 		s.writeError(w, http.StatusInternalServerError, "internal error")
 		return
 	}
-	if err := s.store.AppendEvent(ctx, store.Event{
-		SessionID: sess.ID, Event: req.Event, Status: sess.Status, CreatedAt: req.Timestamp,
-	}); err != nil {
-		// The session is already updated; the event log is best-effort.
-		s.log.Error("appending event", "error", err)
+	// The watcher polls frequently; keep its scans out of the event log.
+	if req.Event != "watch" {
+		if err := s.store.AppendEvent(ctx, store.Event{
+			SessionID: sess.ID, Event: req.Event, Status: sess.Status, CreatedAt: req.Timestamp,
+		}); err != nil {
+			// The session is already updated; the event log is best-effort.
+			s.log.Error("appending event", "error", err)
+		}
 	}
 
 	w.WriteHeader(http.StatusNoContent)
@@ -71,7 +74,11 @@ func applyReport(sess store.Session, isNew bool, req api.ReportRequest) store.Se
 		sess.StartedAt = req.Timestamp
 	}
 	sess.LastSeenAt = req.Timestamp
-	sess.Status = deriveStatus(req.Event, sess.Status)
+	if req.Status != "" {
+		sess.Status = req.Status // explicit status wins (watcher)
+	} else {
+		sess.Status = deriveStatus(req.Event, sess.Status)
+	}
 	if req.Event == "SessionEnd" {
 		sess.EndedAt = req.Timestamp
 	}

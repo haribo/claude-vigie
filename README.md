@@ -80,6 +80,16 @@ just fleet-connect   # writes config + hooks; reads the token from the local db
 `~/.config/claude-fleet/config.json`. New Claude Code sessions then report
 automatically. `just fleet-disconnect` removes the hooks.
 
+Hooks only cover sessions started *after* they're installed. To see **all** your
+sessions (including ones already open), run the watcher, which scans
+`~/.claude/projects/` and reports every recent session:
+
+```bash
+just fleet-watch     # keep running; covers all local sessions
+```
+
+The hooks refine real-time status; the watcher guarantees coverage.
+
 Port 8080 already taken? Override it (same value for both recipes):
 `just fleet_port=9090 fleet-serve` and `just fleet_port=9090 fleet-connect`.
 
