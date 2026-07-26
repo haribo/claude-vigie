@@ -8,6 +8,7 @@ import (
 	"flag"
 	"fmt"
 	"log/slog"
+	"net"
 	"net/http"
 	"os"
 	"os/signal"
@@ -42,8 +43,15 @@ func runServe(args []string) int {
 		return 1
 	}
 
+	// Bind up front so a failure (e.g. port already in use) is reported before
+	// we log "listening".
+	ln, err := net.Listen("tcp", *addr)
+	if err != nil {
+		log.Error("cannot bind address", "addr", *addr, "error", err)
+		return 1
+	}
+
 	srv := &http.Server{
-		Addr:              *addr,
 		Handler:           server.New(st, token, log).Handler(),
 		ReadHeaderTimeout: 5 * time.Second,
 	}
@@ -62,7 +70,7 @@ func runServe(args []string) int {
 	}()
 
 	log.Info("claude-fleetd listening", "addr", *addr, "db", *dbPath)
-	if err := srv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
+	if err := srv.Serve(ln); err != nil && !errors.Is(err, http.ErrServerClosed) {
 		log.Error("serving", "error", err)
 		return 1
 	}
