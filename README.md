@@ -80,6 +80,9 @@ just fleet-connect   # writes config + hooks; reads the token from the local db
 `~/.config/claude-fleet/config.json`. New Claude Code sessions then report
 automatically. `just fleet-disconnect` removes the hooks.
 
+Port 8080 already taken? Override it (same value for both recipes):
+`just fleet_port=9090 fleet-serve` and `just fleet_port=9090 fleet-connect`.
+
 For a remote server, point init at it directly:
 `claude-fleet init --server <url> --token <token>`.
 

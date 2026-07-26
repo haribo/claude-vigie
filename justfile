@@ -8,8 +8,10 @@ ldflags := "-X github.com/haribo/claude-fleet/internal/version.Version=" + versi
 home_bin := env_var("HOME") / ".local/bin"
 fleet_data := env_var("HOME") / ".local/share/claude-fleet"
 fleet_db := fleet_data / "fleet.db"
-fleet_addr := "127.0.0.1:8080"
-fleet_url := "http://127.0.0.1:8080"
+fleet_host := "127.0.0.1"
+fleet_port := "8080"
+fleet_addr := fleet_host + ":" + fleet_port
+fleet_url := "http://" + fleet_host + ":" + fleet_port
 
 # Default: list all commands
 default:
