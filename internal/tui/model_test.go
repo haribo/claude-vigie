@@ -118,3 +118,70 @@ func TestRenderSummary(t *testing.T) {
 		}
 	}
 }
+
+func TestFuzzyMatch(t *testing.T) {
+	if !fuzzyMatch("cf", "claude-fleet") {
+		t.Error("cf should match claude-fleet")
+	}
+	if !fuzzyMatch("FLEET", "claude-fleet") {
+		t.Error("case-insensitive match failed")
+	}
+	if fuzzyMatch("xyz", "claude-fleet") {
+		t.Error("xyz should not match")
+	}
+	if !fuzzyMatch("", "anything") {
+		t.Error("empty pattern should always match")
+	}
+}
+
+func TestVisibleSessionsFilterAndSort(t *testing.T) {
+	m := model{sessions: []api.SessionView{
+		{Title: "alpha", Machine: "m1", Status: "idle", Usage: api.Usage{OutputTokens: 100}, LastSeenAt: "2026-07-26T10:00:00Z"},
+		{Title: "beta", Machine: "m2", Status: "working", Usage: api.Usage{OutputTokens: 900}, LastSeenAt: "2026-07-26T11:00:00Z"},
+		{Title: "gamma", Machine: "m1", Status: "idle", Usage: api.Usage{OutputTokens: 500}, LastSeenAt: "2026-07-26T09:00:00Z"},
+	}}
+
+	if vis := m.visibleSessions(); vis[0].Title != "beta" {
+		t.Errorf("default (last-seen) sort first = %q, want beta", vis[0].Title)
+	}
+
+	m.sortKey = sortTokens
+	vis := m.visibleSessions()
+	if vis[0].Title != "beta" || vis[2].Title != "alpha" {
+		t.Errorf("token sort = %q..%q, want beta..alpha", vis[0].Title, vis[2].Title)
+	}
+
+	m.sortKey = sortLastSeen
+	m.filter = "m1"
+	if vis := m.visibleSessions(); len(vis) != 2 {
+		t.Fatalf("filter m1 len = %d, want 2", len(vis))
+	}
+}
+
+func TestFilterInput(t *testing.T) {
+	key := func(s string) tea.KeyMsg { return tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune(s)} }
+	named := func(kt tea.KeyType) tea.KeyMsg { return tea.KeyMsg{Type: kt} }
+	var m tea.Model = model{sessions: []api.SessionView{{Title: "claude-fleet"}, {Title: "note"}}}
+
+	m, _ = m.Update(key("/"))
+	if !m.(model).filtering {
+		t.Fatal("/ did not enter filter mode")
+	}
+	m, _ = m.Update(key("c"))
+	m, _ = m.Update(key("f"))
+	if m.(model).filter != "cf" {
+		t.Errorf("filter = %q, want cf", m.(model).filter)
+	}
+	if vis := m.(model).visibleSessions(); len(vis) != 1 || vis[0].Title != "claude-fleet" {
+		t.Errorf("filtered = %v", vis)
+	}
+
+	m, _ = m.Update(named(tea.KeyEnter))
+	if m.(model).filtering {
+		t.Error("enter did not leave filter mode")
+	}
+	m, _ = m.Update(named(tea.KeyEsc))
+	if m.(model).filter != "" {
+		t.Errorf("esc did not clear filter: %q", m.(model).filter)
+	}
+}
