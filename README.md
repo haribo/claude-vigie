@@ -72,7 +72,7 @@ just code-check     # fmt + lint + build + test (run before every PR)
 - [x] Reporter: hook payload + transcript parsing
 - [x] `init`: merge hooks into `settings.json`, write config
 - [ ] Web dashboard (embedded)
-- [ ] Terminal client (Bubble Tea)
+- [x] Terminal client (Bubble Tea)
 
 ## Contributing
 

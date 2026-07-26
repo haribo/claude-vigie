@@ -59,10 +59,3 @@ Run "claude-fleet <command> -h" for command-specific flags.
 The server runs separately as "claude-fleetd".
 `)
 }
-
-// notImplemented reports that a subcommand is not wired up yet. Bootstrap
-// skeleton — each subcommand is implemented in its own tracked issue.
-func notImplemented(cmd string) int {
-	fmt.Fprintf(os.Stderr, "%s: not implemented yet\n", cmd)
-	return 1
-}
