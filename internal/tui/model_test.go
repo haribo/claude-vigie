@@ -219,6 +219,15 @@ func TestRenderGroupedTableHasHeaders(t *testing.T) {
 	}
 }
 
+func TestFooterHasHints(t *testing.T) {
+	out := footer()
+	for _, want := range []string{"tabs", "select", "filter", "sort", "group", "quit"} {
+		if !strings.Contains(out, want) {
+			t.Errorf("footer missing %q: %s", want, out)
+		}
+	}
+}
+
 func TestGroupToggleCycles(t *testing.T) {
 	key := func(s string) tea.KeyMsg { return tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune(s)} }
 	var m tea.Model = model{}

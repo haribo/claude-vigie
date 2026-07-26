@@ -221,7 +221,7 @@ func (m model) View() string {
 		b.WriteString(dimStyle.Render("Machines — coming soon"))
 	}
 
-	b.WriteString("\n" + dimStyle.Render("1/2/3 tabs · ↑↓ select · enter detail · / filter · s sort · g group · r refresh · q quit"))
+	b.WriteString("\n" + footer())
 	return b.String()
 }
 
