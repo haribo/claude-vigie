@@ -92,15 +92,20 @@ The hooks refine real-time status; the watcher guarantees coverage.
 
 ### Run as background services (systemd, Linux)
 
-To keep the server and watcher running (start on login, restart on crash, no
-terminal needed):
+The **server** is central (one host); the **watcher** runs on **every machine**
+with Claude sessions. Install only what each machine needs:
 
 ```bash
-just fleet_port=9090 fleet-service-install   # installs + starts both user services
-just fleet_port=9090 fleet-connect           # config + hooks (server is already up)
+# on the host that runs the server:
+just fleet_port=9090 fleet-server-install
 
-journalctl --user -u claude-fleet-watch -f   # follow the watcher logs
-just fleet-service-uninstall                 # stop + remove the services
+# on every machine running Claude sessions (including the host, if it runs Claude):
+just fleet-watch-install
+just fleet_port=9090 fleet-connect     # config + hooks: point the client at the server
+
+journalctl --user -u claude-fleet-watch -f            # follow the watcher logs
+just fleet-server-uninstall                           # remove the server service
+just fleet-watch-uninstall                            # remove the watcher service
 ```
 
 The watcher reads the client config, so run `fleet-connect` once so it knows the
