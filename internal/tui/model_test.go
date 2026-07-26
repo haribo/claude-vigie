@@ -185,3 +185,50 @@ func TestFilterInput(t *testing.T) {
 		t.Errorf("esc did not clear filter: %q", m.(model).filter)
 	}
 }
+
+func TestGroupingClustersByKey(t *testing.T) {
+	m := model{
+		groupBy: groupMachine,
+		sessions: []api.SessionView{
+			{Title: "a", Machine: "m2", LastSeenAt: "2026-07-26T12:00:00Z"},
+			{Title: "b", Machine: "m1", LastSeenAt: "2026-07-26T11:00:00Z"},
+			{Title: "c", Machine: "m2", LastSeenAt: "2026-07-26T10:00:00Z"},
+		},
+	}
+	vis := m.visibleSessions()
+	// grouped by machine: m1 sessions, then m2 sessions (contiguous)
+	if vis[0].Machine != "m1" {
+		t.Errorf("first group = %q, want m1", vis[0].Machine)
+	}
+	if vis[1].Machine != "m2" || vis[2].Machine != "m2" {
+		t.Errorf("m2 sessions not contiguous: %v", []string{vis[1].Machine, vis[2].Machine})
+	}
+}
+
+func TestRenderGroupedTableHasHeaders(t *testing.T) {
+	sessions := []api.SessionView{
+		{Title: "a", Machine: "m1", Usage: api.Usage{OutputTokens: 100}},
+		{Title: "b", Machine: "m1", Usage: api.Usage{OutputTokens: 200}},
+		{Title: "c", Machine: "m2", Usage: api.Usage{OutputTokens: 50}},
+	}
+	out := renderGroupedTable(sessions, 200, -1, groupMachine)
+	for _, want := range []string{"▸ m1", "▸ m2", "(2 ·"} {
+		if !strings.Contains(out, want) {
+			t.Errorf("grouped table missing %q:\n%s", want, out)
+		}
+	}
+}
+
+func TestGroupToggleCycles(t *testing.T) {
+	key := func(s string) tea.KeyMsg { return tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune(s)} }
+	var m tea.Model = model{}
+	m, _ = m.Update(key("g"))
+	if m.(model).groupBy != groupMachine {
+		t.Errorf("after 1x g: groupBy = %d, want groupMachine", m.(model).groupBy)
+	}
+	m, _ = m.Update(key("g"))
+	m, _ = m.Update(key("g"))
+	if m.(model).groupBy != groupNone {
+		t.Errorf("after 3x g: groupBy = %d, want groupNone", m.(model).groupBy)
+	}
+}
