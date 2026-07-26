@@ -31,6 +31,7 @@ type model struct {
 	tab      tab
 	cursor   int
 	detail   bool
+	history  []int
 }
 
 type sessionsMsg struct {
@@ -73,6 +74,10 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 			if m.cursor < 0 {
 				m.cursor = 0
+			}
+			m.history = append(m.history, countByStatus(m.sessions, "working"))
+			if len(m.history) > sparkWindow {
+				m.history = m.history[len(m.history)-sparkWindow:]
 			}
 		}
 	case tickMsg:
@@ -144,6 +149,6 @@ func (m model) viewSessions() string {
 	case m.detail:
 		return renderDetail(m.sessions[m.cursor])
 	default:
-		return renderTable(m.sessions, m.width, m.cursor)
+		return renderSummary(m.sessions, m.history) + "\n\n" + renderTable(m.sessions, m.width, m.cursor)
 	}
 }
