@@ -128,6 +128,62 @@ func detailField(label, value string) string {
 	return labelStyle.Render(pad(label+":", 14)) + value
 }
 
+// sparkWindow is how many recent polls the activity sparkline keeps.
+const sparkWindow = 30
+
+var sparkBlocks = []rune("▁▂▃▄▅▆▇█")
+
+// renderSummary renders the fleet summary strip: status counts, total output
+// tokens across the fleet, and an activity sparkline (working sessions over the
+// recent polls held in history).
+func renderSummary(sessions []api.SessionView, history []int) string {
+	counts := map[string]int{}
+	var totalOut int64
+	for _, s := range sessions {
+		counts[s.Status]++
+		totalOut += s.Usage.OutputTokens
+	}
+
+	parts := []string{
+		statusStyle("working").Render(fmt.Sprintf("● working %d", counts["working"])),
+		statusStyle("waiting").Render(fmt.Sprintf("● waiting %d", counts["waiting"])),
+		statusStyle("idle").Render(fmt.Sprintf("● idle %d", counts["idle"])),
+		dimStyle.Render(fmt.Sprintf("● ended %d", counts["ended"])),
+	}
+	line := strings.Join(parts, "   ") + "    " + labelStyle.Render("out ") + humanizeTokens(totalOut)
+	if s := sparkline(history); s != "" {
+		line += "    " + labelStyle.Render("activity ") + s
+	}
+	return line
+}
+
+func sparkline(values []int) string {
+	if len(values) == 0 {
+		return ""
+	}
+	maxV := 1
+	for _, v := range values {
+		if v > maxV {
+			maxV = v
+		}
+	}
+	var b strings.Builder
+	for _, v := range values {
+		b.WriteRune(sparkBlocks[v*(len(sparkBlocks)-1)/maxV])
+	}
+	return b.String()
+}
+
+func countByStatus(sessions []api.SessionView, status string) int {
+	n := 0
+	for _, s := range sessions {
+		if s.Status == status {
+			n++
+		}
+	}
+	return n
+}
+
 // visibleColumns returns the columns that fit in width, dropping the
 // highest-drop columns first. Columns with drop == 0 are always kept.
 func visibleColumns(width int) []column {

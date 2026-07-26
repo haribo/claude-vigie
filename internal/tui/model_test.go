@@ -88,3 +88,33 @@ func TestRenderDetailContainsFields(t *testing.T) {
 		}
 	}
 }
+
+func TestSparkline(t *testing.T) {
+	if got := sparkline(nil); got != "" {
+		t.Errorf("empty history = %q, want empty", got)
+	}
+	r := []rune(sparkline([]int{0, 1, 2, 4}))
+	if len(r) != 4 {
+		t.Fatalf("sparkline length = %d, want 4", len(r))
+	}
+	if r[0] != '▁' {
+		t.Errorf("zero block = %q, want ▁", string(r[0]))
+	}
+	if r[3] != '█' {
+		t.Errorf("max block = %q, want █", string(r[3]))
+	}
+}
+
+func TestRenderSummary(t *testing.T) {
+	sessions := []api.SessionView{
+		{Status: "working", Usage: api.Usage{OutputTokens: 1000}},
+		{Status: "working", Usage: api.Usage{OutputTokens: 500}},
+		{Status: "idle", Usage: api.Usage{OutputTokens: 200}},
+	}
+	out := renderSummary(sessions, []int{1, 2, 2})
+	for _, want := range []string{"working 2", "idle 1", "waiting 0", "out ", "activity "} {
+		if !strings.Contains(out, want) {
+			t.Errorf("summary missing %q:\n%s", want, out)
+		}
+	}
+}
