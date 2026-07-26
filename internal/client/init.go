@@ -1,20 +1,114 @@
 package client
 
 import (
+	"context"
 	"flag"
 	"fmt"
+	"net/http"
 	"os"
+	"strings"
+	"time"
+
+	"github.com/haribo/claude-fleet/internal/config"
+	"github.com/haribo/claude-fleet/internal/install"
 )
+
+// defaultEvents are the low-frequency hooks installed by default.
+var defaultEvents = []string{"SessionStart", "UserPromptSubmit", "Notification", "Stop", "SessionEnd"}
 
 func runInit(args []string) int {
 	fs := flag.NewFlagSet("init", flag.ContinueOnError)
 	server := fs.String("server", "", "fleet server URL to report to")
 	token := fs.String("token", "", "shared auth token")
 	machine := fs.String("machine", "", "machine name (defaults to the hostname)")
+	detailed := fs.Bool("detailed", false, "also report on every tool use (PostToolUse)")
+	uninstall := fs.Bool("uninstall", false, "remove claude-fleet hooks and stop reporting")
 	if err := fs.Parse(args); err != nil {
 		return 2
 	}
 
-	fmt.Fprintf(os.Stderr, "init: server=%q machine=%q token=%v\n", *server, *machine, *token != "")
-	return notImplemented("init")
+	if *uninstall {
+		path, err := install.Uninstall()
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "init: %v\n", err)
+			return 1
+		}
+		fmt.Printf("removed claude-fleet hooks from %s\n", path)
+		return 0
+	}
+
+	if *server == "" || *token == "" {
+		fmt.Fprintln(os.Stderr, "init: --server and --token are required")
+		return 2
+	}
+
+	mach := *machine
+	if mach == "" {
+		if h, err := os.Hostname(); err == nil {
+			mach = h
+		}
+	}
+	cfg := &config.Config{ServerURL: *server, Token: *token, Machine: mach}
+
+	if err := testConnection(cfg); err != nil {
+		fmt.Fprintf(os.Stderr, "init: cannot reach server: %v\n", err)
+		return 1
+	}
+
+	cfgPath, err := config.Save(cfg)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "init: %v\n", err)
+		return 1
+	}
+
+	binPath, err := os.Executable()
+	if err != nil {
+		binPath = "claude-fleet"
+	}
+
+	events := append([]string(nil), defaultEvents...)
+	if *detailed {
+		events = append(events, "PostToolUse")
+	}
+	settingsPath, err := install.Install(events, binPath, 5)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "init: %v\n", err)
+		return 1
+	}
+
+	fmt.Printf(`claude-fleet configured:
+  config:   %s
+  hooks:    %s
+  server:   %s
+  machine:  %s
+
+New Claude Code sessions on this machine will report to the fleet.
+`, cfgPath, settingsPath, cfg.ServerURL, mach)
+	return 0
+}
+
+// testConnection verifies the server is reachable and the token is accepted.
+func testConnection(cfg *config.Config) error {
+	url := strings.TrimRight(cfg.ServerURL, "/") + "/api/sessions"
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+	if err != nil {
+		return fmt.Errorf("building request: %w", err)
+	}
+	req.Header.Set("Authorization", "Bearer "+cfg.Token)
+
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = resp.Body.Close() }()
+	if resp.StatusCode == http.StatusUnauthorized {
+		return fmt.Errorf("invalid token")
+	}
+	if resp.StatusCode != http.StatusOK {
+		return fmt.Errorf("unexpected status %s", resp.Status)
+	}
+	return nil
 }

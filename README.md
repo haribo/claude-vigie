@@ -70,7 +70,7 @@ just code-check     # fmt + lint + build + test (run before every PR)
 - [x] Server: `/api/report`, `/api/sessions`, Bearer auth
 - [ ] Server: SSE realtime stream
 - [x] Reporter: hook payload + transcript parsing
-- [ ] `init`: merge hooks into `settings.json`, write config
+- [x] `init`: merge hooks into `settings.json`, write config
 - [ ] Web dashboard (embedded)
 - [ ] Terminal client (Bubble Tea)
 
