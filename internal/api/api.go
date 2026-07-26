@@ -15,8 +15,9 @@ type ReportRequest struct {
 	Model      string `json:"model,omitempty"`
 	Title      string `json:"title,omitempty"` // conversation title (/rename or auto)
 	LastTool   string `json:"last_tool,omitempty"`
-	Usage      *Usage `json:"usage,omitempty"` // present on Stop / SessionEnd
-	Timestamp  string `json:"timestamp"`       // RFC3339, event time
+	Status     string `json:"status,omitempty"` // explicit status (watcher); empty = derive from event
+	Usage      *Usage `json:"usage,omitempty"`  // present on Stop / SessionEnd
+	Timestamp  string `json:"timestamp"`        // RFC3339, event time
 }
 
 // Usage holds token counters.

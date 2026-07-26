@@ -165,6 +165,28 @@ func TestReportPreservesContext(t *testing.T) {
 	}
 }
 
+func TestReportExplicitStatusWins(t *testing.T) {
+	srv := newTestServer(t)
+
+	// A watcher report carries an explicit status and must not append an event.
+	body, _ := json.Marshal(api.ReportRequest{
+		Event: "watch", SessionID: "s1", Machine: "m", ProjectDir: "/p",
+		Status: "waiting", Timestamp: "2026-07-26T10:00:00Z",
+	})
+	if rec := do(t, srv, http.MethodPost, "/api/report", body, true); rec.Code != http.StatusNoContent {
+		t.Fatalf("report = %d", rec.Code)
+	}
+
+	rec := do(t, srv, http.MethodGet, "/api/sessions", nil, true)
+	var views []api.SessionView
+	if err := json.Unmarshal(rec.Body.Bytes(), &views); err != nil {
+		t.Fatal(err)
+	}
+	if len(views) != 1 || views[0].Status != "waiting" {
+		t.Fatalf("status = %+v, want explicit 'waiting'", views)
+	}
+}
+
 func TestReportValidation(t *testing.T) {
 	srv := newTestServer(t)
 	if rec := do(t, srv, http.MethodPost, "/api/report", []byte(`{"event":"Stop"}`), true); rec.Code != http.StatusBadRequest {
