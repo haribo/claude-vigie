@@ -10,7 +10,7 @@ import (
 // ErrNotFound is returned when a requested session does not exist.
 var ErrNotFound = errors.New("session not found")
 
-const sessionColumns = `id, machine, project_dir, git_branch, model, status, last_tool,
+const sessionColumns = `id, title, machine, project_dir, git_branch, model, status, last_tool,
 	input_tokens, output_tokens, cache_creation_tokens, cache_read_tokens,
 	started_at, last_seen_at, ended_at`
 
@@ -22,7 +22,7 @@ type scanner interface {
 func scanSession(sc scanner) (Session, error) {
 	var s Session
 	err := sc.Scan(
-		&s.ID, &s.Machine, &s.ProjectDir, &s.GitBranch, &s.Model, &s.Status, &s.LastTool,
+		&s.ID, &s.Title, &s.Machine, &s.ProjectDir, &s.GitBranch, &s.Model, &s.Status, &s.LastTool,
 		&s.Usage.InputTokens, &s.Usage.OutputTokens, &s.Usage.CacheCreationTokens, &s.Usage.CacheReadTokens,
 		&s.StartedAt, &s.LastSeenAt, &s.EndedAt,
 	)
@@ -34,11 +34,12 @@ func scanSession(sc scanner) (Session, error) {
 func (s *Store) UpsertSession(ctx context.Context, sess Session) error {
 	_, err := s.db.ExecContext(ctx, `
 INSERT INTO sessions (
-	id, machine, project_dir, git_branch, model, status, last_tool,
+	id, title, machine, project_dir, git_branch, model, status, last_tool,
 	input_tokens, output_tokens, cache_creation_tokens, cache_read_tokens,
 	started_at, last_seen_at, ended_at
-) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 ON CONFLICT(id) DO UPDATE SET
+	title = excluded.title,
 	machine = excluded.machine,
 	project_dir = excluded.project_dir,
 	git_branch = excluded.git_branch,
@@ -51,7 +52,7 @@ ON CONFLICT(id) DO UPDATE SET
 	cache_read_tokens = excluded.cache_read_tokens,
 	last_seen_at = excluded.last_seen_at,
 	ended_at = excluded.ended_at`,
-		sess.ID, sess.Machine, sess.ProjectDir, sess.GitBranch, sess.Model, sess.Status, sess.LastTool,
+		sess.ID, sess.Title, sess.Machine, sess.ProjectDir, sess.GitBranch, sess.Model, sess.Status, sess.LastTool,
 		sess.Usage.InputTokens, sess.Usage.OutputTokens, sess.Usage.CacheCreationTokens, sess.Usage.CacheReadTokens,
 		sess.StartedAt, sess.LastSeenAt, sess.EndedAt,
 	)

@@ -4,6 +4,7 @@ package store
 // "unknown / not set" (e.g. EndedAt is empty until the session ends).
 type Session struct {
 	ID         string
+	Title      string
 	Machine    string
 	ProjectDir string
 	GitBranch  string

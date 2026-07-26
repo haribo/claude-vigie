@@ -20,6 +20,7 @@ func openTestStore(t *testing.T) *Store {
 func sampleSession(id string) Session {
 	return Session{
 		ID:         id,
+		Title:      "demo-title",
 		Machine:    "laptop",
 		ProjectDir: "/home/x/proj",
 		GitBranch:  "main",
