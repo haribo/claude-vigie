@@ -1,0 +1,76 @@
+// Package server implements the claude-fleetd HTTP API: it accepts session
+// event reports, lists sessions, and (later) streams updates over SSE. Only
+// the daemon imports this package.
+package server
+
+import (
+	"context"
+	"crypto/subtle"
+	"encoding/json"
+	"log/slog"
+	"net/http"
+	"strings"
+
+	"github.com/haribo/claude-fleet/internal/store"
+)
+
+// Store is the persistence surface the server depends on (accept interfaces).
+type Store interface {
+	UpsertSession(ctx context.Context, s store.Session) error
+	GetSession(ctx context.Context, id string) (store.Session, error)
+	ListSessions(ctx context.Context) ([]store.Session, error)
+	AppendEvent(ctx context.Context, e store.Event) error
+}
+
+// Server is the HTTP handler set for the fleet API.
+type Server struct {
+	store Store
+	token string
+	log   *slog.Logger
+}
+
+// New returns a Server backed by st, authenticating with token.
+func New(st Store, token string, log *slog.Logger) *Server {
+	if log == nil {
+		log = slog.Default()
+	}
+	return &Server{store: st, token: token, log: log}
+}
+
+// Handler returns the root HTTP handler with all routes registered.
+func (s *Server) Handler() http.Handler {
+	mux := http.NewServeMux()
+	mux.HandleFunc("GET /healthz", s.handleHealth)
+	mux.Handle("POST /api/report", s.auth(http.HandlerFunc(s.handleReport)))
+	mux.Handle("GET /api/sessions", s.auth(http.HandlerFunc(s.handleSessions)))
+	return mux
+}
+
+func (s *Server) handleHealth(w http.ResponseWriter, _ *http.Request) {
+	w.WriteHeader(http.StatusOK)
+	_, _ = w.Write([]byte("ok\n"))
+}
+
+// auth enforces a constant-time Bearer token check on protected routes.
+func (s *Server) auth(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		token, ok := strings.CutPrefix(r.Header.Get("Authorization"), "Bearer ")
+		if !ok || subtle.ConstantTimeCompare([]byte(token), []byte(s.token)) != 1 {
+			s.writeError(w, http.StatusUnauthorized, "invalid or missing token")
+			return
+		}
+		next.ServeHTTP(w, r)
+	})
+}
+
+func (s *Server) writeJSON(w http.ResponseWriter, status int, v any) {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(status)
+	if err := json.NewEncoder(w).Encode(v); err != nil {
+		s.log.Error("encoding response", "error", err)
+	}
+}
+
+func (s *Server) writeError(w http.ResponseWriter, status int, msg string) {
+	s.writeJSON(w, status, map[string]string{"error": msg})
+}

@@ -1,0 +1,44 @@
+package server
+
+import (
+	"net/http"
+
+	"github.com/haribo/claude-fleet/internal/api"
+	"github.com/haribo/claude-fleet/internal/store"
+)
+
+func (s *Server) handleSessions(w http.ResponseWriter, r *http.Request) {
+	sessions, err := s.store.ListSessions(r.Context())
+	if err != nil {
+		s.log.Error("listing sessions", "error", err)
+		s.writeError(w, http.StatusInternalServerError, "internal error")
+		return
+	}
+
+	views := make([]api.SessionView, 0, len(sessions))
+	for _, ss := range sessions {
+		views = append(views, toView(ss))
+	}
+	s.writeJSON(w, http.StatusOK, views)
+}
+
+func toView(s store.Session) api.SessionView {
+	return api.SessionView{
+		ID:         s.ID,
+		Machine:    s.Machine,
+		ProjectDir: s.ProjectDir,
+		GitBranch:  s.GitBranch,
+		Model:      s.Model,
+		Status:     s.Status,
+		LastTool:   s.LastTool,
+		Usage: api.Usage{
+			InputTokens:         s.Usage.InputTokens,
+			OutputTokens:        s.Usage.OutputTokens,
+			CacheCreationTokens: s.Usage.CacheCreationTokens,
+			CacheReadTokens:     s.Usage.CacheReadTokens,
+		},
+		StartedAt:  s.StartedAt,
+		LastSeenAt: s.LastSeenAt,
+		EndedAt:    s.EndedAt,
+	}
+}
