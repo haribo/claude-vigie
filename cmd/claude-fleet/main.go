@@ -3,9 +3,9 @@ package main
 import (
 	"os"
 
-	"github.com/haribo/claude-fleet/internal/cli"
+	"github.com/haribo/claude-fleet/internal/client"
 )
 
 func main() {
-	os.Exit(cli.Run(os.Args[1:]))
+	os.Exit(client.Run(os.Args[1:]))
 }
