@@ -24,6 +24,8 @@ func Run(args []string) int {
 	switch cmd {
 	case "serve":
 		return runServe(rest)
+	case "token":
+		return runToken(rest)
 	case "version", "--version", "-v":
 		fmt.Println(version.String())
 		return 0
@@ -45,6 +47,7 @@ Usage:
 
 Commands:
   serve      Run the fleet server and web dashboard
+  token      Print the fleet auth token (from the database)
   version    Print version information
   help       Print this help
 
