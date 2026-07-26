@@ -29,6 +29,8 @@ type model struct {
 	updated  string
 	width    int
 	tab      tab
+	cursor   int
+	detail   bool
 }
 
 type sessionsMsg struct {
@@ -66,6 +68,12 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.sessions = msg.sessions
 			m.err = nil
 			m.updated = time.Now().Format("15:04:05")
+			if m.cursor >= len(m.sessions) {
+				m.cursor = len(m.sessions) - 1
+			}
+			if m.cursor < 0 {
+				m.cursor = 0
+			}
 		}
 	case tickMsg:
 		return m, tea.Batch(m.fetchCmd(), tickCmd())
@@ -85,6 +93,20 @@ func (m model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.tab = tabUsage
 	case "3":
 		m.tab = tabMachines
+	case "down", "j":
+		if m.cursor < len(m.sessions)-1 {
+			m.cursor++
+		}
+	case "up", "k":
+		if m.cursor > 0 {
+			m.cursor--
+		}
+	case "enter":
+		if len(m.sessions) > 0 {
+			m.detail = true
+		}
+	case "esc":
+		m.detail = false
 	}
 	return m, nil
 }
@@ -109,7 +131,7 @@ func (m model) View() string {
 		b.WriteString(dimStyle.Render("Machines — coming soon"))
 	}
 
-	b.WriteString("\n" + dimStyle.Render("1 sessions · 2 usage · 3 machines · r refresh · q quit"))
+	b.WriteString("\n" + dimStyle.Render("1 sessions · 2 usage · 3 machines · ↑↓ select · enter detail · esc back · r refresh · q quit"))
 	return b.String()
 }
 
@@ -119,7 +141,9 @@ func (m model) viewSessions() string {
 		return errStyle.Render("error: " + m.err.Error())
 	case len(m.sessions) == 0:
 		return dimStyle.Render("no sessions yet")
+	case m.detail:
+		return renderDetail(m.sessions[m.cursor])
 	default:
-		return renderTable(m.sessions, m.width)
+		return renderTable(m.sessions, m.width, m.cursor)
 	}
 }

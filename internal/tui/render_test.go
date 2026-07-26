@@ -71,7 +71,7 @@ func TestRenderTableWide(t *testing.T) {
 		Model: "claude-opus-4-8", Status: "working",
 		Usage:      api.Usage{OutputTokens: 1500, InputTokens: 500},
 		LastSeenAt: "2026-07-26T17:01:32Z",
-	}}, 200)
+	}}, 200, -1)
 	for _, want := range []string{"NAME", "my-session", "SESSION", "5c483c16", "DIR", "proj", "main", "opus-4-8", "1.5k", "17:01:32", "STATUS", "working"} {
 		if !strings.Contains(out, want) {
 			t.Errorf("wide table missing %q:\n%s", want, out)
@@ -84,7 +84,7 @@ func TestRenderTableNarrowHidesColumns(t *testing.T) {
 		ID: "5c483c16", Title: "my-session", Machine: "laptop",
 		ProjectDir: "/home/x/proj", GitBranch: "main", Status: "working",
 		LastSeenAt: "2026-07-26T17:01:32Z",
-	}}, 60)
+	}}, 60, -1)
 	for _, want := range []string{"NAME", "DIR", "STATUS"} {
 		if !strings.Contains(out, want) {
 			t.Errorf("narrow table dropped mandatory column %q:\n%s", want, out)
