@@ -90,6 +90,22 @@ just fleet-watch     # keep running; covers all local sessions
 
 The hooks refine real-time status; the watcher guarantees coverage.
 
+### Run as background services (systemd, Linux)
+
+To keep the server and watcher running (start on login, restart on crash, no
+terminal needed):
+
+```bash
+just fleet_port=9090 fleet-service-install   # installs + starts both user services
+just fleet_port=9090 fleet-connect           # config + hooks (server is already up)
+
+journalctl --user -u claude-fleet-watch -f   # follow the watcher logs
+just fleet-service-uninstall                 # stop + remove the services
+```
+
+The watcher reads the client config, so run `fleet-connect` once so it knows the
+server URL and token.
+
 Port 8080 already taken? Override it (same value for both recipes):
 `just fleet_port=9090 fleet-serve` and `just fleet_port=9090 fleet-connect`.
 
