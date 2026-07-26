@@ -26,20 +26,25 @@ The unit of tracking is one Claude Code session. Sessions are grouped by
 machine and project. See [docs/architecture.md](docs/architecture.md) for the
 full design.
 
-## One binary, four subcommands
+## Two binaries
 
 ```
-claude-fleet serve      # server + web dashboard (SQLite, SSE)
-claude-fleet tui        # terminal dashboard
-claude-fleet report     # reporter invoked by Claude Code hooks
-claude-fleet init       # install hooks + write the client config
+claude-fleetd serve     # server: HTTP API + web dashboard (SQLite, SSE) — runs on the host
+claude-fleet  init      # client: install hooks + write the config
+claude-fleet  report    # client: reporter invoked by Claude Code hooks
+claude-fleet  tui       # client: terminal dashboard
 ```
+
+`claude-fleetd` is the server daemon (one host). `claude-fleet` is the client
+you install on every machine running Claude Code sessions. See
+[ADR-0003](docs/adr/0003-split-client-and-daemon-binaries.md).
 
 ## Design choices
 
-- **Go, single static binary** — trivial self-hosting, fast reporter startup
-  (it runs on every hook), cross-platform. See
-  [ADR-0002](docs/adr/0002-single-go-binary-with-sqlite.md).
+- **Go, static binaries** — trivial self-hosting, cross-platform, minimal
+  client surface (client and server are separate binaries). See
+  [ADR-0002](docs/adr/0002-single-go-binary-with-sqlite.md) and
+  [ADR-0003](docs/adr/0003-split-client-and-daemon-binaries.md).
 - **Embedded SQLite** — no database server to deploy; full usage history.
 - **Shared-token auth** — simple, suitable for personal use or a small team.
 - **Tokens only** — no currency cost estimates (Claude Code subscriptions have
@@ -59,6 +64,7 @@ just code-check     # fmt + lint + build + test (run before every PR)
 ## Roadmap
 
 - [x] Project skeleton, tooling, CI, conventions
+- [x] Split into client (`claude-fleet`) and daemon (`claude-fleetd`) binaries
 - [x] Client config (XDG) load/save
 - [ ] SQLite store (sessions, events, usage)
 - [ ] Server: `/api/report`, `/api/sessions`, SSE

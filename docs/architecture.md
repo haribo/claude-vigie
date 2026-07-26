@@ -13,14 +13,24 @@ Claude Code hook  →  claude-fleet report  →  POST /api/report  →  SQLite
 Web dashboard / TUI  ←──────── SSE /api/events ←────────────── current state
 ```
 
+## Binaries
+
+Two binaries, split along the deployment boundary (see
+[ADR-0003](adr/0003-split-client-and-daemon-binaries.md)):
+
+- **`claude-fleetd`** — the server daemon. Runs on the host machine. Carries
+  SQLite, the HTTP server, and the embedded web dashboard.
+- **`claude-fleet`** — the client. Installed on every machine running Claude
+  Code sessions. Stays minimal (no server code, no SQLite).
+
 ## Components
 
-| Component | Subcommand | Role |
-|-----------|------------|------|
-| Server | `serve` | HTTP API + embedded web dashboard, SQLite storage, SSE stream |
-| Reporter | `report` | Invoked by Claude Code hooks; sends events to the server |
-| Terminal client | `tui` | Live dashboard in the terminal (Bubble Tea) |
-| Installer | `init` | Merges hooks into `~/.claude/settings.json`, writes the client config |
+| Component | Binary | Subcommand | Role |
+|-----------|--------|------------|------|
+| Server | `claude-fleetd` | `serve` | HTTP API + embedded web dashboard, SQLite storage, SSE stream |
+| Installer | `claude-fleet` | `init` | Merges hooks into `~/.claude/settings.json`, writes the client config |
+| Reporter | `claude-fleet` | `report` | Invoked by Claude Code hooks; sends events to the server |
+| Terminal client | `claude-fleet` | `tui` | Live dashboard in the terminal (Bubble Tea) |
 
 ## Unit of tracking
 
