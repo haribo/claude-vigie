@@ -5,6 +5,7 @@ before:
     - go mod tidy
 
 builds:
+  # claude-fleet — the client (init, report, tui), installed on every machine.
   - id: claude-fleet
     main: ./cmd/claude-fleet
     binary: claude-fleet
@@ -12,13 +13,22 @@ builds:
     # cross-compile cleanly and link statically (see ADR-0002).
     env:
       - CGO_ENABLED=0
-    goos:
-      - linux
-      - darwin
-      - windows
-    goarch:
-      - amd64
-      - arm64
+    goos: [linux, darwin, windows]
+    goarch: [amd64, arm64]
+    ldflags:
+      - -s -w
+      - -X github.com/haribo/claude-fleet/internal/version.Version={{ .Version }}
+      - -X github.com/haribo/claude-fleet/internal/version.Commit={{ .ShortCommit }}
+      - -X github.com/haribo/claude-fleet/internal/version.BuildTime={{ .Date }}
+
+  # claude-fleetd — the server daemon (serve), runs on the host machine.
+  - id: claude-fleetd
+    main: ./cmd/claude-fleetd
+    binary: claude-fleetd
+    env:
+      - CGO_ENABLED=0
+    goos: [linux, darwin, windows]
+    goarch: [amd64, arm64]
     ldflags:
       - -s -w
       - -X github.com/haribo/claude-fleet/internal/version.Version={{ .Version }}
@@ -26,12 +36,21 @@ builds:
       - -X github.com/haribo/claude-fleet/internal/version.BuildTime={{ .Date }}
 
 archives:
-  - id: default
+  # Separate archives so client machines download only claude-fleet.
+  - id: client
+    ids: [claude-fleet]
     formats: [tar.gz]
     format_overrides:
       - goos: windows
         formats: [zip]
-    name_template: "{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
+    name_template: "claude-fleet_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
+  - id: daemon
+    ids: [claude-fleetd]
+    formats: [tar.gz]
+    format_overrides:
+      - goos: windows
+        formats: [zip]
+    name_template: "claude-fleetd_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
 
 checksum:
   name_template: checksums.txt

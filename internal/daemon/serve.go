@@ -1,4 +1,4 @@
-package cli
+package daemon
 
 import (
 	"flag"
@@ -15,5 +15,6 @@ func runServe(args []string) int {
 	}
 
 	fmt.Fprintf(os.Stderr, "serve: addr=%s db=%s\n", *addr, *dbPath)
-	return notImplemented("serve")
+	fmt.Fprintln(os.Stderr, "serve: not implemented yet")
+	return 1
 }

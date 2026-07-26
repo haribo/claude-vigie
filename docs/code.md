@@ -40,25 +40,33 @@ After modifying Go code:
 
 ## Architecture
 
-The binary is a single executable with several subcommands. Each concern lives
-in its own package under `internal/`.
+Two binaries share code through `internal/`. The split is enforced by imports:
+the client never imports the server/store packages, so it never links them.
 
-| Package | Role |
-|---------|------|
-| `internal/cli` | Command-line dispatch; one file per subcommand |
-| `internal/config` | Load/save the shared per-machine client config (XDG) |
-| `internal/version` | Build metadata injected via ldflags |
-| `internal/store` | SQLite persistence: sessions, events, usage |
-| `internal/server` | HTTP API, auth, SSE, embedded web dashboard |
-| `internal/report` | Reporter: parse hook payloads + transcripts, POST to the server |
-| `internal/tui` | Terminal dashboard client (Bubble Tea) |
-| `web/` | Static dashboard assets, embedded via `embed.FS` |
+| Binary | Command dir | Entry package |
+|--------|-------------|---------------|
+| `claude-fleet` (client) | `cmd/claude-fleet` | `internal/client` |
+| `claude-fleetd` (daemon) | `cmd/claude-fleetd` | `internal/daemon` |
+
+| Package | Used by | Role |
+|---------|---------|------|
+| `internal/client` | client | Client command dispatch (init, report, tui) |
+| `internal/daemon` | daemon | Daemon command dispatch (serve) |
+| `internal/report` | client | Parse hook payloads + transcripts, POST to the server |
+| `internal/tui` | client | Terminal dashboard client (Bubble Tea) |
+| `internal/server` | daemon | HTTP API, auth, SSE, embedded web dashboard |
+| `internal/store` | daemon | SQLite persistence: sessions, events, usage |
+| `internal/config` | both | Load/save the shared per-machine client config (XDG) |
+| `internal/api` | both | Shared request/response types (client ↔ server) |
+| `internal/version` | both | Build metadata injected via ldflags |
+| `web/` | daemon | Static dashboard assets, embedded via `embed.FS` |
 
 ### Boundaries
 
-- `cli` wires subcommands to the packages above; it holds no business logic
-- `server` and `tui` depend on `store` / HTTP types, never on each other
-- `config` and `version` are leaves — they import nothing from the project
+- The client (`internal/client`, `report`, `tui`) MUST NOT import
+  `internal/server`, `internal/store`, or `web/` — that is what keeps the
+  client binary minimal
+- `config`, `api`, and `version` are shared leaves — no business logic
 - Keep transport (HTTP handlers) separate from persistence (`store`)
 
 ### File organization

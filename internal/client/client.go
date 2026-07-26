@@ -1,9 +1,10 @@
-// Package cli implements the claude-fleet command-line dispatch.
+// Package client implements the claude-fleet client command-line dispatch.
 //
-// A single binary exposes several subcommands: `serve` (server + web
-// dashboard), `tui` (terminal client), `report` (reporter invoked by Claude
-// Code hooks), and `init` (install hooks + write the client config).
-package cli
+// The client is installed on every machine running Claude Code sessions. It
+// configures reporting (`init`), reports session events invoked by hooks
+// (`report`), and shows the live dashboard in the terminal (`tui`). The server
+// runs separately as the `claude-fleetd` daemon.
+package client
 
 import (
 	"fmt"
@@ -13,7 +14,7 @@ import (
 	"github.com/haribo/claude-fleet/internal/version"
 )
 
-// Run dispatches to the requested subcommand and returns a process exit code.
+// Run dispatches to the requested client subcommand and returns an exit code.
 func Run(args []string) int {
 	if len(args) == 0 {
 		usage(os.Stderr)
@@ -22,14 +23,12 @@ func Run(args []string) int {
 
 	cmd, rest := args[0], args[1:]
 	switch cmd {
-	case "serve":
-		return runServe(rest)
-	case "tui":
-		return runTUI(rest)
-	case "report":
-		return runReport(rest)
 	case "init":
 		return runInit(rest)
+	case "report":
+		return runReport(rest)
+	case "tui":
+		return runTUI(rest)
 	case "version", "--version", "-v":
 		fmt.Println(version.String())
 		return 0
@@ -44,20 +43,20 @@ func Run(args []string) int {
 }
 
 func usage(w io.Writer) {
-	fmt.Fprint(w, `claude-fleet — monitor Claude Code sessions across machines
+	fmt.Fprint(w, `claude-fleet — client for the Claude Fleet monitor
 
 Usage:
   claude-fleet <command> [flags]
 
 Commands:
-  serve      Run the fleet server and web dashboard
-  tui        Run the terminal dashboard client
-  report     Report a session event (invoked by Claude Code hooks)
   init       Install hooks and write the client config
+  report     Report a session event (invoked by Claude Code hooks)
+  tui        Run the terminal dashboard client
   version    Print version information
   help       Print this help
 
 Run "claude-fleet <command> -h" for command-specific flags.
+The server runs separately as "claude-fleetd".
 `)
 }
 

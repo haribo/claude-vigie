@@ -1,5 +1,8 @@
 # Application version (overridden by git tag on release)
 version := "0.0.0"
+commit := `git rev-parse --short HEAD 2>/dev/null || echo none`
+build_time := `date -u +%Y-%m-%dT%H:%M:%SZ`
+ldflags := "-X github.com/haribo/claude-fleet/internal/version.Version=" + version + " -X github.com/haribo/claude-fleet/internal/version.Commit=" + commit + " -X github.com/haribo/claude-fleet/internal/version.BuildTime=" + build_time
 
 # Default: list all commands
 default:
@@ -18,17 +21,18 @@ dev-setup:
 # APP
 # =============================================================================
 
-# Build the binary into ./bin
+# Build both binaries into ./bin
 app-build:
-    go build -ldflags "-X github.com/haribo/claude-fleet/internal/version.Version={{version}} -X github.com/haribo/claude-fleet/internal/version.Commit=$(git rev-parse --short HEAD 2>/dev/null || echo none) -X github.com/haribo/claude-fleet/internal/version.BuildTime=$(date -u +%Y-%m-%dT%H:%M:%SZ)" -o bin/claude-fleet ./cmd/claude-fleet
+    go build -ldflags "{{ldflags}}" -o bin/claude-fleet ./cmd/claude-fleet
+    go build -ldflags "{{ldflags}}" -o bin/claude-fleetd ./cmd/claude-fleetd
 
 # Clean build artifacts
 app-clean:
     rm -rf bin/
 
-# Build and run the server
+# Build and run the server (daemon)
 app-serve: app-build
-    ./bin/claude-fleet serve
+    ./bin/claude-fleetd serve
 
 # Build and run the terminal client
 app-tui: app-build

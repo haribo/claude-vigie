@@ -2,7 +2,9 @@
 
 ## Status
 
-Accepted
+Accepted. The "single binary" aspect is superseded by
+[ADR-0003](0003-split-client-and-daemon-binaries.md) (two binaries: client +
+daemon); the Go / pure-SQLite / GoReleaser decisions still hold.
 
 ## Context
 
