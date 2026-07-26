@@ -128,7 +128,10 @@ tool-install:
 # Install both binaries into ~/.local/bin (must be on your PATH)
 install: app-build
     mkdir -p {{home_bin}}
-    cp bin/claude-fleet bin/claude-fleetd {{home_bin}}/
+    # Atomic replace via mv so a running service (holding the old inode) does
+    # not fail with "Text file busy".
+    cp -f bin/claude-fleet {{home_bin}}/.claude-fleet.tmp && mv -f {{home_bin}}/.claude-fleet.tmp {{home_bin}}/claude-fleet
+    cp -f bin/claude-fleetd {{home_bin}}/.claude-fleetd.tmp && mv -f {{home_bin}}/.claude-fleetd.tmp {{home_bin}}/claude-fleetd
     @echo "installed claude-fleet + claude-fleetd into {{home_bin}}"
 
 # Run the fleet server locally in the foreground

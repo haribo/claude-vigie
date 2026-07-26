@@ -104,11 +104,14 @@ func testConnection(cfg *config.Config) error {
 		return err
 	}
 	defer func() { _ = resp.Body.Close() }()
-	if resp.StatusCode == http.StatusUnauthorized {
+	switch resp.StatusCode {
+	case http.StatusOK:
+		return nil
+	case http.StatusUnauthorized:
 		return fmt.Errorf("invalid token")
-	}
-	if resp.StatusCode != http.StatusOK {
+	case http.StatusNotFound:
+		return fmt.Errorf("%s responded 404 — not a claude-fleet server (wrong port, or claude-fleetd not running there)", cfg.ServerURL)
+	default:
 		return fmt.Errorf("unexpected status %s", resp.Status)
 	}
-	return nil
 }
