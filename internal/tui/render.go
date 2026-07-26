@@ -2,6 +2,7 @@ package tui
 
 import (
 	"fmt"
+	"path/filepath"
 	"strings"
 
 	"github.com/charmbracelet/lipgloss"
@@ -20,10 +21,11 @@ var columns = []struct {
 	width int
 }{
 	{"STATUS", 13},
-	{"MACHINE", 12},
-	{"PROJECT", 24},
+	{"SESSION", 9},
+	{"MACHINE", 10},
+	{"PROJECT", 18},
 	{"BRANCH", 16},
-	{"MODEL", 14},
+	{"MODEL", 12},
 	{"OUT", 8},
 	{"TOTAL", 9},
 	{"SEEN", 8},
@@ -57,13 +59,14 @@ func renderTable(sessions []api.SessionView) string {
 			s.Usage.CacheCreationTokens + s.Usage.CacheReadTokens
 		cells := []string{
 			statusStyle(s.Status).Render(pad(s.Status, columns[0].width)),
-			pad(s.Machine, columns[1].width),
-			pad(tailPath(s.ProjectDir, columns[2].width), columns[2].width),
-			pad(orDash(s.GitBranch), columns[3].width),
-			pad(shortModel(s.Model), columns[4].width),
-			pad(humanizeTokens(s.Usage.OutputTokens), columns[5].width),
-			pad(humanizeTokens(total), columns[6].width),
-			pad(clockTime(s.LastSeenAt), columns[7].width),
+			pad(shortID(s.ID), columns[1].width),
+			pad(s.Machine, columns[2].width),
+			pad(projectName(s.ProjectDir), columns[3].width),
+			pad(orDash(s.GitBranch), columns[4].width),
+			pad(shortModel(s.Model), columns[5].width),
+			pad(humanizeTokens(s.Usage.OutputTokens), columns[6].width),
+			pad(humanizeTokens(total), columns[7].width),
+			pad(clockTime(s.LastSeenAt), columns[8].width),
 		}
 		b.WriteString(strings.Join(cells, "  ") + "\n")
 	}
@@ -119,11 +122,19 @@ func truncate(s string, maxRunes int) string {
 	return string(r[:maxRunes-1]) + "…"
 }
 
-// tailPath keeps the most informative (trailing) part of a path.
-func tailPath(s string, maxRunes int) string {
-	r := []rune(s)
-	if len(r) <= maxRunes {
-		return s
+// shortID returns the first 8 characters of a session id.
+func shortID(id string) string {
+	r := []rune(id)
+	if len(r) > 8 {
+		return string(r[:8])
 	}
-	return "…" + string(r[len(r)-maxRunes+1:])
+	return id
+}
+
+// projectName returns the final path segment of a project directory.
+func projectName(dir string) string {
+	if dir == "" {
+		return "-"
+	}
+	return filepath.Base(dir)
 }

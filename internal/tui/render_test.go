@@ -40,14 +40,29 @@ func TestPadAndTruncate(t *testing.T) {
 	}
 }
 
+func TestShortIDAndProjectName(t *testing.T) {
+	if got := shortID("5c483c16-96b5-4f61"); got != "5c483c16" {
+		t.Errorf("shortID = %q, want 5c483c16", got)
+	}
+	if got := shortID("abc"); got != "abc" {
+		t.Errorf("shortID(short) = %q, want abc", got)
+	}
+	if got := projectName("/home/x/claude-fleet"); got != "claude-fleet" {
+		t.Errorf("projectName = %q, want claude-fleet", got)
+	}
+	if got := projectName(""); got != "-" {
+		t.Errorf("projectName(empty) = %q, want -", got)
+	}
+}
+
 func TestRenderTableContainsData(t *testing.T) {
 	out := renderTable([]api.SessionView{{
-		ID: "s1", Machine: "laptop", ProjectDir: "/home/x/proj", GitBranch: "main",
+		ID: "5c483c16-96b5-4f61", Machine: "laptop", ProjectDir: "/home/x/proj", GitBranch: "main",
 		Model: "claude-opus-4-8", Status: "working",
 		Usage:      api.Usage{OutputTokens: 1500, InputTokens: 500},
 		LastSeenAt: "2026-07-26T17:01:32Z",
 	}})
-	for _, want := range []string{"STATUS", "laptop", "proj", "main", "opus-4-8", "1.5k", "17:01:32"} {
+	for _, want := range []string{"SESSION", "5c483c16", "laptop", "proj", "main", "opus-4-8", "1.5k", "17:01:32"} {
 		if !strings.Contains(out, want) {
 			t.Errorf("rendered table missing %q:\n%s", want, out)
 		}
