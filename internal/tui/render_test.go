@@ -55,16 +55,44 @@ func TestShortIDAndProjectName(t *testing.T) {
 	}
 }
 
-func TestRenderTableContainsData(t *testing.T) {
+func TestSessionName(t *testing.T) {
+	if got := sessionName(api.SessionView{Title: "my-conv", ID: "5c483c16-x"}); got != "my-conv" {
+		t.Errorf("sessionName with title = %q, want my-conv", got)
+	}
+	if got := sessionName(api.SessionView{ID: "5c483c16-x"}); got != "5c483c16" {
+		t.Errorf("sessionName without title = %q, want short id 5c483c16", got)
+	}
+}
+
+func TestRenderTableWide(t *testing.T) {
 	out := renderTable([]api.SessionView{{
-		ID: "5c483c16-96b5-4f61", Machine: "laptop", ProjectDir: "/home/x/proj", GitBranch: "main",
+		ID: "5c483c16-96b5-4f61", Title: "my-session", Machine: "laptop",
+		ProjectDir: "/home/x/proj", GitBranch: "main",
 		Model: "claude-opus-4-8", Status: "working",
 		Usage:      api.Usage{OutputTokens: 1500, InputTokens: 500},
 		LastSeenAt: "2026-07-26T17:01:32Z",
-	}})
-	for _, want := range []string{"SESSION", "5c483c16", "laptop", "proj", "main", "opus-4-8", "1.5k", "17:01:32"} {
+	}}, 200)
+	for _, want := range []string{"NAME", "my-session", "SESSION", "5c483c16", "DIR", "proj", "main", "opus-4-8", "1.5k", "17:01:32", "STATUS", "working"} {
 		if !strings.Contains(out, want) {
-			t.Errorf("rendered table missing %q:\n%s", want, out)
+			t.Errorf("wide table missing %q:\n%s", want, out)
+		}
+	}
+}
+
+func TestRenderTableNarrowHidesColumns(t *testing.T) {
+	out := renderTable([]api.SessionView{{
+		ID: "5c483c16", Title: "my-session", Machine: "laptop",
+		ProjectDir: "/home/x/proj", GitBranch: "main", Status: "working",
+		LastSeenAt: "2026-07-26T17:01:32Z",
+	}}, 60)
+	for _, want := range []string{"NAME", "DIR", "STATUS"} {
+		if !strings.Contains(out, want) {
+			t.Errorf("narrow table dropped mandatory column %q:\n%s", want, out)
+		}
+	}
+	for _, gone := range []string{"SESSION", "BRANCH", "TOTAL"} {
+		if strings.Contains(out, gone) {
+			t.Errorf("narrow table still shows %q (should be hidden):\n%s", gone, out)
 		}
 	}
 }
