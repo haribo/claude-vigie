@@ -1,0 +1,176 @@
+package server
+
+import (
+	"bytes"
+	"encoding/json"
+	"net/http"
+	"net/http/httptest"
+	"path/filepath"
+	"testing"
+
+	"github.com/haribo/claude-fleet/internal/api"
+	"github.com/haribo/claude-fleet/internal/store"
+)
+
+const testToken = "test-token"
+
+func newTestServer(t *testing.T) *Server {
+	t.Helper()
+	st, err := store.Open(filepath.Join(t.TempDir(), "test.db"))
+	if err != nil {
+		t.Fatalf("store: %v", err)
+	}
+	t.Cleanup(func() { _ = st.Close() })
+	return New(st, testToken, nil)
+}
+
+func do(t *testing.T, srv *Server, method, path string, body []byte, auth bool) *httptest.ResponseRecorder {
+	t.Helper()
+	var r *http.Request
+	if body != nil {
+		r = httptest.NewRequest(method, path, bytes.NewReader(body))
+	} else {
+		r = httptest.NewRequest(method, path, nil)
+	}
+	if auth {
+		r.Header.Set("Authorization", "Bearer "+testToken)
+	}
+	rec := httptest.NewRecorder()
+	srv.Handler().ServeHTTP(rec, r)
+	return rec
+}
+
+func TestHealthNoAuth(t *testing.T) {
+	rec := do(t, newTestServer(t), http.MethodGet, "/healthz", nil, false)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200", rec.Code)
+	}
+}
+
+func TestProtectedRoutesRequireAuth(t *testing.T) {
+	srv := newTestServer(t)
+	if rec := do(t, srv, http.MethodPost, "/api/report", []byte(`{}`), false); rec.Code != http.StatusUnauthorized {
+		t.Errorf("report without auth = %d, want 401", rec.Code)
+	}
+	if rec := do(t, srv, http.MethodGet, "/api/sessions", nil, false); rec.Code != http.StatusUnauthorized {
+		t.Errorf("sessions without auth = %d, want 401", rec.Code)
+	}
+}
+
+func TestReportCreatesAndListsSession(t *testing.T) {
+	srv := newTestServer(t)
+
+	body, _ := json.Marshal(api.ReportRequest{
+		Event:      "UserPromptSubmit",
+		SessionID:  "s1",
+		Machine:    "laptop",
+		ProjectDir: "/p",
+		Model:      "claude-opus-4-8",
+		Timestamp:  "2026-07-26T10:00:00Z",
+	})
+	if rec := do(t, srv, http.MethodPost, "/api/report", body, true); rec.Code != http.StatusNoContent {
+		t.Fatalf("report = %d, want 204 (body: %s)", rec.Code, rec.Body)
+	}
+
+	rec := do(t, srv, http.MethodGet, "/api/sessions", nil, true)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("sessions = %d, want 200", rec.Code)
+	}
+	var views []api.SessionView
+	if err := json.Unmarshal(rec.Body.Bytes(), &views); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if len(views) != 1 {
+		t.Fatalf("len = %d, want 1", len(views))
+	}
+	if views[0].ID != "s1" || views[0].Status != "working" {
+		t.Errorf("got id=%s status=%s, want s1/working", views[0].ID, views[0].Status)
+	}
+	if views[0].StartedAt != "2026-07-26T10:00:00Z" {
+		t.Errorf("started_at = %q", views[0].StartedAt)
+	}
+}
+
+func TestReportWithoutUsagePreservesTokens(t *testing.T) {
+	srv := newTestServer(t)
+
+	// First: Stop carrying usage.
+	stop, _ := json.Marshal(api.ReportRequest{
+		Event: "Stop", SessionID: "s1", Machine: "m", ProjectDir: "/p",
+		Timestamp: "2026-07-26T10:00:00Z",
+		Usage:     &api.Usage{InputTokens: 100, OutputTokens: 50},
+	})
+	if rec := do(t, srv, http.MethodPost, "/api/report", stop, true); rec.Code != http.StatusNoContent {
+		t.Fatalf("first report = %d", rec.Code)
+	}
+
+	// Second: a prompt submit with no usage must not zero the tokens.
+	prompt, _ := json.Marshal(api.ReportRequest{
+		Event: "UserPromptSubmit", SessionID: "s1", Machine: "m", ProjectDir: "/p",
+		Timestamp: "2026-07-26T10:01:00Z",
+	})
+	if rec := do(t, srv, http.MethodPost, "/api/report", prompt, true); rec.Code != http.StatusNoContent {
+		t.Fatalf("second report = %d", rec.Code)
+	}
+
+	rec := do(t, srv, http.MethodGet, "/api/sessions", nil, true)
+	var views []api.SessionView
+	if err := json.Unmarshal(rec.Body.Bytes(), &views); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if len(views) != 1 {
+		t.Fatalf("len = %d, want 1", len(views))
+	}
+	if views[0].Usage.InputTokens != 100 || views[0].Usage.OutputTokens != 50 {
+		t.Errorf("usage not preserved: %+v", views[0].Usage)
+	}
+	if views[0].Status != "working" {
+		t.Errorf("status = %q, want working", views[0].Status)
+	}
+}
+
+func TestReportPreservesContext(t *testing.T) {
+	srv := newTestServer(t)
+
+	start, _ := json.Marshal(api.ReportRequest{
+		Event: "SessionStart", SessionID: "s1", Machine: "laptop", ProjectDir: "/p",
+		GitBranch: "feature-x", Model: "claude-opus-4-8", Timestamp: "2026-07-26T10:00:00Z",
+	})
+	if rec := do(t, srv, http.MethodPost, "/api/report", start, true); rec.Code != http.StatusNoContent {
+		t.Fatalf("start = %d", rec.Code)
+	}
+
+	// A later event omits git_branch and model; they must be preserved.
+	stop, _ := json.Marshal(api.ReportRequest{
+		Event: "Stop", SessionID: "s1", Machine: "laptop", ProjectDir: "/p",
+		Timestamp: "2026-07-26T10:05:00Z",
+	})
+	if rec := do(t, srv, http.MethodPost, "/api/report", stop, true); rec.Code != http.StatusNoContent {
+		t.Fatalf("stop = %d", rec.Code)
+	}
+
+	rec := do(t, srv, http.MethodGet, "/api/sessions", nil, true)
+	var views []api.SessionView
+	if err := json.Unmarshal(rec.Body.Bytes(), &views); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if len(views) != 1 {
+		t.Fatalf("len = %d, want 1", len(views))
+	}
+	if views[0].GitBranch != "feature-x" {
+		t.Errorf("git_branch = %q, want feature-x (preserved)", views[0].GitBranch)
+	}
+	if views[0].Model != "claude-opus-4-8" {
+		t.Errorf("model = %q, want preserved", views[0].Model)
+	}
+}
+
+func TestReportValidation(t *testing.T) {
+	srv := newTestServer(t)
+	if rec := do(t, srv, http.MethodPost, "/api/report", []byte(`{"event":"Stop"}`), true); rec.Code != http.StatusBadRequest {
+		t.Errorf("missing session_id = %d, want 400", rec.Code)
+	}
+	if rec := do(t, srv, http.MethodPost, "/api/report", []byte(`not json`), true); rec.Code != http.StatusBadRequest {
+		t.Errorf("bad json = %d, want 400", rec.Code)
+	}
+}
