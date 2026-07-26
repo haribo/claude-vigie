@@ -4,15 +4,30 @@ import (
 	"flag"
 	"fmt"
 	"os"
+
+	"github.com/haribo/claude-fleet/internal/config"
+	"github.com/haribo/claude-fleet/internal/tui"
 )
 
 func runTUI(args []string) int {
 	fs := flag.NewFlagSet("tui", flag.ContinueOnError)
-	server := fs.String("server", "", "fleet server URL (defaults to the value in the client config)")
+	server := fs.String("server", "", "fleet server URL (overrides the client config)")
 	if err := fs.Parse(args); err != nil {
 		return 2
 	}
 
-	fmt.Fprintf(os.Stderr, "tui: server=%q\n", *server)
-	return notImplemented("tui")
+	cfg, err := config.Load()
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "tui: %v\nrun 'claude-fleet init' first, or pass --server\n", err)
+		return 1
+	}
+	if *server != "" {
+		cfg.ServerURL = *server
+	}
+
+	if err := tui.Run(cfg); err != nil {
+		fmt.Fprintf(os.Stderr, "tui: %v\n", err)
+		return 1
+	}
+	return 0
 }
