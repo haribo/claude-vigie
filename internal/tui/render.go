@@ -106,7 +106,7 @@ func statusStyle(status string) lipgloss.Style {
 	switch status {
 	case "working":
 		return lipgloss.NewStyle().Foreground(lipgloss.Color("10")) // green
-	case "waiting_input":
+	case "waiting", "waiting_input":
 		return lipgloss.NewStyle().Foreground(lipgloss.Color("11")) // yellow
 	case "idle":
 		return lipgloss.NewStyle().Foreground(lipgloss.Color("12")) // blue

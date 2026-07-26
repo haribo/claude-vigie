@@ -27,6 +27,8 @@ func Run(args []string) int {
 		return runInit(rest)
 	case "report":
 		return runReport(rest)
+	case "watch":
+		return runWatch(rest)
 	case "tui":
 		return runTUI(rest)
 	case "version", "--version", "-v":
@@ -51,6 +53,7 @@ Usage:
 Commands:
   init       Install hooks and write the client config
   report     Report a session event (invoked by Claude Code hooks)
+  watch      Watch local transcripts and report all sessions
   tui        Run the terminal dashboard client
   version    Print version information
   help       Print this help

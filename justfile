@@ -147,3 +147,7 @@ fleet-connect: app-build
 # Disconnect this machine (remove our hooks)
 fleet-disconnect: app-build
     ./bin/claude-fleet init --uninstall
+
+# Watch ALL local sessions and report them (covers already-open sessions)
+fleet-watch: app-build
+    ./bin/claude-fleet watch
