@@ -66,7 +66,7 @@ just code-check     # fmt + lint + build + test (run before every PR)
 - [x] Project skeleton, tooling, CI, conventions
 - [x] Split into client (`claude-fleet`) and daemon (`claude-fleetd`) binaries
 - [x] Client config (XDG) load/save
-- [ ] SQLite store (sessions, events, usage)
+- [x] SQLite store (sessions, events)
 - [ ] Server: `/api/report`, `/api/sessions`, SSE
 - [ ] Reporter: hook payload + transcript parsing
 - [ ] `init`: merge hooks into `settings.json`, write config
