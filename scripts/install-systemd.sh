@@ -28,7 +28,8 @@ RestartSec=5
 WantedBy=default.target
 EOF
     systemctl --user daemon-reload
-    systemctl --user enable --now claude-fleetd.service
+    systemctl --user enable claude-fleetd.service
+    systemctl --user restart claude-fleetd.service
     echo "installed and started claude-fleetd.service ($ADDR)"
     ;;
   watch)
@@ -46,7 +47,8 @@ RestartSec=5
 WantedBy=default.target
 EOF
     systemctl --user daemon-reload
-    systemctl --user enable --now claude-fleet-watch.service
+    systemctl --user enable claude-fleet-watch.service
+    systemctl --user restart claude-fleet-watch.service
     echo "installed and started claude-fleet-watch.service"
     ;;
   *)
