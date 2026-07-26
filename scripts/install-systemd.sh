@@ -1,16 +1,20 @@
 #!/usr/bin/env bash
-# Generate and start systemd --user services for the fleet server and watcher.
-# Usage: install-systemd.sh <bin_dir> <addr> <db>
+# Install a systemd --user service for one fleet role.
+# Usage:
+#   install-systemd.sh server <bin_dir> <addr> <db>
+#   install-systemd.sh watch  <bin_dir>
 set -euo pipefail
 
-BIN_DIR="${1:?usage: install-systemd.sh <bin_dir> <addr> <db>}"
-ADDR="${2:?missing addr}"
-DB="${3:?missing db}"
+ROLE="${1:?usage: install-systemd.sh <server|watch> <bin_dir> [addr] [db]}"
+BIN_DIR="${2:?missing bin_dir}"
 UNIT_DIR="${XDG_CONFIG_HOME:-$HOME/.config}/systemd/user"
-
 mkdir -p "$UNIT_DIR"
 
-cat > "$UNIT_DIR/claude-fleetd.service" <<EOF
+case "$ROLE" in
+  server)
+    ADDR="${3:?missing addr}"
+    DB="${4:?missing db}"
+    cat > "$UNIT_DIR/claude-fleetd.service" <<EOF
 [Unit]
 Description=Claude Fleet server
 After=network.target
@@ -23,12 +27,15 @@ RestartSec=5
 [Install]
 WantedBy=default.target
 EOF
-
-cat > "$UNIT_DIR/claude-fleet-watch.service" <<EOF
+    systemctl --user daemon-reload
+    systemctl --user enable --now claude-fleetd.service
+    echo "installed and started claude-fleetd.service ($ADDR)"
+    ;;
+  watch)
+    cat > "$UNIT_DIR/claude-fleet-watch.service" <<EOF
 [Unit]
 Description=Claude Fleet watcher
-After=claude-fleetd.service
-Wants=claude-fleetd.service
+After=network.target
 
 [Service]
 ExecStart=$BIN_DIR/claude-fleet watch
@@ -38,12 +45,12 @@ RestartSec=5
 [Install]
 WantedBy=default.target
 EOF
-
-systemctl --user daemon-reload
-systemctl --user enable --now claude-fleetd.service claude-fleet-watch.service
-
-echo "installed and started user services:"
-echo "  claude-fleetd.service       ($ADDR)"
-echo "  claude-fleet-watch.service"
-echo "logs:   journalctl --user -u claude-fleet-watch -f"
-echo "status: systemctl --user status claude-fleetd claude-fleet-watch"
+    systemctl --user daemon-reload
+    systemctl --user enable --now claude-fleet-watch.service
+    echo "installed and started claude-fleet-watch.service"
+    ;;
+  *)
+    echo "unknown role: $ROLE (use 'server' or 'watch')" >&2
+    exit 1
+    ;;
+esac

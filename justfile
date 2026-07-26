@@ -152,13 +152,24 @@ fleet-disconnect: app-build
 fleet-watch: app-build
     ./bin/claude-fleet watch
 
-# Install & start systemd --user services (server + watcher, Linux)
-fleet-service-install: install
-    scripts/install-systemd.sh {{home_bin}} {{fleet_addr}} {{fleet_db}}
+# Install & start the SERVER as a systemd --user service (host only, Linux)
+fleet-server-install: install
+    scripts/install-systemd.sh server {{home_bin}} {{fleet_addr}} {{fleet_db}}
 
-# Stop & remove the systemd --user services
-fleet-service-uninstall:
-    -systemctl --user disable --now claude-fleetd.service claude-fleet-watch.service
-    rm -f ~/.config/systemd/user/claude-fleetd.service ~/.config/systemd/user/claude-fleet-watch.service
+# Stop & remove the server service
+fleet-server-uninstall:
+    -systemctl --user disable --now claude-fleetd.service
+    rm -f ~/.config/systemd/user/claude-fleetd.service
     systemctl --user daemon-reload
-    @echo "removed claude-fleet user services"
+    @echo "removed claude-fleetd.service"
+
+# Install & start the WATCHER as a systemd --user service (every machine, Linux)
+fleet-watch-install: install
+    scripts/install-systemd.sh watch {{home_bin}}
+
+# Stop & remove the watcher service
+fleet-watch-uninstall:
+    -systemctl --user disable --now claude-fleet-watch.service
+    rm -f ~/.config/systemd/user/claude-fleet-watch.service
+    systemctl --user daemon-reload
+    @echo "removed claude-fleet-watch.service"
