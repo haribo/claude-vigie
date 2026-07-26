@@ -1,0 +1,18 @@
+#!/bin/bash
+
+# Block direct commits on protected branches (docs/git-workflow.md).
+# Every change must go through a feature branch and a pull request.
+
+BRANCH=$(git symbolic-ref --short HEAD 2>/dev/null)
+
+if [ "$BRANCH" = "main" ] || [ "$BRANCH" = "develop" ]; then
+  echo ""
+  echo "ERROR: direct commits on '$BRANCH' are not allowed."
+  echo "  Create a feature branch and open a pull request:"
+  echo "    git checkout -b feat/<issue>-<description> $BRANCH"
+  echo "  See docs/git-workflow.md."
+  echo ""
+  exit 1
+fi
+
+exit 0

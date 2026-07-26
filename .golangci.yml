@@ -1,0 +1,146 @@
+version: "2"
+
+linters:
+  default: none
+  enable:
+    # Bugs
+    - errcheck
+    - errorlint
+    - govet
+    - ineffassign
+    - nilerr
+    - nilnil
+    - staticcheck
+    - unused
+
+    # Security
+    - gosec
+
+    # Performance
+    - prealloc
+    - unconvert
+
+    # Style
+    - misspell
+    - revive
+
+    # Complexity
+    - cyclop
+    - funlen
+    - gocognit
+
+    # SQL / HTTP
+    - bodyclose
+    - sqlclosecheck
+
+    # Tests
+    - thelper
+    - tparallel
+
+  exclusions:
+    presets:
+      - std-error-handling
+      - common-false-positives
+    rules:
+      # Test files can be longer due to table-driven tests
+      - path: "_test\\.go$"
+        linters:
+          - funlen
+          - cyclop
+          - gocognit
+      # Test files: unused-parameter is common in mock implementations
+      - path: "_test\\.go$"
+        linters:
+          - revive
+        text: "unused-parameter"
+      # Test files: file permissions and hardcoded credentials are fine
+      - path: "_test\\.go$"
+        linters:
+          - gosec
+        text: "G(101|306)"
+      # Test files: errcheck on w.Write/json.Encode in httptest handlers is noise
+      - path: "_test\\.go$"
+        linters:
+          - errcheck
+      # Package names that shadow stdlib are intentional for internal packages
+      - path: "^internal/"
+        linters:
+          - revive
+        text: "var-naming: avoid package names"
+
+  settings:
+    cyclop:
+      max-complexity: 15
+      package-average: 10.0
+
+    funlen:
+      lines: 100
+      statements: 50
+
+    gocognit:
+      min-complexity: 30
+
+    goimports:
+      sections:
+        - standard
+        - default
+        - localmodule
+
+    revive:
+      rules:
+        - name: blank-imports
+        - name: context-as-argument
+        - name: context-keys-type
+        - name: dot-imports
+        - name: error-return
+        - name: error-strings
+        - name: error-naming
+        - name: exported
+          disabled: true
+        - name: increment-decrement
+        - name: var-naming
+        - name: var-declaration
+        - name: package-comments
+          disabled: true
+        - name: range
+        - name: receiver-naming
+        - name: time-naming
+        - name: unexported-return
+        - name: indent-error-flow
+        - name: errorf
+        - name: empty-block
+        - name: superfluous-else
+        - name: unused-parameter
+        - name: unreachable-code
+        - name: redefines-builtin-id
+
+    gosec:
+      excludes:
+        - G104  # Audit errors not checked (too noisy)
+        - G115  # Integer overflow conversion (false positives for safe conversions)
+
+    misspell:
+      locale: US
+
+formatters:
+  enable:
+    - gofmt
+    - goimports
+
+issues:
+  max-issues-per-linter: 50
+  max-same-issues: 10
+
+  exclude-dirs:
+    - vendor
+    - third_party
+    - testdata
+    - bin
+
+  exclude-files:
+    - ".*_gen\\.go$"
+
+output:
+  formats:
+    text:
+      print-linter-name: true

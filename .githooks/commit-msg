@@ -1,0 +1,36 @@
+#!/bin/bash
+
+# Validate commit message against docs/git-commits.md rules.
+
+msg=$(head -1 "$1")
+
+# Skip merge commits, reverts, fixup, and squash
+if echo "$msg" | grep -qE "^(Merge |Revert \"|fixup! |squash! )"; then
+  exit 0
+fi
+
+# Rule 2: max 72 characters
+if [ ${#msg} -gt 72 ]; then
+  echo ""
+  echo "ERROR: commit message header is ${#msg} characters (max 72)"
+  echo ""
+  echo "  $msg"
+  echo ""
+  exit 1
+fi
+
+# Rule 1 + 4: type(scope)!: lowercase description, no trailing period
+if ! echo "$msg" | grep -qE "^(feat|fix|docs|style|refactor|perf|test|chore|ci|build)(\([a-z0-9/-]+\))?!?: [a-z].*[^.]$"; then
+  echo ""
+  echo "ERROR: commit message does not match required format"
+  echo ""
+  echo "  $msg"
+  echo ""
+  echo "Expected: type(scope): lowercase description"
+  echo "Types:    feat fix docs style refactor perf test chore ci build"
+  echo "Rules:    lowercase start, no trailing period, imperative tense"
+  echo ""
+  exit 1
+fi
+
+exit 0
