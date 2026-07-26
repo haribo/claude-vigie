@@ -1,0 +1,68 @@
+# Develop Merge
+
+Merge a feature PR into `develop` following project conventions with strict validation.
+
+Accepts an optional argument: PR number or branch name. If not provided, detect from current branch.
+
+## Instructions
+
+### 1. Resolve target PR
+
+- If argument is a PR number (`#123` or `123`): use it directly
+- If argument is a branch name: find the open PR for that branch targeting `develop`
+- If no argument: detect current branch, find its open PR targeting `develop`
+- If no PR found: **refuse** — no PR, no merge
+
+### 2. Collect PR information
+
+Run all of these in parallel:
+- `gh pr view <number> --json number,title,state,baseRefName,headRefName,mergeable,reviews,statusCheckRollup,commits,body,labels`
+- `gh pr checks <number>`
+- `gh pr diff <number>`
+
+### 3. Validate merge readiness — fail on first violation
+
+Perform every check below. Collect **all** violations, then report them together. Do NOT stop at the first failure.
+
+| # | Check | Rule |
+|---|-------|------|
+| 1 | PR state | Must be `OPEN` |
+| 2 | Base branch | Must be `develop` — refuse any other target |
+| 3 | Mergeability | `mergeable` must be `MERGEABLE` — if `CONFLICTING`, demand rebase |
+| 4 | CI status | Every required check must be `pass` or `success` — no pending, no failures |
+| 5 | Reviews | Zero `CHANGES_REQUESTED` — if any, report and stop |
+| 6 | Diff review | Read the full diff — flag anything suspicious: debug prints, TODO/FIXME, hardcoded secrets, commented-out code, unrelated changes |
+
+If **any** check fails: report all violations in a structured summary and **stop**. Do not proceed.
+
+### 4. Craft squash commit message
+
+- Read `docs/git-commits.md` for format rules
+- Analyze the PR title, body, and all individual commit messages
+- Determine the correct `type(scope):` prefix from the actual changes (not blindly from PR title)
+- Write a single-line commit message (max 72 chars excluding the (#N) suffix, imperative, no capital, no period)
+- Append " (#<PR number>)" to the commit message — required because --subject overrides GitHub's auto-append
+- If the PR contains breaking changes: use `type(scope)!:` format
+- Present the proposed commit message to the user for approval before merging
+
+### 5. Merge
+
+- Execute: `gh pr merge <number> --squash --delete-branch --subject "<approved message>" --body ""`
+- If merge fails: report the error, do not retry
+
+### 6. Local cleanup
+
+- `git checkout develop`
+- `git pull origin develop`
+- If the feature branch still exists locally: `git branch -d <branch>`
+- Confirm merge success with `git log --oneline -1`
+
+## Output format
+
+Report a summary:
+
+```
+PR #<number> merged into develop
+  <commit hash> <commit message>
+  Branch <branch> deleted (remote + local)
+```

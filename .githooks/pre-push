@@ -1,0 +1,31 @@
+#!/bin/bash
+
+# Validate branch naming convention (docs/git-workflow.md)
+# Runs before pushing to prevent non-conforming branches from reaching remote.
+
+BRANCH=$(git symbolic-ref --short HEAD 2>/dev/null)
+
+# Skip detached HEAD
+if [ -z "$BRANCH" ]; then
+  exit 0
+fi
+
+# Skip permanent branches
+if [ "$BRANCH" = "main" ] || [ "$BRANCH" = "develop" ]; then
+  exit 0
+fi
+
+# Pattern: type/number-description or type/description (chore/style without issue)
+# Types must match commit types from docs/git-commits.md
+PATTERN='^(feat|fix|docs|style|refactor|perf|test|chore|ci|build)/([0-9]+-[a-z0-9-]+|[a-z0-9-]+)$'
+
+if ! echo "$BRANCH" | grep -qE "$PATTERN"; then
+  echo ""
+  echo "ERROR: Invalid branch name: $BRANCH"
+  echo "  Expected: type/number-description (e.g., feat/12-web-dashboard)"
+  echo "  Types: feat|fix|docs|style|refactor|perf|test|chore|ci|build"
+  echo ""
+  exit 1
+fi
+
+exit 0
