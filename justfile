@@ -4,6 +4,13 @@ commit := `git rev-parse --short HEAD 2>/dev/null || echo none`
 build_time := `date -u +%Y-%m-%dT%H:%M:%SZ`
 ldflags := "-X github.com/haribo/claude-fleet/internal/version.Version=" + version + " -X github.com/haribo/claude-fleet/internal/version.Commit=" + commit + " -X github.com/haribo/claude-fleet/internal/version.BuildTime=" + build_time
 
+# Fleet self-host paths (local dogfooding)
+home_bin := env_var("HOME") / ".local/bin"
+fleet_data := env_var("HOME") / ".local/share/claude-fleet"
+fleet_db := fleet_data / "fleet.db"
+fleet_addr := "127.0.0.1:8080"
+fleet_url := "http://127.0.0.1:8080"
+
 # Default: list all commands
 default:
     @just --list
@@ -111,3 +118,30 @@ tool-install:
     @mkdir -p bin
     GOBIN=$(pwd)/bin go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.11.4
     GOBIN=$(pwd)/bin go install golang.org/x/tools/cmd/goimports@latest
+
+# =============================================================================
+# FLEET (self-host / dogfood)
+# =============================================================================
+
+# Install both binaries into ~/.local/bin (must be on your PATH)
+install: app-build
+    mkdir -p {{home_bin}}
+    cp bin/claude-fleet bin/claude-fleetd {{home_bin}}/
+    @echo "installed claude-fleet + claude-fleetd into {{home_bin}}"
+
+# Run the fleet server locally in the foreground
+fleet-serve: app-build
+    mkdir -p {{fleet_data}}
+    ./bin/claude-fleetd serve --addr {{fleet_addr}} --db {{fleet_db}}
+
+# Print the local fleet auth token
+fleet-token: app-build
+    @./bin/claude-fleetd token --db {{fleet_db}}
+
+# Connect this machine to the local fleet (writes config + Claude Code hooks)
+fleet-connect: app-build
+    ./bin/claude-fleet init --server {{fleet_url}} --token "$(./bin/claude-fleetd token --db {{fleet_db}})" --machine "$(hostname)"
+
+# Disconnect this machine (remove our hooks)
+fleet-disconnect: app-build
+    ./bin/claude-fleet init --uninstall

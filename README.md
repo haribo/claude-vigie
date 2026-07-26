@@ -61,6 +61,28 @@ just app-build      # build ./bin/claude-fleet
 just code-check     # fmt + lint + build + test (run before every PR)
 ```
 
+## Self-hosting & connecting
+
+Install the binaries and connect a machine with `just`:
+
+```bash
+just install         # build + copy claude-fleet & claude-fleetd into ~/.local/bin
+
+# on the host that runs the server:
+just fleet-serve     # runs claude-fleetd on 127.0.0.1:8080 (foreground)
+
+# on each machine running Claude Code (another terminal):
+just fleet-connect   # writes config + hooks; reads the token from the local db
+```
+
+`fleet-connect` runs `claude-fleet init`, which merges hooks into
+`~/.claude/settings.json` (all projects) and writes
+`~/.config/claude-fleet/config.json`. New Claude Code sessions then report
+automatically. `just fleet-disconnect` removes the hooks.
+
+For a remote server, point init at it directly:
+`claude-fleet init --server <url> --token <token>`.
+
 ## Roadmap
 
 - [x] Project skeleton, tooling, CI, conventions
