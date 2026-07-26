@@ -1,0 +1,26 @@
+# Build artifacts
+/bin/
+/dist/
+*.out
+*.html
+coverage.*
+
+# Local dev database
+*.db
+*.db-shm
+*.db-wal
+
+# Logs
+/logs/
+
+# Generated audit reports (working documents)
+/docs/generated/
+
+# Editor / OS
+.DS_Store
+*.swp
+.idea/
+.vscode/
+
+# Local Claude settings (permissions allowlist, machine-specific)
+.claude/settings.local.json
