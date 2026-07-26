@@ -11,15 +11,29 @@ import (
 )
 
 var (
-	headerStyle = lipgloss.NewStyle().Bold(true)
-	dimStyle    = lipgloss.NewStyle().Foreground(lipgloss.Color("8"))
-	errStyle    = lipgloss.NewStyle().Foreground(lipgloss.Color("9"))
-
-	tabActiveStyle   = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("12"))
-	cursorStyle      = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("12"))
-	labelStyle       = lipgloss.NewStyle().Foreground(lipgloss.Color("8"))
-	groupHeaderStyle = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("13"))
+	headerStyle      = lipgloss.NewStyle().Bold(true).Foreground(cAccent)
+	dimStyle         = lipgloss.NewStyle().Foreground(cMuted)
+	errStyle         = lipgloss.NewStyle().Foreground(cRed)
+	labelStyle       = lipgloss.NewStyle().Foreground(cMuted)
+	cursorStyle      = lipgloss.NewStyle().Bold(true).Foreground(cAccent)
+	tabActiveStyle   = lipgloss.NewStyle().Bold(true).Foreground(cAccent).Underline(true)
+	groupHeaderStyle = lipgloss.NewStyle().Bold(true).Foreground(cAccent2)
+	keycapStyle      = lipgloss.NewStyle().Foreground(cText).Background(cSurface)
 )
+
+// footer renders the keycap-style key hints.
+func footer() string {
+	hints := [][2]string{
+		{"1/2/3", "tabs"}, {"↑↓", "select"}, {"enter", "detail"},
+		{"/", "filter"}, {"s", "sort"}, {"g", "group"},
+		{"r", "refresh"}, {"q", "quit"},
+	}
+	parts := make([]string, len(hints))
+	for i, h := range hints {
+		parts[i] = keycapStyle.Render(" "+h[0]+" ") + dimStyle.Render(" "+h[1])
+	}
+	return strings.Join(parts, "  ")
+}
 
 // renderTabBar renders the top-level tab bar with the active tab highlighted.
 func renderTabBar(active tab) string {
@@ -163,6 +177,7 @@ func renderDetail(s api.SessionView) string {
 	}
 	panel := lipgloss.NewStyle().
 		Border(lipgloss.RoundedBorder()).
+		BorderForeground(cAccent).
 		Padding(0, 1).
 		Render(strings.Join(lines, "\n"))
 	return panel
@@ -264,11 +279,11 @@ func tableWidth(cols []column) int {
 func statusStyle(status string) lipgloss.Style {
 	switch status {
 	case "working":
-		return lipgloss.NewStyle().Foreground(lipgloss.Color("10")) // green
+		return lipgloss.NewStyle().Foreground(cGreen)
 	case "waiting", "waiting_input":
-		return lipgloss.NewStyle().Foreground(lipgloss.Color("11")) // yellow
+		return lipgloss.NewStyle().Foreground(cAmber)
 	case "idle":
-		return lipgloss.NewStyle().Foreground(lipgloss.Color("12")) // blue
+		return lipgloss.NewStyle().Foreground(cBlue)
 	default:
 		return dimStyle // ended / unknown
 	}
