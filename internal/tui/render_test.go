@@ -63,8 +63,9 @@ func TestRenderTableWide(t *testing.T) {
 		Usage:      api.Usage{OutputTokens: 1500, InputTokens: 500},
 		LastSeenAt: "2026-07-26T17:01:32Z",
 	}}, 200, -1, sortState{})
-	// SEEN is a relative age now (depends on time.Now()), so it is not asserted here.
-	for _, want := range []string{"NAME", "my-session", "SESSION", "5c483c16", "DIR", "proj", "main", "opus-4-8", "1.5k", "STATUS", "working"} {
+	// SEEN is relative (time.Now()) and SESSION moved to the detail panel, so
+	// neither is asserted here.
+	for _, want := range []string{"NAME", "my-session", "DIR", "proj", "main", "opus-4-8", "1.5k", "STATUS", "working"} {
 		if !strings.Contains(out, want) {
 			t.Errorf("wide table missing %q:\n%s", want, out)
 		}

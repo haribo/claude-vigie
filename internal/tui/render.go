@@ -56,33 +56,35 @@ type column struct {
 	width  int
 	// drop is the priority for hiding on narrow terminals: 0 = always kept,
 	// higher = dropped first.
-	drop int
-	cell func(api.SessionView) string
+	drop  int
+	right bool // right-align (numeric columns)
+	cell  func(api.SessionView) string
 	// style optionally colors the (padded) cell; nil leaves it uncolored.
 	style func(api.SessionView) lipgloss.Style
 }
 
-// columns in display order: stable identity on the left, dynamic state on the
-// right, with rc and the colored status last.
+// columns in display order (mockup #91): identity, context, numbers (right-
+// aligned), then activity, rc, and the colored `● status`. The short session id
+// lives in the detail panel only.
 var columns = []column{
-	{"NAME", 22, 0, sessionName, nil},
-	{"USER", 10, 8, func(s api.SessionView) string { return orDash(s.User) }, nil},
-	{"SESSION", 9, 8, func(s api.SessionView) string { return shortID(s.ID) }, nil},
-	{"DIR", 16, 0, func(s api.SessionView) string { return projectName(s.ProjectDir) }, nil},
-	{"BRANCH", 16, 7, func(s api.SessionView) string { return orDash(s.GitBranch) }, nil},
-	{"MACHINE", 10, 4, func(s api.SessionView) string { return s.Machine }, nil},
-	{"MODEL", 12, 5, func(s api.SessionView) string { return shortModel(s.Model) }, nil},
-	{"OUT", 8, 3, func(s api.SessionView) string { return humanizeTokens(s.Usage.OutputTokens) }, nil},
-	{"TOTAL", 9, 2, func(s api.SessionView) string { return humanizeTokens(totalTokens(s)) }, nil},
-	{"SEEN", 8, 6, func(s api.SessionView) string { return relativeAge(s.LastSeenAt, time.Now()) }, nil},
-	{"ACT", 10, 9, func(s api.SessionView) string { return activitySpark(s.Samples) }, nil},
-	{"RC", 4, 1, rcCell, rcStyle},
-	{"STATUS", 13, 0, func(s api.SessionView) string { return s.Status }, func(s api.SessionView) lipgloss.Style { return statusStyle(s.Status) }},
+	{"NAME", 22, 0, false, sessionName, nil},
+	{"USER", 10, 8, false, func(s api.SessionView) string { return orDash(s.User) }, func(api.SessionView) lipgloss.Style { return userStyle }},
+	{"MACHINE", 10, 4, false, func(s api.SessionView) string { return s.Machine }, nil},
+	{"DIR", 16, 0, false, func(s api.SessionView) string { return projectName(s.ProjectDir) }, nil},
+	{"BRANCH", 16, 7, false, func(s api.SessionView) string { return orDash(s.GitBranch) }, func(api.SessionView) lipgloss.Style { return dimStyle }},
+	{"MODEL", 12, 5, false, func(s api.SessionView) string { return shortModel(s.Model) }, func(api.SessionView) lipgloss.Style { return dimStyle }},
+	{"OUT", 8, 3, true, func(s api.SessionView) string { return humanizeTokens(s.Usage.OutputTokens) }, nil},
+	{"TOTAL", 9, 2, true, func(s api.SessionView) string { return humanizeTokens(totalTokens(s)) }, nil},
+	{"SEEN", 6, 6, true, func(s api.SessionView) string { return relativeAge(s.LastSeenAt, time.Now()) }, func(api.SessionView) lipgloss.Style { return dimStyle }},
+	{"ACT", 10, 9, false, func(s api.SessionView) string { return activitySpark(s.Samples) }, nil},
+	{"RC", 4, 1, false, rcCell, rcStyle},
+	{"STATUS", 12, 0, false, func(s api.SessionView) string { return "● " + s.Status }, func(s api.SessionView) lipgloss.Style { return statusStyle(s.Status) }},
 }
 
 var (
 	rcOnStyle  = lipgloss.NewStyle().Foreground(cGreen)
 	rcOffStyle = dimStyle
+	userStyle  = lipgloss.NewStyle().Foreground(cAccent2) // violet
 )
 
 // rcCell renders the remote-control flag: ◉ when active, ○ when inactive.
@@ -131,8 +133,9 @@ func renderTable(sessions []api.SessionView, width, selected int, st sortState) 
 	cols := visibleColumns(width)
 	var b strings.Builder
 	b.WriteString(renderHeaderRow(cols, st) + "\n")
+	b.WriteString(rule(rowWidth(cols)) + "\n")
 	for idx, s := range sessions {
-		b.WriteString(renderRow(cols, s, idx == selected) + "\n")
+		b.WriteString(renderRow(cols, s, idx == selected, width) + "\n")
 	}
 	return b.String()
 }
@@ -145,25 +148,45 @@ func renderHeaderRow(cols []column, st sortState) string {
 		if c.header == arrowCol {
 			h += sortArrow(st.reversed)
 		}
-		headers[i] = pad(h, c.width)
+		if c.right {
+			headers[i] = padLeft(h, c.width)
+		} else {
+			headers[i] = pad(h, c.width)
+		}
 	}
 	return "  " + headerStyle.Render(strings.Join(headers, colSep))
 }
 
-func renderRow(cols []column, s api.SessionView, selected bool) string {
+func renderRow(cols []column, s api.SessionView, selected bool, termWidth int) string {
 	cells := make([]string, len(cols))
 	for i, c := range cols {
-		cell := pad(c.cell(s), c.width)
+		var cell string
+		if c.right {
+			cell = padLeft(c.cell(s), c.width)
+		} else {
+			cell = pad(c.cell(s), c.width)
+		}
 		if c.style != nil {
 			cell = c.style(s).Render(cell)
 		}
 		cells[i] = cell
 	}
-	gutter := "  "
+	body := strings.Join(cells, colSep)
 	if selected {
-		gutter = cursorStyle.Render("❯ ")
+		return renderSelectedRow(body, rowWidth(cols), termWidth)
 	}
-	return gutter + strings.Join(cells, colSep)
+	return "  " + body
+}
+
+// renderSelectedRow draws an accent left bar and a full-width background fill so
+// the selection stands out among the colored status cells.
+func renderSelectedRow(body string, tableWidth, termWidth int) string {
+	w := tableWidth
+	if termWidth > 1 {
+		w = termWidth - 1
+	}
+	fill := lipgloss.NewStyle().Background(cSel).Width(w)
+	return cursorStyle.Render("▎") + fill.Render(" "+body)
 }
 
 // renderGroupedTable renders sessions grouped by gb, with a header and token
@@ -184,6 +207,7 @@ func renderGroupedTable(sessions []api.SessionView, width, selected int, gb grou
 	cols := visibleColumns(width)
 	var b strings.Builder
 	b.WriteString(renderHeaderRow(cols, st) + "\n")
+	b.WriteString(rule(rowWidth(cols)) + "\n")
 	lastKey, first := "", true
 	for idx, s := range sessions {
 		k := groupKey(s, gb)
@@ -191,7 +215,7 @@ func renderGroupedTable(sessions []api.SessionView, width, selected int, gb grou
 			b.WriteString(groupHeaderStyle.Render(fmt.Sprintf("▸ %s  (%d · %s)", orDash(k), count[k], humanizeTokens(subtotal[k]))) + "\n")
 			lastKey, first = k, false
 		}
-		b.WriteString(renderRow(cols, s, idx == selected) + "\n")
+		b.WriteString(renderRow(cols, s, idx == selected, width) + "\n")
 	}
 	return b.String()
 }
@@ -382,6 +406,29 @@ func tableWidth(cols []column) int {
 		w += c.width
 	}
 	return w
+}
+
+// rowWidth is the table width including the 2-column left gutter.
+func rowWidth(cols []column) int {
+	return 2 + tableWidth(cols)
+}
+
+// rule renders a horizontal separator line of n columns (a sensible default if
+// the width is unknown).
+func rule(n int) string {
+	if n <= 0 {
+		n = 80
+	}
+	return dimStyle.Render(strings.Repeat("─", n))
+}
+
+// padLeft truncates or left-pads s to exactly w runes (for right-aligned cells).
+func padLeft(s string, w int) string {
+	s = truncate(s, w)
+	if n := w - len([]rune(s)); n > 0 {
+		return strings.Repeat(" ", n) + s
+	}
+	return s
 }
 
 func statusStyle(status string) lipgloss.Style {

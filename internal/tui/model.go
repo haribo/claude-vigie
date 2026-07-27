@@ -7,6 +7,7 @@ import (
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/lipgloss"
 
 	"github.com/haribo/claude-fleet/internal/api"
 )
@@ -70,7 +71,7 @@ type model struct {
 	watcherSeen  string
 	gotWatcher   bool
 	err          error
-	updated      string
+	updatedAt    time.Time
 	width        int
 	tab          tab
 	cursor       int
@@ -195,7 +196,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		} else {
 			m.sessions = msg.sessions
 			m.err = nil
-			m.updated = time.Now().Format("15:04:05")
+			m.updatedAt = time.Now()
 			m.history = append(m.history, countByStatus(m.sessions, "working"))
 			if len(m.history) > sparkWindow {
 				m.history = m.history[len(m.history)-sparkWindow:]
@@ -343,11 +344,7 @@ func (m model) visibleSessions() []api.SessionView {
 func (m model) View() string {
 	var b strings.Builder
 
-	b.WriteString(headerStyle.Render("Claude Fleet"))
-	if m.updated != "" {
-		b.WriteString(dimStyle.Render("  updated " + m.updated))
-	}
-	b.WriteString("\n")
+	// No title/clock line: open straight on the tab bar.
 	b.WriteString(renderTabBar(m.tab))
 	b.WriteString("\n")
 	if m.gotWatcher && m.watcherStale() {
@@ -364,7 +361,7 @@ func (m model) View() string {
 		b.WriteString(dimStyle.Render("Machines — coming soon"))
 	}
 
-	b.WriteString("\n" + footer())
+	b.WriteString("\n" + rule(m.width) + "\n" + footer())
 	return b.String()
 }
 
@@ -383,8 +380,14 @@ func (m model) viewSessions() string {
 	}
 
 	var b strings.Builder
-	b.WriteString(renderSummary(m.sessions, m.history) + "\n")
-	b.WriteString(m.renderControls() + "\n\n")
+	// Summary strip framed by rules at the top of the body.
+	b.WriteString(rule(m.width) + "\n")
+	b.WriteString(joinLR(renderSummary(m.sessions, m.history), m.summaryRight(), m.width) + "\n")
+	b.WriteString(rule(m.width) + "\n")
+	if m.filtering || m.filter != "" {
+		b.WriteString(m.filterLine() + "\n")
+	}
+	b.WriteString("\n")
 	if len(vis) == 0 {
 		b.WriteString(dimStyle.Render("no sessions match the filter"))
 	} else {
@@ -393,23 +396,40 @@ func (m model) viewSessions() string {
 	return b.String()
 }
 
-func (m model) renderControls() string {
-	s := labelStyle.Render("sort ") + sortNames[m.sortKey] + sortArrow(m.sortReversed)
+// summaryRight is the right-aligned side of the summary strip: the active sort
+// (and group), plus the relative last-update age.
+func (m model) summaryRight() string {
+	parts := []string{labelStyle.Render("sort ") + sortNames[m.sortKey] + sortArrow(m.sortReversed)}
 	if m.groupBy != groupNone {
-		s += "    " + labelStyle.Render("group ") + groupNames[m.groupBy]
-	}
-	switch {
-	case m.filtering:
-		s += "    " + labelStyle.Render("filter ") + m.filter + "▌"
-	case m.filter != "":
-		s += "    " + labelStyle.Render("filter ") + m.filter
+		parts = append(parts, labelStyle.Render("group ")+groupNames[m.groupBy])
 	}
 	if m.showAll {
-		s += "    " + labelStyle.Render("showing ") + "all"
+		parts = append(parts, labelStyle.Render("showing ")+"all")
 	} else if h := m.hiddenCount(); h > 0 {
-		s += "    " + labelStyle.Render("hidden ") + strconv.Itoa(h)
+		parts = append(parts, labelStyle.Render("hidden ")+strconv.Itoa(h))
+	}
+	if !m.updatedAt.IsZero() {
+		parts = append(parts, labelStyle.Render("updated ")+humanizeDuration(time.Since(m.updatedAt))+" ago")
+	}
+	return strings.Join(parts, dimStyle.Render(" · "))
+}
+
+// filterLine shows the active filter (with a caret while typing).
+func (m model) filterLine() string {
+	s := labelStyle.Render("filter ") + m.filter
+	if m.filtering {
+		s += "▌"
 	}
 	return s
+}
+
+// joinLR places left and right on one line, right-aligned to width when known.
+func joinLR(left, right string, width int) string {
+	lw, rw := lipgloss.Width(left), lipgloss.Width(right)
+	if width <= 0 || lw+rw+3 > width {
+		return left + "   " + right
+	}
+	return left + strings.Repeat(" ", width-lw-rw) + right
 }
 
 // hiddenCount is how many sessions the default filter is currently hiding.
