@@ -25,7 +25,7 @@ var (
 func footer() string {
 	hints := [][2]string{
 		{"1/2/3", "tabs"}, {"↑↓", "select"}, {"enter", "detail"},
-		{"/", "filter"}, {"s", "sort"}, {"g", "group"},
+		{"/", "filter"}, {"s", "sort"}, {"g", "group"}, {"a", "all"},
 		{"r", "refresh"}, {"q", "quit"},
 	}
 	parts := make([]string, len(hints))

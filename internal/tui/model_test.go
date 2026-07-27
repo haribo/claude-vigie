@@ -135,7 +135,9 @@ func TestFuzzyMatch(t *testing.T) {
 }
 
 func TestVisibleSessionsFilterAndSort(t *testing.T) {
-	m := model{sessions: []api.SessionView{
+	// showAll isolates sort/filter from the default hide-stale behavior, which
+	// is covered separately by TestIsActive.
+	m := model{showAll: true, sessions: []api.SessionView{
 		{Title: "alpha", Machine: "m1", Status: "idle", Usage: api.Usage{OutputTokens: 100}, LastSeenAt: "2026-07-26T10:00:00Z"},
 		{Title: "beta", Machine: "m2", Status: "working", Usage: api.Usage{OutputTokens: 900}, LastSeenAt: "2026-07-26T11:00:00Z"},
 		{Title: "gamma", Machine: "m1", Status: "idle", Usage: api.Usage{OutputTokens: 500}, LastSeenAt: "2026-07-26T09:00:00Z"},
@@ -189,6 +191,7 @@ func TestFilterInput(t *testing.T) {
 func TestGroupingClustersByKey(t *testing.T) {
 	m := model{
 		groupBy: groupMachine,
+		showAll: true, // isolate grouping from the default hide-stale behavior
 		sessions: []api.SessionView{
 			{Title: "a", Machine: "m2", LastSeenAt: "2026-07-26T12:00:00Z"},
 			{Title: "b", Machine: "m1", LastSeenAt: "2026-07-26T11:00:00Z"},
