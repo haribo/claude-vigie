@@ -56,26 +56,48 @@ type column struct {
 	width  int
 	// drop is the priority for hiding on narrow terminals: 0 = always kept,
 	// higher = dropped first.
-	drop   int
-	styled bool // color the cell by session status
-	cell   func(api.SessionView) string
+	drop int
+	cell func(api.SessionView) string
+	// style optionally colors the (padded) cell; nil leaves it uncolored.
+	style func(api.SessionView) lipgloss.Style
 }
 
 // columns in display order: stable identity on the left, dynamic state on the
-// right, with the colored status last.
+// right, with rc and the colored status last.
 var columns = []column{
-	{"NAME", 22, 0, false, sessionName},
-	{"USER", 10, 8, false, func(s api.SessionView) string { return orDash(s.User) }},
-	{"SESSION", 9, 8, false, func(s api.SessionView) string { return shortID(s.ID) }},
-	{"DIR", 16, 0, false, func(s api.SessionView) string { return projectName(s.ProjectDir) }},
-	{"BRANCH", 16, 7, false, func(s api.SessionView) string { return orDash(s.GitBranch) }},
-	{"MACHINE", 10, 4, false, func(s api.SessionView) string { return s.Machine }},
-	{"MODEL", 12, 5, false, func(s api.SessionView) string { return shortModel(s.Model) }},
-	{"OUT", 8, 3, false, func(s api.SessionView) string { return humanizeTokens(s.Usage.OutputTokens) }},
-	{"TOTAL", 9, 2, false, func(s api.SessionView) string { return humanizeTokens(totalTokens(s)) }},
-	{"SEEN", 8, 6, false, func(s api.SessionView) string { return relativeAge(s.LastSeenAt, time.Now()) }},
-	{"ACT", 10, 9, false, func(s api.SessionView) string { return activitySpark(s.Samples) }},
-	{"STATUS", 13, 0, true, func(s api.SessionView) string { return s.Status }},
+	{"NAME", 22, 0, sessionName, nil},
+	{"USER", 10, 8, func(s api.SessionView) string { return orDash(s.User) }, nil},
+	{"SESSION", 9, 8, func(s api.SessionView) string { return shortID(s.ID) }, nil},
+	{"DIR", 16, 0, func(s api.SessionView) string { return projectName(s.ProjectDir) }, nil},
+	{"BRANCH", 16, 7, func(s api.SessionView) string { return orDash(s.GitBranch) }, nil},
+	{"MACHINE", 10, 4, func(s api.SessionView) string { return s.Machine }, nil},
+	{"MODEL", 12, 5, func(s api.SessionView) string { return shortModel(s.Model) }, nil},
+	{"OUT", 8, 3, func(s api.SessionView) string { return humanizeTokens(s.Usage.OutputTokens) }, nil},
+	{"TOTAL", 9, 2, func(s api.SessionView) string { return humanizeTokens(totalTokens(s)) }, nil},
+	{"SEEN", 8, 6, func(s api.SessionView) string { return relativeAge(s.LastSeenAt, time.Now()) }, nil},
+	{"ACT", 10, 9, func(s api.SessionView) string { return activitySpark(s.Samples) }, nil},
+	{"RC", 4, 1, rcCell, rcStyle},
+	{"STATUS", 13, 0, func(s api.SessionView) string { return s.Status }, func(s api.SessionView) lipgloss.Style { return statusStyle(s.Status) }},
+}
+
+var (
+	rcOnStyle  = lipgloss.NewStyle().Foreground(cGreen)
+	rcOffStyle = dimStyle
+)
+
+// rcCell renders the remote-control flag: ◉ when active, ○ when inactive.
+func rcCell(s api.SessionView) string {
+	if s.RemoteControl {
+		return "◉"
+	}
+	return "○"
+}
+
+func rcStyle(s api.SessionView) lipgloss.Style {
+	if s.RemoteControl {
+		return rcOnStyle
+	}
+	return rcOffStyle
 }
 
 const colSep = "  "
@@ -105,8 +127,8 @@ func renderRow(cols []column, s api.SessionView, selected bool) string {
 	cells := make([]string, len(cols))
 	for i, c := range cols {
 		cell := pad(c.cell(s), c.width)
-		if c.styled {
-			cell = statusStyle(s.Status).Render(cell)
+		if c.style != nil {
+			cell = c.style(s).Render(cell)
 		}
 		cells[i] = cell
 	}
@@ -207,9 +229,13 @@ var (
 func renderSummary(sessions []api.SessionView, history []int) string {
 	counts := map[string]int{}
 	var totalOut int64
+	rcActive := 0
 	for _, s := range sessions {
 		counts[s.Status]++
 		totalOut += s.Usage.OutputTokens
+		if s.RemoteControl {
+			rcActive++
+		}
 	}
 
 	parts := []string{
@@ -218,7 +244,8 @@ func renderSummary(sessions []api.SessionView, history []int) string {
 		statusStyle("idle").Render(fmt.Sprintf("● idle %d", counts["idle"])),
 		dimStyle.Render(fmt.Sprintf("● ended %d", counts["ended"])),
 	}
-	line := strings.Join(parts, "   ") + "    " + labelStyle.Render("out ") + humanizeTokens(totalOut)
+	line := strings.Join(parts, "   ") + "    " + labelStyle.Render("out ") + humanizeTokens(totalOut) +
+		"    " + labelStyle.Render("rc ") + rcOnStyle.Render(fmt.Sprintf("◉ %d", rcActive))
 	if s := sparkline(history); s != "" {
 		line += "    " + labelStyle.Render("activity ") + s
 	}
