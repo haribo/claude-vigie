@@ -16,26 +16,28 @@ func TestRenderTabBar(t *testing.T) {
 			t.Errorf("tab bar missing %q: %s", want, out)
 		}
 	}
-	if !strings.Contains(out, "[2 Usage]") {
-		t.Errorf("active tab not highlighted: %s", out)
+	// Labels no longer carry numbers (tabs switch with Tab/Shift+Tab).
+	if strings.Contains(out, "2 Usage") {
+		t.Errorf("tab labels should not carry numbers: %s", out)
 	}
 }
 
-func TestTabSwitching(t *testing.T) {
-	key := func(s string) tea.KeyMsg { return tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune(s)} }
+func TestTabNavigation(t *testing.T) {
+	tabKey := tea.KeyMsg{Type: tea.KeyTab}
+	shiftTab := tea.KeyMsg{Type: tea.KeyShiftTab}
 	var m tea.Model = model{}
-
-	m, _ = m.Update(key("2"))
+	m, _ = m.Update(tabKey)
 	if m.(model).tab != tabUsage {
-		t.Errorf("after '2': tab = %d, want tabUsage", m.(model).tab)
+		t.Errorf("Tab from Sessions = %v, want Usage", m.(model).tab)
 	}
-	m, _ = m.Update(key("3"))
-	if m.(model).tab != tabMachines {
-		t.Errorf("after '3': tab = %d, want tabMachines", m.(model).tab)
-	}
-	m, _ = m.Update(key("1"))
+	m, _ = m.Update(shiftTab)
 	if m.(model).tab != tabSessions {
-		t.Errorf("after '1': tab = %d, want tabSessions", m.(model).tab)
+		t.Errorf("Shift+Tab back = %v, want Sessions", m.(model).tab)
+	}
+	// Shift+Tab from the first tab wraps to the last.
+	m, _ = m.Update(shiftTab)
+	if m.(model).tab != tabMachines {
+		t.Errorf("Shift+Tab wrap = %v, want Machines", m.(model).tab)
 	}
 }
 
@@ -234,7 +236,7 @@ func TestActivitySpark(t *testing.T) {
 
 func TestFooterHasHints(t *testing.T) {
 	out := footer()
-	for _, want := range []string{"tabs", "select", "filter", "sort", "group", "quit"} {
+	for _, want := range []string{"switch", "select", "filter", "sort", "group", "quit"} {
 		if !strings.Contains(out, want) {
 			t.Errorf("footer missing %q: %s", want, out)
 		}

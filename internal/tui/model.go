@@ -257,12 +257,10 @@ func (m model) toggleSelectedRC() tea.Cmd {
 
 func (m model) handleViewKey(msg tea.KeyMsg) model {
 	switch msg.String() {
-	case "1":
-		m.tab = tabSessions
-	case "2":
-		m.tab = tabUsage
-	case "3":
-		m.tab = tabMachines
+	case "tab":
+		m.tab = (m.tab + 1) % tab(len(tabNames))
+	case "shift+tab":
+		m.tab = (m.tab + tab(len(tabNames)) - 1) % tab(len(tabNames))
 	case "/":
 		m.filtering = true
 	case "s":

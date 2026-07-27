@@ -26,7 +26,7 @@ var (
 // footer renders the keycap-style key hints.
 func footer() string {
 	hints := [][2]string{
-		{"1/2/3", "tabs"}, {"↑↓", "select"}, {"enter", "detail"},
+		{"⇥", "switch"}, {"↑↓", "select"}, {"enter", "detail"},
 		{"/", "filter"}, {"s", "sort"}, {"S", "reverse"}, {"g", "group"}, {"a", "all"}, {"c", "control"},
 		{"r", "refresh"}, {"q", "quit"},
 	}
@@ -38,17 +38,17 @@ func footer() string {
 }
 
 // renderTabBar renders the top-level tab bar with the active tab highlighted.
+// Tabs are switched with Tab/Shift+Tab, so labels carry no numbers.
 func renderTabBar(active tab) string {
 	parts := make([]string, len(tabNames))
 	for i, name := range tabNames {
-		label := fmt.Sprintf("%d %s", i+1, name)
 		if tab(i) == active {
-			parts[i] = tabActiveStyle.Render("[" + label + "]")
+			parts[i] = tabActiveStyle.Render(name)
 		} else {
-			parts[i] = dimStyle.Render(" " + label + " ")
+			parts[i] = dimStyle.Render(name)
 		}
 	}
-	return strings.Join(parts, " ")
+	return strings.Join(parts, "   ")
 }
 
 type column struct {
