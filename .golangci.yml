@@ -53,11 +53,12 @@ linters:
         linters:
           - revive
         text: "unused-parameter"
-      # Test files: file permissions and hardcoded credentials are fine
+      # Test files: file permissions, hardcoded credentials, and temp-path
+      # writes (via t.TempDir/$HOME) are fine
       - path: "_test\\.go$"
         linters:
           - gosec
-        text: "G(101|306)"
+        text: "G(101|306|703)"
       # Test files: errcheck on w.Write/json.Encode in httptest handlers is noise
       - path: "_test\\.go$"
         linters:
