@@ -1,10 +1,12 @@
 package tui
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"net/url"
 	"strings"
 	"time"
 
@@ -94,4 +96,32 @@ func fetchWatcher(cfg *config.Config) (api.WatcherStatus, error) {
 		return api.WatcherStatus{}, fmt.Errorf("decoding watcher status: %w", err)
 	}
 	return s, nil
+}
+
+// toggleRemoteControl sets a session's remote-control flag on the server.
+func toggleRemoteControl(cfg *config.Config, id string, enabled bool) error {
+	body, err := json.Marshal(api.RCRequest{Enabled: enabled})
+	if err != nil {
+		return err
+	}
+	u := strings.TrimRight(cfg.ServerURL, "/") + "/api/sessions/" + url.PathEscape(id) + "/rc"
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, u, bytes.NewReader(body))
+	if err != nil {
+		return err
+	}
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", "Bearer "+cfg.Token)
+
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = resp.Body.Close() }()
+	if resp.StatusCode >= http.StatusMultipleChoices {
+		return fmt.Errorf("server returned %s", resp.Status)
+	}
+	return nil
 }

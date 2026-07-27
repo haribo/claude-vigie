@@ -62,6 +62,7 @@ type model struct {
 	fetch        func() ([]api.SessionView, error)
 	fetchUsage   func() (api.UsageReport, error)
 	fetchWatcher func() (api.WatcherStatus, error)
+	toggleRC     func(id string, enabled bool) error
 	sessions     []api.SessionView
 	usage        api.UsageReport
 	watcherSeen  string
@@ -135,6 +136,8 @@ type watcherMsg struct {
 	err  error
 }
 
+type rcDoneMsg struct{ err error }
+
 func (m model) Init() tea.Cmd {
 	return tea.Batch(m.fetchCmd(), m.fetchUsageCmd(), m.watcherCmd(), tickCmd(), m.waitForEventCmd())
 }
@@ -204,6 +207,11 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.watcherSeen = msg.seen
 			m.gotWatcher = true
 		}
+	case rcDoneMsg:
+		if msg.err != nil {
+			m.err = msg.err
+		}
+		return m, m.fetchCmd() // reflect the new rc state
 	case eventMsg:
 		return m, tea.Batch(m.fetchCmd(), m.fetchUsageCmd(), m.waitForEventCmd())
 	case tickMsg:
@@ -221,8 +229,27 @@ func (m model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, tea.Quit
 	case "r":
 		return m, m.fetchCmd()
+	case "c":
+		return m, m.toggleSelectedRC()
 	}
 	return m.handleViewKey(msg), nil
+}
+
+// toggleSelectedRC flips the remote-control flag of the selected session (only
+// on the Sessions tab). Returns nil when there is nothing to toggle.
+func (m model) toggleSelectedRC() tea.Cmd {
+	if m.tab != tabSessions || m.toggleRC == nil {
+		return nil
+	}
+	vis := m.visibleSessions()
+	if len(vis) == 0 {
+		return nil
+	}
+	s := vis[clamp(m.cursor, len(vis))]
+	id, enabled := s.ID, !s.RemoteControl
+	return func() tea.Msg {
+		return rcDoneMsg{err: m.toggleRC(id, enabled)}
+	}
 }
 
 func (m model) handleViewKey(msg tea.KeyMsg) model {
