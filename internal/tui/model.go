@@ -32,6 +32,7 @@ const (
 	sortTokens
 	sortStatus
 	sortName
+	sortRC
 	sortKeyCount
 )
 
@@ -40,6 +41,7 @@ var sortNames = map[sortKey]string{
 	sortTokens:   "tokens",
 	sortStatus:   "status",
 	sortName:     "name",
+	sortRC:       "rc",
 }
 
 // groupBy identifies how sessions are grouped in the table.
@@ -326,7 +328,7 @@ func (m model) visibleSessions() []api.SessionView {
 		if !m.showAll && !isActive(s, now) {
 			continue
 		}
-		if m.filter == "" || fuzzyMatch(m.filter, sessionHaystack(s)) {
+		if m.matchesFilter(s) {
 			out = append(out, s)
 		}
 	}
@@ -451,6 +453,11 @@ func lessBy(a, b api.SessionView, key sortKey) bool {
 		return a.LastSeenAt > b.LastSeenAt // tie-break: most recent first
 	case sortName:
 		return strings.ToLower(sessionName(a)) < strings.ToLower(sessionName(b))
+	case sortRC:
+		if a.RemoteControl != b.RemoteControl {
+			return a.RemoteControl // rc-active first
+		}
+		return a.LastSeenAt > b.LastSeenAt
 	default: // sortLastSeen
 		return a.LastSeenAt > b.LastSeenAt
 	}
@@ -470,6 +477,19 @@ func statusRank(status string) int {
 	default:
 		return 0
 	}
+}
+
+// matchesFilter reports whether s passes the current filter. The special
+// filter "rc" isolates remote-controlled sessions; anything else is a
+// case-insensitive fuzzy match over the session's fields.
+func (m model) matchesFilter(s api.SessionView) bool {
+	if m.filter == "" {
+		return true
+	}
+	if strings.EqualFold(m.filter, "rc") {
+		return s.RemoteControl
+	}
+	return fuzzyMatch(m.filter, sessionHaystack(s))
 }
 
 // fuzzyMatch reports whether the runes of pattern appear in order in text
