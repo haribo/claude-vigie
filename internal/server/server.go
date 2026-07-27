@@ -10,6 +10,7 @@ import (
 	"log/slog"
 	"net/http"
 	"strings"
+	"time"
 
 	"github.com/haribo/claude-fleet/internal/store"
 )
@@ -23,6 +24,9 @@ type Store interface {
 	AddSample(ctx context.Context, sessionID, at string, outputTokens int64) error
 	LastSampleAt(ctx context.Context, sessionID string) (string, error)
 	ListSamples(ctx context.Context, sessionID string, limit int) ([]int64, error)
+	AcquireLease(ctx context.Context, holder string, ttl time.Duration, now time.Time) (bool, string, error)
+	GetMeta(ctx context.Context, key string) (string, bool, error)
+	SetMeta(ctx context.Context, key, value string) error
 }
 
 // Server is the HTTP handler set for the fleet API.
@@ -46,6 +50,9 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /healthz", s.handleHealth)
 	mux.Handle("POST /api/report", s.auth(http.HandlerFunc(s.handleReport)))
 	mux.Handle("GET /api/sessions", s.auth(http.HandlerFunc(s.handleSessions)))
+	mux.Handle("POST /api/usage/lease", s.auth(http.HandlerFunc(s.handleUsageLease)))
+	mux.Handle("POST /api/usage", s.auth(http.HandlerFunc(s.handlePostUsage)))
+	mux.Handle("GET /api/usage", s.auth(http.HandlerFunc(s.handleGetUsage)))
 	return mux
 }
 
