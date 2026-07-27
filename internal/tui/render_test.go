@@ -105,3 +105,15 @@ func TestRCCellAndSummary(t *testing.T) {
 		t.Errorf("summary missing rc counter (want ◉ 2):\n%s", out)
 	}
 }
+
+func TestRenderDetailUserAndRC(t *testing.T) {
+	out := renderDetail(api.SessionView{
+		ID: "s1", Title: "t", User: "alice", Machine: "m",
+		Status: "working", RemoteControl: true,
+	})
+	for _, want := range []string{"User", "alice", "Remote control", "on"} {
+		if !strings.Contains(out, want) {
+			t.Errorf("detail missing %q:\n%s", want, out)
+		}
+	}
+}
