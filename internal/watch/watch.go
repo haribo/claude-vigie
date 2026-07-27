@@ -17,12 +17,14 @@ import (
 	"github.com/haribo/claude-fleet/internal/api"
 	"github.com/haribo/claude-fleet/internal/config"
 	"github.com/haribo/claude-fleet/internal/transcript"
+	"github.com/haribo/claude-fleet/internal/usage"
 )
 
 // Options configures the watch loop.
 type Options struct {
-	Interval time.Duration
-	MaxAge   time.Duration
+	Interval      time.Duration
+	MaxAge        time.Duration
+	UsageInterval time.Duration
 }
 
 // Status thresholds derived from how recently a transcript changed.
@@ -46,6 +48,9 @@ func Run(ctx context.Context, cfg *config.Config, opts Options) error {
 	if err != nil {
 		return err
 	}
+
+	go runUsageLoop(ctx, cfg, opts.UsageInterval)
+
 	ticker := time.NewTicker(opts.Interval)
 	defer ticker.Stop()
 
@@ -124,22 +129,28 @@ func deriveStatus(lastStopReason string, age time.Duration) string {
 }
 
 func post(cfg *config.Config, req api.ReportRequest) error {
-	body, err := json.Marshal(req)
-	if err != nil {
-		return fmt.Errorf("encoding report: %w", err)
-	}
-	url := strings.TrimRight(cfg.ServerURL, "/") + "/api/report"
+	return postJSON(cfg, "/api/report", req, nil)
+}
 
-	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+// postJSON POSTs body to path on the server (with auth) and, if out is
+// non-nil, decodes the response into it.
+func postJSON(cfg *config.Config, path string, body, out any) error {
+	b, err := json.Marshal(body)
+	if err != nil {
+		return fmt.Errorf("encoding request: %w", err)
+	}
+	url := strings.TrimRight(cfg.ServerURL, "/") + path
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
-	httpReq, err := http.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewReader(body))
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewReader(b))
 	if err != nil {
 		return fmt.Errorf("building request: %w", err)
 	}
-	httpReq.Header.Set("Content-Type", "application/json")
-	httpReq.Header.Set("Authorization", "Bearer "+cfg.Token)
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", "Bearer "+cfg.Token)
 
-	resp, err := http.DefaultClient.Do(httpReq)
+	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
 		return err
 	}
@@ -147,5 +158,51 @@ func post(cfg *config.Config, req api.ReportRequest) error {
 	if resp.StatusCode >= http.StatusMultipleChoices {
 		return fmt.Errorf("server returned %s", resp.Status)
 	}
+	if out != nil {
+		if err := json.NewDecoder(resp.Body).Decode(out); err != nil {
+			return fmt.Errorf("decoding response: %w", err)
+		}
+	}
 	return nil
+}
+
+// runUsageLoop periodically tries to hold the usage lease and, when it does,
+// fetches subscription usage and reports it. The token never leaves the machine.
+func runUsageLoop(ctx context.Context, cfg *config.Config, interval time.Duration) {
+	if interval <= 0 {
+		return
+	}
+	fetcher := &usage.Fetcher{}
+	ticker := time.NewTicker(interval)
+	defer ticker.Stop()
+	for {
+		usageCycle(ctx, cfg, fetcher)
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+		}
+	}
+}
+
+func usageCycle(ctx context.Context, cfg *config.Config, fetcher *usage.Fetcher) {
+	var lease api.LeaseResponse
+	if err := postJSON(cfg, "/api/usage/lease", api.LeaseRequest{Holder: cfg.Machine}, &lease); err != nil {
+		fmt.Fprintf(os.Stderr, "watch: usage lease: %v\n", err)
+		return
+	}
+	if !lease.Acquired {
+		return // another machine holds the lease
+	}
+	rep, ok, err := fetcher.Fetch(ctx, time.Now())
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "watch: usage fetch: %v\n", err)
+		return
+	}
+	if !ok {
+		return // backing off
+	}
+	if err := postJSON(cfg, "/api/usage", rep, nil); err != nil {
+		fmt.Fprintf(os.Stderr, "watch: post usage: %v\n", err)
+	}
 }

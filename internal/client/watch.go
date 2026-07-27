@@ -17,6 +17,7 @@ func runWatch(args []string) int {
 	fs := flag.NewFlagSet("watch", flag.ContinueOnError)
 	interval := fs.Duration("interval", 2*time.Second, "scan interval")
 	maxAge := fs.Duration("max-age", 24*time.Hour, "ignore sessions inactive longer than this")
+	usageInterval := fs.Duration("usage-interval", 5*time.Minute, "subscription usage fetch interval (0 to disable)")
 	if err := fs.Parse(args); err != nil {
 		return 2
 	}
@@ -31,7 +32,8 @@ func runWatch(args []string) int {
 	defer stop()
 
 	fmt.Fprintf(os.Stderr, "watching ~/.claude/projects (interval %s, max-age %s) — Ctrl+C to stop\n", *interval, *maxAge)
-	if err := watch.Run(ctx, cfg, watch.Options{Interval: *interval, MaxAge: *maxAge}); err != nil {
+	opts := watch.Options{Interval: *interval, MaxAge: *maxAge, UsageInterval: *usageInterval}
+	if err := watch.Run(ctx, cfg, opts); err != nil {
 		fmt.Fprintf(os.Stderr, "watch: %v\n", err)
 		return 1
 	}
