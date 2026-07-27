@@ -5,6 +5,7 @@ package store
 type Session struct {
 	ID         string
 	Title      string
+	User       string // OS account that launched the session
 	Machine    string
 	ProjectDir string
 	GitBranch  string

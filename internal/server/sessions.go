@@ -30,6 +30,7 @@ func toView(s store.Session, samples []int64) api.SessionView {
 	return api.SessionView{
 		ID:         s.ID,
 		Title:      s.Title,
+		User:       s.User,
 		Machine:    s.Machine,
 		ProjectDir: s.ProjectDir,
 		GitBranch:  s.GitBranch,

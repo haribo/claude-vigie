@@ -9,6 +9,7 @@ package api
 type ReportRequest struct {
 	Event      string `json:"event"`
 	SessionID  string `json:"session_id"`
+	User       string `json:"user,omitempty"` // OS account that launched the session
 	Machine    string `json:"machine"`
 	ProjectDir string `json:"project_dir"`
 	GitBranch  string `json:"git_branch,omitempty"`
@@ -32,6 +33,7 @@ type Usage struct {
 type SessionView struct {
 	ID         string  `json:"id"`
 	Title      string  `json:"title,omitempty"`
+	User       string  `json:"user,omitempty"`
 	Machine    string  `json:"machine"`
 	ProjectDir string  `json:"project_dir"`
 	GitBranch  string  `json:"git_branch,omitempty"`

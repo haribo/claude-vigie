@@ -11,7 +11,9 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"os"
 	"os/exec"
+	"os/user"
 	"strings"
 	"time"
 
@@ -56,6 +58,7 @@ func Run(event string, stdin io.Reader) error {
 	req := api.ReportRequest{
 		Event:      event,
 		SessionID:  p.SessionID,
+		User:       systemUser(),
 		Machine:    cfg.Machine,
 		ProjectDir: p.Cwd,
 		GitBranch:  gitBranch(p.Cwd),
@@ -116,6 +119,18 @@ func post(cfg *config.Config, req api.ReportRequest) error {
 		return fmt.Errorf("server returned %s", resp.Status)
 	}
 	return nil
+}
+
+// systemUser returns the OS account running the session: the USER env var if
+// set, else the current user, else "" (best-effort context, never an error).
+func systemUser() string {
+	if u := os.Getenv("USER"); u != "" {
+		return u
+	}
+	if u, err := user.Current(); err == nil {
+		return u.Username
+	}
+	return ""
 }
 
 // gitBranch returns the current branch of the repo at dir, or "" if dir is not

@@ -1,0 +1,1 @@
+ALTER TABLE sessions ADD COLUMN os_user TEXT NOT NULL DEFAULT '';

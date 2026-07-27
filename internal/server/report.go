@@ -78,6 +78,9 @@ func applyReport(sess store.Session, isNew bool, req api.ReportRequest) store.Se
 	sess.ID = req.SessionID
 	// Context fields are preserved when a later event omits them, so a partial
 	// report (e.g. Stop without git_branch) does not erase known context.
+	if req.User != "" {
+		sess.User = req.User
+	}
 	if req.Machine != "" {
 		sess.Machine = req.Machine
 	}
