@@ -44,3 +44,24 @@ type SessionView struct {
 	EndedAt    string  `json:"ended_at,omitempty"`
 	Samples    []int64 `json:"samples,omitempty"` // recent output-token samples, oldest first
 }
+
+// LeaseRequest asks for the usage-fetch lease.
+type LeaseRequest struct {
+	Holder string `json:"holder"`
+}
+
+// LeaseResponse is the reply to a lease request.
+type LeaseResponse struct {
+	Acquired  bool   `json:"acquired"`
+	ExpiresAt string `json:"expires_at"`
+}
+
+// UsageReport is the fetched subscription usage the lease holder posts, and
+// what GET /api/usage returns. Percentages only, no currency.
+type UsageReport struct {
+	FiveHourPct   float64 `json:"five_hour_pct"`
+	FiveHourReset string  `json:"five_hour_reset,omitempty"`
+	SevenDayPct   float64 `json:"seven_day_pct"`
+	SevenDayReset string  `json:"seven_day_reset,omitempty"`
+	FetchedAt     string  `json:"fetched_at,omitempty"`
+}
