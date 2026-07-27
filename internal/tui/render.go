@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/charmbracelet/lipgloss"
 
@@ -71,7 +72,7 @@ var columns = []column{
 	{"MODEL", 12, 5, false, func(s api.SessionView) string { return shortModel(s.Model) }},
 	{"OUT", 8, 3, false, func(s api.SessionView) string { return humanizeTokens(s.Usage.OutputTokens) }},
 	{"TOTAL", 9, 2, false, func(s api.SessionView) string { return humanizeTokens(totalTokens(s)) }},
-	{"SEEN", 8, 6, false, func(s api.SessionView) string { return clockTime(s.LastSeenAt) }},
+	{"SEEN", 8, 6, false, func(s api.SessionView) string { return relativeAge(s.LastSeenAt, time.Now()) }},
 	{"ACT", 10, 9, false, func(s api.SessionView) string { return activitySpark(s.Samples) }},
 	{"STATUS", 13, 0, true, func(s api.SessionView) string { return s.Status }},
 }
@@ -335,14 +336,6 @@ func humanizeTokens(n int64) string {
 // shortModel drops the "claude-" prefix for a compact model label.
 func shortModel(m string) string {
 	return strings.TrimPrefix(m, "claude-")
-}
-
-// clockTime extracts HH:MM:SS from an RFC3339 timestamp.
-func clockTime(rfc string) string {
-	if i := strings.IndexByte(rfc, 'T'); i >= 0 && len(rfc) >= i+9 {
-		return rfc[i+1 : i+9]
-	}
-	return rfc
 }
 
 // shortID returns the first 8 characters of a session id.
