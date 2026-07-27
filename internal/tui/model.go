@@ -486,7 +486,7 @@ func statusRank(status string) int {
 	switch status {
 	case "working":
 		return 4
-	case "waiting", "waiting_input":
+	case "waiting":
 		return 3
 	case "idle":
 		return 2

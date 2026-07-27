@@ -443,7 +443,7 @@ func statusStyle(status string) lipgloss.Style {
 	switch status {
 	case "working":
 		return lipgloss.NewStyle().Foreground(cGreen)
-	case "waiting", "waiting_input":
+	case "waiting":
 		return lipgloss.NewStyle().Foreground(cAmber)
 	case "idle":
 		return lipgloss.NewStyle().Foreground(cBlue)

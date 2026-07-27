@@ -54,7 +54,7 @@ Two files, kept separate:
 | `SessionStart` | Session appears (machine, project, git branch, model) |
 | `UserPromptSubmit` | status → `working` |
 | `PostToolUse` | last tool used + heartbeat |
-| `Notification` | status → `waiting_input` |
+| `Notification` | status → `waiting` |
 | `Stop` | status → `idle` + push token usage (read from the transcript) |
 | `SessionEnd` | status → `ended` (archived to history) |
 
