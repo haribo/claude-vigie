@@ -2,6 +2,7 @@ package tui
 
 import (
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 
@@ -73,7 +74,26 @@ type model struct {
 	filtering  bool
 	sortKey    sortKey
 	groupBy    groupBy
+	showAll    bool
 	events     <-chan struct{}
+}
+
+// staleAfter is how long a session may go unseen before it is hidden by default
+// (along with ended sessions). Press "a" to show everything.
+const staleAfter = time.Hour
+
+// isActive reports whether a session should be shown by default: not ended and
+// seen recently. A session with an unparseable timestamp is kept (never hidden
+// on a parse error).
+func isActive(s api.SessionView, now time.Time) bool {
+	if s.Status == "ended" {
+		return false
+	}
+	t, err := time.Parse(time.RFC3339, s.LastSeenAt)
+	if err != nil {
+		return true
+	}
+	return now.Sub(t) < staleAfter
 }
 
 type sessionsMsg struct {
@@ -179,6 +199,17 @@ func (m model) handleViewKey(msg tea.KeyMsg) model {
 		m.sortKey = (m.sortKey + 1) % sortKeyCount
 	case "g":
 		m.groupBy = (m.groupBy + 1) % groupByCount
+	case "a":
+		m.showAll = !m.showAll
+		m.cursor = 0
+	default:
+		return m.handleNavKey(msg)
+	}
+	return m
+}
+
+func (m model) handleNavKey(msg tea.KeyMsg) model {
+	switch msg.String() {
 	case "down", "j":
 		if m.cursor < len(m.visibleSessions())-1 {
 			m.cursor++
@@ -216,10 +247,15 @@ func (m model) handleFilterKey(msg tea.KeyMsg) model {
 	return m
 }
 
-// visibleSessions returns the sessions after filtering and sorting.
+// visibleSessions returns the sessions after filtering and sorting. Ended and
+// stale sessions are hidden unless showAll is set.
 func (m model) visibleSessions() []api.SessionView {
+	now := time.Now()
 	out := make([]api.SessionView, 0, len(m.sessions))
 	for _, s := range m.sessions {
+		if !m.showAll && !isActive(s, now) {
+			continue
+		}
 		if m.filter == "" || fuzzyMatch(m.filter, sessionHaystack(s)) {
 			out = append(out, s)
 		}
@@ -294,7 +330,27 @@ func (m model) renderControls() string {
 	case m.filter != "":
 		s += "    " + labelStyle.Render("filter ") + m.filter
 	}
+	if m.showAll {
+		s += "    " + labelStyle.Render("showing ") + "all"
+	} else if h := m.hiddenCount(); h > 0 {
+		s += "    " + labelStyle.Render("hidden ") + strconv.Itoa(h)
+	}
 	return s
+}
+
+// hiddenCount is how many sessions the default filter is currently hiding.
+func (m model) hiddenCount() int {
+	if m.showAll {
+		return 0
+	}
+	now := time.Now()
+	n := 0
+	for _, s := range m.sessions {
+		if !isActive(s, now) {
+			n++
+		}
+	}
+	return n
 }
 
 func sortSessions(s []api.SessionView, key sortKey) {
