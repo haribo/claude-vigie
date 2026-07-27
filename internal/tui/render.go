@@ -27,7 +27,7 @@ var (
 func footer() string {
 	hints := [][2]string{
 		{"1/2/3", "tabs"}, {"↑↓", "select"}, {"enter", "detail"},
-		{"/", "filter"}, {"s", "sort"}, {"g", "group"}, {"a", "all"}, {"c", "control"},
+		{"/", "filter"}, {"s", "sort"}, {"S", "reverse"}, {"g", "group"}, {"a", "all"}, {"c", "control"},
 		{"r", "refresh"}, {"q", "quit"},
 	}
 	parts := make([]string, len(hints))
@@ -102,23 +102,50 @@ func rcStyle(s api.SessionView) lipgloss.Style {
 
 const colSep = "  "
 
+// sortState is the active sort, passed to the header so it can mark the sorted
+// column with a direction arrow.
+type sortState struct {
+	key      sortKey
+	reversed bool
+}
+
+// sortColumn maps a sort key to the header it annotates with an arrow.
+var sortColumn = map[sortKey]string{
+	sortLastSeen: "SEEN",
+	sortTokens:   "TOTAL",
+	sortStatus:   "STATUS",
+	sortName:     "NAME",
+}
+
+func sortArrow(reversed bool) string {
+	if reversed {
+		return "▲"
+	}
+	return "▼"
+}
+
 // renderTable renders the sessions, dropping low-priority columns to fit width
 // (width <= 0 means unknown: show everything). The row at index selected is
 // marked with a cursor (selected < 0 for none).
-func renderTable(sessions []api.SessionView, width, selected int) string {
+func renderTable(sessions []api.SessionView, width, selected int, st sortState) string {
 	cols := visibleColumns(width)
 	var b strings.Builder
-	b.WriteString(renderHeaderRow(cols) + "\n")
+	b.WriteString(renderHeaderRow(cols, st) + "\n")
 	for idx, s := range sessions {
 		b.WriteString(renderRow(cols, s, idx == selected) + "\n")
 	}
 	return b.String()
 }
 
-func renderHeaderRow(cols []column) string {
+func renderHeaderRow(cols []column, st sortState) string {
+	arrowCol := sortColumn[st.key]
 	headers := make([]string, len(cols))
 	for i, c := range cols {
-		headers[i] = pad(c.header, c.width)
+		h := c.header
+		if c.header == arrowCol {
+			h += sortArrow(st.reversed)
+		}
+		headers[i] = pad(h, c.width)
 	}
 	return "  " + headerStyle.Render(strings.Join(headers, colSep))
 }
@@ -141,9 +168,9 @@ func renderRow(cols []column, s api.SessionView, selected bool) string {
 
 // renderGroupedTable renders sessions grouped by gb, with a header and token
 // subtotal per group. gb == groupNone falls back to a flat table.
-func renderGroupedTable(sessions []api.SessionView, width, selected int, gb groupBy) string {
+func renderGroupedTable(sessions []api.SessionView, width, selected int, gb groupBy, st sortState) string {
 	if gb == groupNone {
-		return renderTable(sessions, width, selected)
+		return renderTable(sessions, width, selected, st)
 	}
 
 	subtotal := map[string]int64{}
@@ -156,7 +183,7 @@ func renderGroupedTable(sessions []api.SessionView, width, selected int, gb grou
 
 	cols := visibleColumns(width)
 	var b strings.Builder
-	b.WriteString(renderHeaderRow(cols) + "\n")
+	b.WriteString(renderHeaderRow(cols, st) + "\n")
 	lastKey, first := "", true
 	for idx, s := range sessions {
 		k := groupKey(s, gb)

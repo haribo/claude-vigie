@@ -77,6 +77,7 @@ type model struct {
 	filter       string
 	filtering    bool
 	sortKey      sortKey
+	sortReversed bool
 	groupBy      groupBy
 	showAll      bool
 	events       <-chan struct{}
@@ -264,6 +265,8 @@ func (m model) handleViewKey(msg tea.KeyMsg) model {
 		m.filtering = true
 	case "s":
 		m.sortKey = (m.sortKey + 1) % sortKeyCount
+	case "S":
+		m.sortReversed = !m.sortReversed
 	case "g":
 		m.groupBy = (m.groupBy + 1) % groupByCount
 	case "a":
@@ -327,7 +330,7 @@ func (m model) visibleSessions() []api.SessionView {
 			out = append(out, s)
 		}
 	}
-	sortSessions(out, m.sortKey)
+	sortSessions(out, m.sortKey, m.sortReversed)
 	if m.groupBy != groupNone {
 		gb := m.groupBy
 		sort.SliceStable(out, func(i, j int) bool {
@@ -385,13 +388,13 @@ func (m model) viewSessions() string {
 	if len(vis) == 0 {
 		b.WriteString(dimStyle.Render("no sessions match the filter"))
 	} else {
-		b.WriteString(renderGroupedTable(vis, m.width, cursor, m.groupBy))
+		b.WriteString(renderGroupedTable(vis, m.width, cursor, m.groupBy, sortState{m.sortKey, m.sortReversed}))
 	}
 	return b.String()
 }
 
 func (m model) renderControls() string {
-	s := labelStyle.Render("sort ") + sortNames[m.sortKey]
+	s := labelStyle.Render("sort ") + sortNames[m.sortKey] + sortArrow(m.sortReversed)
 	if m.groupBy != groupNone {
 		s += "    " + labelStyle.Render("group ") + groupNames[m.groupBy]
 	}
@@ -424,19 +427,49 @@ func (m model) hiddenCount() int {
 	return n
 }
 
-func sortSessions(s []api.SessionView, key sortKey) {
+// sortSessions orders sessions by key in its natural (default) direction, or
+// reversed. Stable, so equal rows keep their prior order.
+func sortSessions(s []api.SessionView, key sortKey, reversed bool) {
 	sort.SliceStable(s, func(i, j int) bool {
-		switch key {
-		case sortTokens:
-			return totalTokens(s[i]) > totalTokens(s[j])
-		case sortStatus:
-			return s[i].Status < s[j].Status
-		case sortName:
-			return strings.ToLower(sessionName(s[i])) < strings.ToLower(sessionName(s[j]))
-		default: // sortLastSeen
-			return s[i].LastSeenAt > s[j].LastSeenAt
+		if reversed {
+			return lessBy(s[j], s[i], key)
 		}
+		return lessBy(s[i], s[j], key)
 	})
+}
+
+// lessBy reports whether a sorts before b for key in the natural direction:
+// most recent, most tokens, most active status, or A→Z name.
+func lessBy(a, b api.SessionView, key sortKey) bool {
+	switch key {
+	case sortTokens:
+		return totalTokens(a) > totalTokens(b)
+	case sortStatus:
+		if ra, rb := statusRank(a.Status), statusRank(b.Status); ra != rb {
+			return ra > rb
+		}
+		return a.LastSeenAt > b.LastSeenAt // tie-break: most recent first
+	case sortName:
+		return strings.ToLower(sessionName(a)) < strings.ToLower(sessionName(b))
+	default: // sortLastSeen
+		return a.LastSeenAt > b.LastSeenAt
+	}
+}
+
+// statusRank orders statuses by activity: working > waiting > idle > ended.
+func statusRank(status string) int {
+	switch status {
+	case "working":
+		return 4
+	case "waiting", "waiting_input":
+		return 3
+	case "idle":
+		return 2
+	case "ended":
+		return 1
+	default:
+		return 0
+	}
 }
 
 // fuzzyMatch reports whether the runes of pattern appear in order in text
