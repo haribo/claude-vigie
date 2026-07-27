@@ -10,20 +10,18 @@ import (
 
 func TestDeriveStatus(t *testing.T) {
 	cases := []struct {
-		stop     string
-		inFlight int
-		age      time.Duration
-		want     string
+		stop string
+		age  time.Duration
+		want string
 	}{
-		{"tool_use", 0, time.Hour, "working"},       // tool_use → working regardless of age
-		{"end_turn", 0, 3 * time.Second, "working"}, // very recent activity → working
-		{"end_turn", 2, time.Hour, "waiting"},       // finished but background tasks in flight
-		{"end_turn", 0, time.Hour, "idle"},          // finished, nothing pending
-		{"tool_use", 3, time.Hour, "working"},       // active work outranks in-flight count
+		{"tool_use", time.Hour, "working"},       // tool_use → working regardless of age
+		{"end_turn", 3 * time.Second, "working"}, // very recent activity → working
+		{"end_turn", 2 * time.Minute, "waiting"},
+		{"end_turn", time.Hour, "idle"},
 	}
 	for _, c := range cases {
-		if got := deriveStatus(c.stop, c.inFlight, c.age); got != c.want {
-			t.Errorf("deriveStatus(%q, %d, %s) = %q, want %q", c.stop, c.inFlight, c.age, got, c.want)
+		if got := deriveStatus(c.stop, c.age); got != c.want {
+			t.Errorf("deriveStatus(%q, %s) = %q, want %q", c.stop, c.age, got, c.want)
 		}
 	}
 }
@@ -38,7 +36,6 @@ func TestScanFiltersOldAndBuildsReports(t *testing.T) {
 	recent := filepath.Join(proj, "sess-recent.jsonl")
 	writeLines(t, recent, []string{
 		`{"sessionId":"s-recent","cwd":"/home/x/a","gitBranch":"main","type":"assistant","message":{"id":"m1","model":"claude-opus-4-8","stop_reason":"end_turn","usage":{"output_tokens":100}}}`,
-		`{"type":"user","message":{"content":"Command running in background with ID: bg42"}}`,
 	})
 
 	old := filepath.Join(proj, "sess-old.jsonl")

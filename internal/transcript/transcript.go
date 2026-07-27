@@ -5,11 +5,9 @@ package transcript
 
 import (
 	"bufio"
-	"bytes"
 	"encoding/json"
 	"fmt"
 	"os"
-	"regexp"
 
 	"github.com/haribo/claude-fleet/internal/api"
 )
@@ -24,7 +22,6 @@ type Info struct {
 	Usage          api.Usage
 	LastStopReason string // stop_reason of the last assistant message
 	LastActivity   string // RFC3339 timestamp of the last line
-	InFlightTasks  int    // background shells launched but not yet completed
 }
 
 type usage struct {
@@ -69,13 +66,11 @@ func Parse(path string) (*Info, error) {
 
 	var info Info
 	var titles titleTracker
-	tasks := newTaskTracker()
 	seen := make(map[string]bool)
 
 	sc := bufio.NewScanner(f)
 	sc.Buffer(make([]byte, 0, 64*1024), maxLine)
 	for sc.Scan() {
-		tasks.observe(sc.Bytes())
 		var l line
 		if err := json.Unmarshal(sc.Bytes(), &l); err != nil {
 			continue // skip malformed lines rather than fail the whole parse
@@ -90,7 +85,6 @@ func Parse(path string) (*Info, error) {
 	}
 
 	info.Title = titles.resolve()
-	info.InFlightTasks = tasks.inFlight()
 	return &info, nil
 }
 
@@ -147,56 +141,4 @@ func (t *titleTracker) resolve() string {
 		return t.custom
 	}
 	return t.ai
-}
-
-// Background-task markers, matched against raw transcript lines. These depend on
-// Claude Code's output format (a background shell reports "…with ID: <id>", and
-// its completion arrives as a <task-notification> carrying the same id), so they
-// are the pieces most likely to need updating across Claude Code versions.
-var (
-	bgLaunchMark = []byte("background with ID:")
-	doneMark     = []byte("<status>completed</status>")
-	killedMark   = []byte("<status>killed</status>")
-
-	reBgLaunch = regexp.MustCompile(`background with ID: (\w+)`)
-	reDoneFile = regexp.MustCompile(`tasks/(\w+)\.output`)
-	reDoneID   = regexp.MustCompile(`<task-id>(\w+)</task-id>`)
-)
-
-// taskTracker counts background shells launched but not yet completed, by
-// matching launch and completion markers that share the same task id. The
-// cheap bytes.Contains guards keep the regexes off the vast majority of lines.
-type taskTracker struct {
-	launched  map[string]bool
-	completed map[string]bool
-}
-
-func newTaskTracker() *taskTracker {
-	return &taskTracker{launched: map[string]bool{}, completed: map[string]bool{}}
-}
-
-func (t *taskTracker) observe(raw []byte) {
-	if bytes.Contains(raw, bgLaunchMark) {
-		for _, m := range reBgLaunch.FindAllSubmatch(raw, -1) {
-			t.launched[string(m[1])] = true
-		}
-	}
-	if bytes.Contains(raw, doneMark) || bytes.Contains(raw, killedMark) {
-		for _, m := range reDoneFile.FindAllSubmatch(raw, -1) {
-			t.completed[string(m[1])] = true
-		}
-		for _, m := range reDoneID.FindAllSubmatch(raw, -1) {
-			t.completed[string(m[1])] = true
-		}
-	}
-}
-
-func (t *taskTracker) inFlight() int {
-	n := 0
-	for id := range t.launched {
-		if !t.completed[id] {
-			n++
-		}
-	}
-	return n
 }
