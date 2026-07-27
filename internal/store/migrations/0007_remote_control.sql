@@ -1,0 +1,1 @@
+ALTER TABLE sessions ADD COLUMN remote_control INTEGER NOT NULL DEFAULT 0;

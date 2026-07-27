@@ -31,20 +31,26 @@ type Usage struct {
 
 // SessionView is a session as returned by /api/sessions.
 type SessionView struct {
-	ID         string  `json:"id"`
-	Title      string  `json:"title,omitempty"`
-	User       string  `json:"user,omitempty"`
-	Machine    string  `json:"machine"`
-	ProjectDir string  `json:"project_dir"`
-	GitBranch  string  `json:"git_branch,omitempty"`
-	Model      string  `json:"model,omitempty"`
-	Status     string  `json:"status"`
-	LastTool   string  `json:"last_tool,omitempty"`
-	Usage      Usage   `json:"usage"`
-	StartedAt  string  `json:"started_at"`
-	LastSeenAt string  `json:"last_seen_at"`
-	EndedAt    string  `json:"ended_at,omitempty"`
-	Samples    []int64 `json:"samples,omitempty"` // recent output-token samples, oldest first
+	ID            string  `json:"id"`
+	Title         string  `json:"title,omitempty"`
+	User          string  `json:"user,omitempty"`
+	Machine       string  `json:"machine"`
+	ProjectDir    string  `json:"project_dir"`
+	GitBranch     string  `json:"git_branch,omitempty"`
+	Model         string  `json:"model,omitempty"`
+	Status        string  `json:"status"`
+	LastTool      string  `json:"last_tool,omitempty"`
+	Usage         Usage   `json:"usage"`
+	StartedAt     string  `json:"started_at"`
+	LastSeenAt    string  `json:"last_seen_at"`
+	EndedAt       string  `json:"ended_at,omitempty"`
+	RemoteControl bool    `json:"remote_control"`
+	Samples       []int64 `json:"samples,omitempty"` // recent output-token samples, oldest first
+}
+
+// RCRequest toggles a session's remote-control flag.
+type RCRequest struct {
+	Enabled bool `json:"enabled"`
 }
 
 // LeaseRequest asks for the usage-fetch lease.

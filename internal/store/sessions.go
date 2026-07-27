@@ -12,7 +12,7 @@ var ErrNotFound = errors.New("session not found")
 
 const sessionColumns = `id, title, os_user, machine, project_dir, git_branch, model, status, last_tool,
 	input_tokens, output_tokens, cache_creation_tokens, cache_read_tokens,
-	started_at, last_seen_at, ended_at`
+	started_at, last_seen_at, ended_at, remote_control`
 
 // scanner is satisfied by both *sql.Row and *sql.Rows.
 type scanner interface {
@@ -24,7 +24,7 @@ func scanSession(sc scanner) (Session, error) {
 	err := sc.Scan(
 		&s.ID, &s.Title, &s.User, &s.Machine, &s.ProjectDir, &s.GitBranch, &s.Model, &s.Status, &s.LastTool,
 		&s.Usage.InputTokens, &s.Usage.OutputTokens, &s.Usage.CacheCreationTokens, &s.Usage.CacheReadTokens,
-		&s.StartedAt, &s.LastSeenAt, &s.EndedAt,
+		&s.StartedAt, &s.LastSeenAt, &s.EndedAt, &s.RemoteControl,
 	)
 	return s, err
 }
@@ -74,6 +74,20 @@ func (s *Store) GetSession(ctx context.Context, id string) (Session, error) {
 		return Session{}, fmt.Errorf("getting session %s: %w", id, err)
 	}
 	return sess, nil
+}
+
+// SetRemoteControl updates only a session's remote-control flag, leaving the
+// fields that reports keep refreshing untouched. Returns ErrNotFound if the
+// session does not exist.
+func (s *Store) SetRemoteControl(ctx context.Context, id string, enabled bool) error {
+	res, err := s.db.ExecContext(ctx, `UPDATE sessions SET remote_control = ? WHERE id = ?`, enabled, id)
+	if err != nil {
+		return fmt.Errorf("setting remote control for %s: %w", id, err)
+	}
+	if n, err := res.RowsAffected(); err == nil && n == 0 {
+		return ErrNotFound
+	}
+	return nil
 }
 
 // ListSessions returns all sessions, most recently active first.
