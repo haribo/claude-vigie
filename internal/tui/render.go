@@ -65,6 +65,7 @@ type column struct {
 // right, with the colored status last.
 var columns = []column{
 	{"NAME", 22, 0, false, sessionName},
+	{"USER", 10, 8, false, func(s api.SessionView) string { return orDash(s.User) }},
 	{"SESSION", 9, 8, false, func(s api.SessionView) string { return shortID(s.ID) }},
 	{"DIR", 16, 0, false, func(s api.SessionView) string { return projectName(s.ProjectDir) }},
 	{"BRANCH", 16, 7, false, func(s api.SessionView) string { return orDash(s.GitBranch) }},
