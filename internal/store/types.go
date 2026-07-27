@@ -3,19 +3,20 @@ package store
 // Session is the current state of one Claude Code session. Empty strings mean
 // "unknown / not set" (e.g. EndedAt is empty until the session ends).
 type Session struct {
-	ID         string
-	Title      string
-	User       string // OS account that launched the session
-	Machine    string
-	ProjectDir string
-	GitBranch  string
-	Model      string
-	Status     string
-	LastTool   string
-	Usage      Usage
-	StartedAt  string // RFC3339
-	LastSeenAt string // RFC3339
-	EndedAt    string // RFC3339, empty while the session is active
+	ID            string
+	Title         string
+	User          string // OS account that launched the session
+	Machine       string
+	ProjectDir    string
+	GitBranch     string
+	Model         string
+	Status        string
+	LastTool      string
+	Usage         Usage
+	StartedAt     string // RFC3339
+	LastSeenAt    string // RFC3339
+	EndedAt       string // RFC3339, empty while the session is active
+	RemoteControl bool   // operator-toggled remote-control flag
 }
 
 // Usage holds cumulative token counters for a session.
