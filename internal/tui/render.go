@@ -158,35 +158,43 @@ func renderHeaderRow(cols []column, st sortState) string {
 }
 
 func renderRow(cols []column, s api.SessionView, selected bool, termWidth int) string {
+	// When selected, the background is applied to every segment (each cell and
+	// separator) individually: applying it once over the whole line fails
+	// because the cells' own ANSI reset sequences cut it off.
+	bg := lipgloss.NewStyle()
+	if selected {
+		bg = bg.Background(cSel)
+	}
 	cells := make([]string, len(cols))
 	for i, c := range cols {
-		var cell string
+		var txt string
 		if c.right {
-			cell = padLeft(c.cell(s), c.width)
+			txt = padLeft(c.cell(s), c.width)
 		} else {
-			cell = pad(c.cell(s), c.width)
+			txt = pad(c.cell(s), c.width)
 		}
+		style := bg
 		if c.style != nil {
-			cell = c.style(s).Render(cell)
+			style = c.style(s)
+			if selected {
+				style = style.Background(cSel)
+			}
 		}
-		cells[i] = cell
+		cells[i] = style.Render(txt)
 	}
-	body := strings.Join(cells, colSep)
+	sep := colSep
 	if selected {
-		return renderSelectedRow(body, rowWidth(cols), termWidth)
+		sep = bg.Render(colSep)
 	}
-	return "  " + body
-}
-
-// renderSelectedRow draws an accent left bar and a full-width background fill so
-// the selection stands out among the colored status cells.
-func renderSelectedRow(body string, tableWidth, termWidth int) string {
-	w := tableWidth
-	if termWidth > 1 {
-		w = termWidth - 1
+	body := strings.Join(cells, sep)
+	if !selected {
+		return "  " + body
 	}
-	fill := lipgloss.NewStyle().Background(cSel).Width(w)
-	return cursorStyle.Render("▎") + fill.Render(" "+body)
+	line := cursorStyle.Render("▎") + bg.Render(" ") + body
+	if used := rowWidth(cols); termWidth > used {
+		line += bg.Render(strings.Repeat(" ", termWidth-used)) // fill to the edge
+	}
+	return line
 }
 
 // renderGroupedTable renders sessions grouped by gb, with a header and token
