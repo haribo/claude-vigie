@@ -214,7 +214,7 @@ func TestRenderGroupedTableHasHeaders(t *testing.T) {
 		{Title: "b", Machine: "m1", Usage: api.Usage{OutputTokens: 200}},
 		{Title: "c", Machine: "m2", Usage: api.Usage{OutputTokens: 50}},
 	}
-	out := renderGroupedTable(sessions, 200, -1, groupMachine)
+	out := renderGroupedTable(sessions, 200, -1, groupMachine, sortState{})
 	for _, want := range []string{"▸ m1", "▸ m2", "(2 ·"} {
 		if !strings.Contains(out, want) {
 			t.Errorf("grouped table missing %q:\n%s", want, out)
@@ -252,5 +252,24 @@ func TestGroupToggleCycles(t *testing.T) {
 	m, _ = m.Update(key("g"))
 	if m.(model).groupBy != groupNone {
 		t.Errorf("after 3x g: groupBy = %d, want groupNone", m.(model).groupBy)
+	}
+}
+
+func TestStatusRankAndSort(t *testing.T) {
+	if statusRank("working") <= statusRank("waiting") || statusRank("idle") <= statusRank("ended") {
+		t.Fatal("status rank must be working > waiting > idle > ended")
+	}
+	s := []api.SessionView{
+		{Status: "idle", LastSeenAt: "2026-07-27T10:00:00Z"},
+		{Status: "working", LastSeenAt: "2026-07-27T09:00:00Z"},
+		{Status: "ended", LastSeenAt: "2026-07-27T11:00:00Z"},
+	}
+	sortSessions(s, sortStatus, false)
+	if s[0].Status != "working" || s[2].Status != "ended" {
+		t.Errorf("status sort = %s..%s, want working..ended", s[0].Status, s[2].Status)
+	}
+	sortSessions(s, sortStatus, true)
+	if s[0].Status != "ended" || s[2].Status != "working" {
+		t.Errorf("reversed sort = %s..%s, want ended..working", s[0].Status, s[2].Status)
 	}
 }
