@@ -1,9 +1,11 @@
 package server
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"net/http"
+	"time"
 
 	"github.com/haribo/claude-fleet/internal/api"
 	"github.com/haribo/claude-fleet/internal/store"
@@ -45,7 +47,24 @@ func (s *Server) handleReport(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	s.maybeSample(ctx, sess.ID, req.Timestamp, sess.Usage.OutputTokens)
+
 	w.WriteHeader(http.StatusNoContent)
+}
+
+// maybeSample records a token sample at most once per minute per session, so
+// the watcher's frequent reports don't flood the samples table.
+func (s *Server) maybeSample(ctx context.Context, sessionID, at string, output int64) {
+	if last, err := s.store.LastSampleAt(ctx, sessionID); err == nil && last != "" {
+		lt, e1 := time.Parse(time.RFC3339, last)
+		nt, e2 := time.Parse(time.RFC3339, at)
+		if e1 == nil && e2 == nil && nt.Sub(lt) < time.Minute {
+			return
+		}
+	}
+	if err := s.store.AddSample(ctx, sessionID, at, output); err != nil {
+		s.log.Error("adding sample", "error", err)
+	}
 }
 
 // applyReport merges a report into the session state (read-modify-write).
