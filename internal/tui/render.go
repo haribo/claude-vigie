@@ -212,7 +212,7 @@ func renderDetail(s api.SessionView) string {
 }
 
 func detailField(label, value string) string {
-	return labelStyle.Render(pad(label+":", 14)) + value
+	return labelStyle.Render(pad(label+":", 16)) + value
 }
 
 // rcLabel renders the remote-control flag as a symbol + word for the detail panel.
