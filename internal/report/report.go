@@ -75,11 +75,14 @@ func Run(event string, stdin io.Reader) error {
 }
 
 // recordPresence captures the backing claude process at SessionStart and clears
-// it at SessionEnd. Errors are ignored: presence is an enhancement, and the hook
-// must exit 0 regardless (e.g. when not run under Claude Code, or off Linux).
+// it at SessionEnd. It also refreshes the mapping on UserPromptSubmit, so a
+// session already open when the hook was installed gets backfilled on its next
+// message (SessionStart does not replay for a running session). Errors are
+// ignored: presence is an enhancement, and the hook must exit 0 regardless
+// (e.g. when not run under Claude Code, or off Linux).
 func recordPresence(event, sessionID string) {
 	switch event {
-	case "SessionStart":
+	case "SessionStart", "UserPromptSubmit":
 		if m, err := presence.ResolveClaude(); err == nil {
 			_ = presence.Save(sessionID, m)
 		}
