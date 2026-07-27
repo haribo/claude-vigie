@@ -75,6 +75,44 @@ func TestScanFiltersOldAndBuildsReports(t *testing.T) {
 	}
 }
 
+func TestScannerCachesParse(t *testing.T) {
+	root := t.TempDir()
+	proj := filepath.Join(root, "p")
+	if err := os.MkdirAll(proj, 0o750); err != nil {
+		t.Fatal(err)
+	}
+	f := filepath.Join(proj, "s.jsonl")
+	writeLines(t, f, []string{
+		`{"sessionId":"s1","type":"assistant","message":{"id":"m","stop_reason":"end_turn","usage":{"output_tokens":10}}}`,
+	})
+	fi, err := os.Stat(f)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	sc := newScanner()
+	r1, err := sc.scan(root, "m", time.Hour, time.Now())
+	if err != nil || len(r1) != 1 || r1[0].Usage.OutputTokens != 10 {
+		t.Fatalf("first scan: %+v (err %v)", r1, err)
+	}
+	if len(sc.cache) != 1 {
+		t.Fatalf("cache not populated: len=%d", len(sc.cache))
+	}
+
+	// Rewrite the file with different (invalid) content of the SAME size, then
+	// restore its mod time. A re-parse would yield 0 tokens; a cache hit keeps 10.
+	if err := os.WriteFile(f, []byte(strings.Repeat("x", int(fi.Size()))), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chtimes(f, fi.ModTime(), fi.ModTime()); err != nil {
+		t.Fatal(err)
+	}
+	r2, err := sc.scan(root, "m", time.Hour, time.Now())
+	if err != nil || len(r2) != 1 || r2[0].Usage.OutputTokens != 10 {
+		t.Errorf("cached scan should reuse the parse (10 tokens), got %+v (err %v)", r2, err)
+	}
+}
+
 func writeLines(t *testing.T, path string, lines []string) {
 	t.Helper()
 	if err := os.WriteFile(path, []byte(strings.Join(lines, "\n")+"\n"), 0o600); err != nil {
