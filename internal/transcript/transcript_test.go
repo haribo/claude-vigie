@@ -52,3 +52,28 @@ func TestParse(t *testing.T) {
 		t.Errorf("LastActivity = %q, want the last timestamp", info.LastActivity)
 	}
 }
+
+func TestParseInFlightTasks(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "t.jsonl")
+	lines := []string{
+		// Two background shells launched.
+		`{"type":"user","message":{"content":"Command running in background with ID: shellA"}}`,
+		`{"type":"user","message":{"content":"Command running in background with ID: shellB"}}`,
+		// One of them completes via a task-notification carrying the same id.
+		`{"type":"user","message":{"content":"<task-notification> <task-id>shellA</task-id> <output-file>/tmp/tasks/shellA.output</output-file> <status>completed</status> </task-notification>"}}`,
+		// An unrelated agent task completes: its id was never launched as a shell,
+		// so it must not affect the in-flight count.
+		`{"type":"user","message":{"content":"<task-notification> <task-id>agentZ</task-id> <status>killed</status> </task-notification>"}}`,
+	}
+	if err := os.WriteFile(path, []byte(strings.Join(lines, "\n")+"\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	info, err := Parse(path)
+	if err != nil {
+		t.Fatalf("Parse: %v", err)
+	}
+	if info.InFlightTasks != 1 {
+		t.Errorf("InFlightTasks = %d, want 1 (shellB still running)", info.InFlightTasks)
+	}
+}
