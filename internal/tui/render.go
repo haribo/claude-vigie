@@ -194,7 +194,12 @@ func detailField(label, value string) string {
 // sparkWindow is how many recent polls the activity sparkline keeps.
 const sparkWindow = 30
 
-var sparkBlocks = []rune("▁▂▃▄▅▆▇█")
+// Braille dot bits (offset from U+2800) for a column filled from the bottom up
+// to a height of 0..4. The left column uses dots 7,3,2,1; the right, 8,6,5,4.
+var (
+	brailleLeft  = [5]byte{0, 0x40, 0x44, 0x46, 0x47}
+	brailleRight = [5]byte{0, 0x80, 0xA0, 0xB0, 0xB8}
+)
 
 // renderSummary renders the fleet summary strip: status counts, total output
 // tokens across the fleet, and an activity sparkline (working sessions over the
@@ -220,6 +225,8 @@ func renderSummary(sessions []api.SessionView, history []int) string {
 	return line
 }
 
+// sparkline renders values as a braille graph: two samples per glyph (2 columns
+// × 4 dot rows), doubling the horizontal resolution of block runes.
 func sparkline(values []int) string {
 	if len(values) == 0 {
 		return ""
@@ -231,10 +238,27 @@ func sparkline(values []int) string {
 		}
 	}
 	var b strings.Builder
-	for _, v := range values {
-		b.WriteRune(sparkBlocks[v*(len(sparkBlocks)-1)/maxV])
+	for i := 0; i < len(values); i += 2 {
+		bits := brailleLeft[sparkHeight(values[i], maxV)]
+		if i+1 < len(values) {
+			bits |= brailleRight[sparkHeight(values[i+1], maxV)]
+		}
+		b.WriteRune(rune(0x2800 + int(bits)))
 	}
 	return b.String()
+}
+
+// sparkHeight maps a value onto a 0..4 dot column height.
+func sparkHeight(v, maxV int) int {
+	h := v * 4 / maxV
+	switch {
+	case h < 0:
+		return 0
+	case h > 4:
+		return 4
+	default:
+		return h
+	}
 }
 
 // activitySpark renders a per-session sparkline of token deltas between samples.

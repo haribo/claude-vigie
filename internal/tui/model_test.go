@@ -93,15 +93,15 @@ func TestSparkline(t *testing.T) {
 	if got := sparkline(nil); got != "" {
 		t.Errorf("empty history = %q, want empty", got)
 	}
+	// Braille packs two samples per glyph, so 4 values → 2 glyphs.
 	r := []rune(sparkline([]int{0, 1, 2, 4}))
-	if len(r) != 4 {
-		t.Fatalf("sparkline length = %d, want 4", len(r))
+	if len(r) != 2 {
+		t.Fatalf("sparkline length = %d, want 2 (braille packs 2/glyph)", len(r))
 	}
-	if r[0] != '▁' {
-		t.Errorf("zero block = %q, want ▁", string(r[0]))
-	}
-	if r[3] != '█' {
-		t.Errorf("max block = %q, want █", string(r[3]))
+	for _, g := range r {
+		if g < 0x2800 || g > 0x28FF {
+			t.Errorf("glyph %q outside the braille range", string(g))
+		}
 	}
 }
 
@@ -226,9 +226,9 @@ func TestActivitySpark(t *testing.T) {
 	if got := activitySpark([]int64{100}); got != "" {
 		t.Errorf("single sample = %q, want empty", got)
 	}
-	// deltas between 100,150,150,400 → 50, 0, 250 (3 blocks)
-	if got := []rune(activitySpark([]int64{100, 150, 150, 400})); len(got) != 3 {
-		t.Errorf("spark length = %d, want 3", len(got))
+	// deltas 50, 0, 250 → 3 samples → 2 braille glyphs (2 samples per glyph)
+	if got := []rune(activitySpark([]int64{100, 150, 150, 400})); len(got) != 2 {
+		t.Errorf("spark length = %d, want 2 (braille packs 2 deltas/glyph)", len(got))
 	}
 }
 
