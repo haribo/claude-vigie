@@ -27,11 +27,9 @@ type Options struct {
 	UsageInterval time.Duration
 }
 
-// Status thresholds derived from how recently a transcript changed.
-const (
-	activeWindow  = 10 * time.Second
-	waitingWindow = 15 * time.Minute
-)
+// activeWindow is how recently a transcript must have changed to count as
+// actively working (below it, the session is between turns).
+const activeWindow = 10 * time.Second
 
 // ProjectsDir returns the Claude Code transcripts root (~/.claude/projects).
 func ProjectsDir() (string, error) {
@@ -108,7 +106,7 @@ func Scan(root, machine string, maxAge time.Duration, now time.Time) ([]api.Repo
 			GitBranch:  info.GitBranch,
 			Model:      info.Model,
 			Title:      info.Title,
-			Status:     deriveStatus(info.LastStopReason, age),
+			Status:     deriveStatus(info.LastStopReason, info.InFlightTasks, age),
 			Usage:      &usage,
 			Timestamp:  fi.ModTime().UTC().Format(time.RFC3339),
 		})
@@ -116,12 +114,15 @@ func Scan(root, machine string, maxAge time.Duration, now time.Time) ([]api.Repo
 	return reports, nil
 }
 
-// deriveStatus maps a transcript's last stop_reason and age to a status.
-func deriveStatus(lastStopReason string, age time.Duration) string {
+// deriveStatus maps a transcript's last stop_reason, in-flight background task
+// count, and age to a status. "waiting" means the turn is finished but
+// background shells are still running (blocked on external work), which is
+// distinct from "idle" (finished with nothing left to do).
+func deriveStatus(lastStopReason string, inFlight int, age time.Duration) string {
 	switch {
 	case lastStopReason == "tool_use" || age < activeWindow:
 		return "working"
-	case age < waitingWindow:
+	case inFlight > 0:
 		return "waiting"
 	default:
 		return "idle"
