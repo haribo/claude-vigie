@@ -273,3 +273,19 @@ func TestStatusRankAndSort(t *testing.T) {
 		t.Errorf("reversed sort = %s..%s, want ended..working", s[0].Status, s[2].Status)
 	}
 }
+
+func TestRCSortAndFilter(t *testing.T) {
+	m := model{sessions: []api.SessionView{
+		{Title: "a", Status: "idle", LastSeenAt: "2026-07-27T10:00:00Z"},
+		{Title: "b", Status: "idle", RemoteControl: true, LastSeenAt: "2026-07-27T09:00:00Z"},
+	}, showAll: true, sortKey: sortRC}
+	vis := m.visibleSessions()
+	if !vis[0].RemoteControl {
+		t.Errorf("rc sort: first = %q, want the rc-active one", vis[0].Title)
+	}
+	m.filter = "rc"
+	vis = m.visibleSessions()
+	if len(vis) != 1 || !vis[0].RemoteControl {
+		t.Errorf("filter rc = %d rows, want 1 rc-active", len(vis))
+	}
+}
