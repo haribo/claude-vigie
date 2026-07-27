@@ -65,3 +65,9 @@ type UsageReport struct {
 	SevenDayReset string  `json:"seven_day_reset,omitempty"`
 	FetchedAt     string  `json:"fetched_at,omitempty"`
 }
+
+// WatcherStatus reports when the server last received a watch report, so the
+// client can warn that statuses may be stale. LastSeen is empty if never.
+type WatcherStatus struct {
+	LastSeen string `json:"last_seen,omitempty"` // RFC3339
+}

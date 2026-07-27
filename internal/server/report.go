@@ -37,14 +37,17 @@ func (s *Server) handleReport(w http.ResponseWriter, r *http.Request) {
 		s.writeError(w, http.StatusInternalServerError, "internal error")
 		return
 	}
-	// The watcher polls frequently; keep its scans out of the event log.
-	if req.Event != "watch" {
-		if err := s.store.AppendEvent(ctx, store.Event{
-			SessionID: sess.ID, Event: req.Event, Status: sess.Status, CreatedAt: req.Timestamp,
-		}); err != nil {
-			// The session is already updated; the event log is best-effort.
-			s.log.Error("appending event", "error", err)
+	// The watcher polls frequently; keep its scans out of the event log, but
+	// record a heartbeat so clients can detect an absent watcher.
+	if req.Event == "watch" {
+		if err := s.store.SetMeta(ctx, watchSeenKey, time.Now().UTC().Format(time.RFC3339)); err != nil {
+			s.log.Error("recording watch heartbeat", "error", err)
 		}
+	} else if err := s.store.AppendEvent(ctx, store.Event{
+		SessionID: sess.ID, Event: req.Event, Status: sess.Status, CreatedAt: req.Timestamp,
+	}); err != nil {
+		// The session is already updated; the event log is best-effort.
+		s.log.Error("appending event", "error", err)
 	}
 
 	s.maybeSample(ctx, sess.ID, req.Timestamp, sess.Usage.OutputTokens)
