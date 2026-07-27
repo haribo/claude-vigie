@@ -58,19 +58,21 @@ var groupNames = map[groupBy]string{
 }
 
 type model struct {
-	fetch     func() ([]api.SessionView, error)
-	sessions  []api.SessionView
-	err       error
-	updated   string
-	width     int
-	tab       tab
-	cursor    int
-	detail    bool
-	history   []int
-	filter    string
-	filtering bool
-	sortKey   sortKey
-	groupBy   groupBy
+	fetch      func() ([]api.SessionView, error)
+	fetchUsage func() (api.UsageReport, error)
+	sessions   []api.SessionView
+	usage      api.UsageReport
+	err        error
+	updated    string
+	width      int
+	tab        tab
+	cursor     int
+	detail     bool
+	history    []int
+	filter     string
+	filtering  bool
+	sortKey    sortKey
+	groupBy    groupBy
 }
 
 type sessionsMsg struct {
@@ -80,14 +82,26 @@ type sessionsMsg struct {
 
 type tickMsg struct{}
 
+type usageMsg struct {
+	usage api.UsageReport
+	err   error
+}
+
 func (m model) Init() tea.Cmd {
-	return tea.Batch(m.fetchCmd(), tickCmd())
+	return tea.Batch(m.fetchCmd(), m.fetchUsageCmd(), tickCmd())
 }
 
 func (m model) fetchCmd() tea.Cmd {
 	return func() tea.Msg {
 		s, err := m.fetch()
 		return sessionsMsg{sessions: s, err: err}
+	}
+}
+
+func (m model) fetchUsageCmd() tea.Cmd {
+	return func() tea.Msg {
+		u, err := m.fetchUsage()
+		return usageMsg{usage: u, err: err}
 	}
 }
 
@@ -113,8 +127,12 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.history = m.history[len(m.history)-sparkWindow:]
 			}
 		}
+	case usageMsg:
+		if msg.err == nil {
+			m.usage = msg.usage
+		}
 	case tickMsg:
-		return m, tea.Batch(m.fetchCmd(), tickCmd())
+		return m, tea.Batch(m.fetchCmd(), m.fetchUsageCmd(), tickCmd())
 	}
 	return m, nil
 }
@@ -216,7 +234,7 @@ func (m model) View() string {
 	case tabSessions:
 		b.WriteString(m.viewSessions())
 	case tabUsage:
-		b.WriteString(dimStyle.Render("Usage — coming soon"))
+		b.WriteString(renderUsage(m.usage))
 	case tabMachines:
 		b.WriteString(dimStyle.Render("Machines — coming soon"))
 	}

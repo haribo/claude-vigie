@@ -12,7 +12,8 @@ import (
 // Run starts the terminal dashboard, polling the server described by cfg.
 func Run(cfg *config.Config) error {
 	m := model{
-		fetch: func() ([]api.SessionView, error) { return fetchSessions(cfg) },
+		fetch:      func() ([]api.SessionView, error) { return fetchSessions(cfg) },
+		fetchUsage: func() (api.UsageReport, error) { return fetchUsage(cfg) },
 	}
 	_, err := tea.NewProgram(m, tea.WithAltScreen()).Run()
 	return err
