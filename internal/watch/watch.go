@@ -16,6 +16,7 @@ import (
 
 	"github.com/haribo/claude-fleet/internal/api"
 	"github.com/haribo/claude-fleet/internal/config"
+	"github.com/haribo/claude-fleet/internal/presence"
 	"github.com/haribo/claude-fleet/internal/transcript"
 	"github.com/haribo/claude-fleet/internal/usage"
 )
@@ -108,7 +109,7 @@ func Scan(root, machine string, maxAge time.Duration, now time.Time) ([]api.Repo
 			GitBranch:  info.GitBranch,
 			Model:      info.Model,
 			Title:      info.Title,
-			Status:     deriveStatus(info.LastStopReason, age),
+			Status:     statusFor(id, info.LastStopReason, age),
 			Usage:      &usage,
 			Timestamp:  fi.ModTime().UTC().Format(time.RFC3339),
 		})
@@ -116,7 +117,30 @@ func Scan(root, machine string, maxAge time.Duration, now time.Time) ([]api.Repo
 	return reports, nil
 }
 
-// deriveStatus maps a transcript's last stop_reason and age to a status.
+// statusFor derives a session's status, preferring the reliable process-presence
+// signal when a SessionStart hook recorded a mapping for it:
+//   - process alive  → working if the transcript is actively changing, else idle
+//     (a live session is idle for any duration, never wrongly "ended")
+//   - process dead   → ended (reliable even on a hard kill, without SessionEnd)
+//
+// Without a mapping (session opened before the hook was installed, or on another
+// machine), it falls back to the activity-only heuristic.
+func statusFor(sessionID, lastStopReason string, age time.Duration) string {
+	m, ok, err := presence.Load(sessionID)
+	if err != nil || !ok {
+		return deriveStatus(lastStopReason, age)
+	}
+	if !presence.Alive(m) {
+		return "ended"
+	}
+	if lastStopReason == "tool_use" || age < activeWindow {
+		return "working"
+	}
+	return "idle"
+}
+
+// deriveStatus maps a transcript's last stop_reason and age to a status. It is
+// the fallback used only when no process-presence mapping exists.
 func deriveStatus(lastStopReason string, age time.Duration) string {
 	switch {
 	case lastStopReason == "tool_use" || age < activeWindow:

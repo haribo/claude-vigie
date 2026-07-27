@@ -3,9 +3,12 @@ package watch
 import (
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/haribo/claude-fleet/internal/presence"
 )
 
 func TestDeriveStatus(t *testing.T) {
@@ -77,4 +80,48 @@ func writeLines(t *testing.T, path string, lines []string) {
 	if err := os.WriteFile(path, []byte(strings.Join(lines, "\n")+"\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
+}
+
+func TestStatusForPresence(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
+
+	// A live mapping = the test process itself (present, matching start time).
+	if err := presence.Save("live", presence.Mapping{PID: os.Getpid(), StartTime: selfStartTime(t)}); err != nil {
+		t.Fatal(err)
+	}
+	if got := statusFor("live", "end_turn", time.Hour); got != "idle" {
+		t.Errorf("alive + old + end_turn = %q, want idle (live sessions never go stale)", got)
+	}
+	if got := statusFor("live", "tool_use", time.Hour); got != "working" {
+		t.Errorf("alive + tool_use = %q, want working", got)
+	}
+
+	// A dead mapping = a pid that does not exist → ended.
+	if err := presence.Save("dead", presence.Mapping{PID: 2 << 30, StartTime: 1}); err != nil {
+		t.Fatal(err)
+	}
+	if got := statusFor("dead", "end_turn", time.Hour); got != "ended" {
+		t.Errorf("dead process = %q, want ended", got)
+	}
+
+	// No mapping → activity fallback (old transcript → idle).
+	if got := statusFor("unmapped", "end_turn", time.Hour); got != "idle" {
+		t.Errorf("no mapping + old = %q, want idle (fallback)", got)
+	}
+}
+
+// selfStartTime reads field 22 of /proc/self/stat (the test process start time).
+func selfStartTime(t *testing.T) uint64 {
+	t.Helper()
+	data, err := os.ReadFile("/proc/self/stat")
+	if err != nil {
+		t.Skipf("no /proc (non-Linux?): %v", err)
+	}
+	s := string(data)
+	fields := strings.Fields(s[strings.LastIndexByte(s, ')')+1:])
+	v, err := strconv.ParseUint(fields[19], 10, 64)
+	if err != nil {
+		t.Fatalf("parsing start time: %v", err)
+	}
+	return v
 }
