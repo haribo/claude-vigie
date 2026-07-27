@@ -185,11 +185,13 @@ func renderDetail(s api.SessionView) string {
 	lines := []string{
 		detailField("Name", name),
 		detailField("Session", s.ID),
+		detailField("User", orDash(s.User)),
 		detailField("Machine", s.Machine),
 		detailField("Directory", s.ProjectDir),
 		detailField("Branch", orDash(s.GitBranch)),
 		detailField("Model", orDash(s.Model)),
 		detailField("Status", s.Status),
+		detailField("Remote control", rcLabel(s.RemoteControl)),
 		detailField("Last tool", orDash(s.LastTool)),
 		detailField("Started", orDash(s.StartedAt)),
 		detailField("Last seen", orDash(s.LastSeenAt)),
@@ -211,6 +213,14 @@ func renderDetail(s api.SessionView) string {
 
 func detailField(label, value string) string {
 	return labelStyle.Render(pad(label+":", 14)) + value
+}
+
+// rcLabel renders the remote-control flag as a symbol + word for the detail panel.
+func rcLabel(on bool) string {
+	if on {
+		return rcOnStyle.Render("◉ on")
+	}
+	return rcOffStyle.Render("○ off")
 }
 
 // sparkWindow is how many recent polls the activity sparkline keeps.
