@@ -34,6 +34,9 @@ const (
 	waitingWindow = 15 * time.Minute
 )
 
+// gcInterval is how often the watcher garbage-collects dead session mappings.
+const gcInterval = 5 * time.Minute
+
 // ProjectsDir returns the Claude Code transcripts root (~/.claude/projects).
 func ProjectsDir() (string, error) {
 	home, err := os.UserHomeDir()
@@ -56,6 +59,7 @@ func Run(ctx context.Context, cfg *config.Config, opts Options) error {
 	defer ticker.Stop()
 
 	sc := newScanner()
+	lastGC := time.Now()
 	for {
 		reports, err := sc.scan(root, cfg.Machine, opts.MaxAge, time.Now())
 		if err != nil {
@@ -66,11 +70,26 @@ func Run(ctx context.Context, cfg *config.Config, opts Options) error {
 				fmt.Fprintf(os.Stderr, "watch: reporting %s: %v\n", r.SessionID, err)
 			}
 		}
+		if time.Since(lastGC) > gcInterval {
+			collectDeadMappings(opts.MaxAge)
+			lastGC = time.Now()
+		}
 		select {
 		case <-ctx.Done():
 			return nil
 		case <-ticker.C:
 		}
+	}
+}
+
+// collectDeadMappings removes presence mappings for sessions whose process died
+// without a SessionEnd and whose transcript is past the watcher's window.
+func collectDeadMappings(maxAge time.Duration) {
+	n, err := presence.GC(maxAge, time.Now())
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "watch: presence gc: %v\n", err)
+	} else if n > 0 {
+		fmt.Fprintf(os.Stderr, "watch: cleaned %d dead session mapping(s)\n", n)
 	}
 }
 

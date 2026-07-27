@@ -11,6 +11,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 )
 
 // Mapping records which process backs a session, captured at SessionStart.
@@ -79,6 +80,42 @@ func Load(sessionID string) (m Mapping, ok bool, err error) {
 		return Mapping{}, false, fmt.Errorf("parsing mapping: %w", err)
 	}
 	return m, true, nil
+}
+
+// GC removes mappings whose process is dead and whose file has not changed for
+// at least olderThan. Live sessions, and recently-closed ones (so the watcher
+// can still report them ended), are kept. It returns the number removed.
+func GC(olderThan time.Duration, now time.Time) (int, error) {
+	d, err := dir()
+	if err != nil {
+		return 0, err
+	}
+	entries, err := os.ReadDir(d)
+	if os.IsNotExist(err) {
+		return 0, nil
+	}
+	if err != nil {
+		return 0, fmt.Errorf("reading sessions dir: %w", err)
+	}
+	removed := 0
+	for _, e := range entries {
+		if e.IsDir() || !strings.HasSuffix(e.Name(), ".json") {
+			continue
+		}
+		sessionID := strings.TrimSuffix(e.Name(), ".json")
+		m, ok, err := Load(sessionID)
+		if err != nil || !ok || Alive(m) {
+			continue
+		}
+		fi, err := e.Info()
+		if err != nil || now.Sub(fi.ModTime()) < olderThan {
+			continue
+		}
+		if err := Delete(sessionID); err == nil {
+			removed++
+		}
+	}
+	return removed, nil
 }
 
 // Delete removes a session mapping (called at SessionEnd); absent is not an error.

@@ -3,6 +3,7 @@ package presence
 import (
 	"os"
 	"testing"
+	"time"
 )
 
 func TestSaveLoadDelete(t *testing.T) {
@@ -32,6 +33,48 @@ func TestSaveLoadDelete(t *testing.T) {
 	}
 	if err := Delete("sess-1"); err != nil {
 		t.Errorf("Delete when absent: %v, want nil", err)
+	}
+}
+
+func TestGC(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
+	self := os.Getpid()
+	_, _, start, err := readStat(self)
+	if err != nil {
+		t.Skipf("no /proc: %v", err)
+	}
+
+	if err := Save("live", Mapping{PID: self, StartTime: start}); err != nil {
+		t.Fatal(err)
+	}
+	if err := Save("dead-old", Mapping{PID: 2 << 30, StartTime: 1}); err != nil {
+		t.Fatal(err)
+	}
+	if err := Save("dead-new", Mapping{PID: 2 << 30, StartTime: 1}); err != nil {
+		t.Fatal(err)
+	}
+	// Age the dead-old mapping file beyond the threshold.
+	p, _ := pathFor("dead-old")
+	old := time.Now().Add(-48 * time.Hour)
+	if err := os.Chtimes(p, old, old); err != nil {
+		t.Fatal(err)
+	}
+
+	n, err := GC(24*time.Hour, time.Now())
+	if err != nil {
+		t.Fatalf("GC: %v", err)
+	}
+	if n != 1 {
+		t.Errorf("removed %d, want 1 (only dead+old)", n)
+	}
+	if _, ok, _ := Load("dead-old"); ok {
+		t.Error("dead-old should have been collected")
+	}
+	if _, ok, _ := Load("dead-new"); !ok {
+		t.Error("dead-new should be kept (recently closed)")
+	}
+	if _, ok, _ := Load("live"); !ok {
+		t.Error("live should be kept (process alive)")
 	}
 }
 
