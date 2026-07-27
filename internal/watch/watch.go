@@ -55,8 +55,9 @@ func Run(ctx context.Context, cfg *config.Config, opts Options) error {
 	ticker := time.NewTicker(opts.Interval)
 	defer ticker.Stop()
 
+	sc := newScanner()
 	for {
-		reports, err := Scan(root, cfg.Machine, opts.MaxAge, time.Now())
+		reports, err := sc.scan(root, cfg.Machine, opts.MaxAge, time.Now())
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "watch: %v\n", err)
 		}
@@ -73,15 +74,40 @@ func Run(ctx context.Context, cfg *config.Config, opts Options) error {
 	}
 }
 
-// Scan reads every transcript under root modified within maxAge and returns a
-// report (with a derived status) for each.
+// cacheEntry is a transcript's last parse, keyed by path and validated by the
+// file's mod time and size.
+type cacheEntry struct {
+	modTime time.Time
+	size    int64
+	info    *transcript.Info
+}
+
+// scanner scans transcripts and caches each parse, so an unchanged (idle)
+// transcript is not re-parsed every interval — important because a large
+// transcript takes seconds to parse and the watcher scans frequently.
+type scanner struct {
+	cache map[string]cacheEntry
+}
+
+func newScanner() *scanner {
+	return &scanner{cache: map[string]cacheEntry{}}
+}
+
+// Scan performs a single cache-less scan (used in tests and one-offs).
 func Scan(root, machine string, maxAge time.Duration, now time.Time) ([]api.ReportRequest, error) {
+	return newScanner().scan(root, machine, maxAge, now)
+}
+
+// scan reads every transcript under root modified within maxAge and returns a
+// report (with a derived status) for each, reusing cached parses.
+func (s *scanner) scan(root, machine string, maxAge time.Duration, now time.Time) ([]api.ReportRequest, error) {
 	paths, err := filepath.Glob(filepath.Join(root, "*", "*.jsonl"))
 	if err != nil {
 		return nil, fmt.Errorf("globbing transcripts: %w", err)
 	}
 
 	var reports []api.ReportRequest
+	fresh := make(map[string]cacheEntry, len(s.cache))
 	for _, p := range paths {
 		fi, err := os.Stat(p)
 		if err != nil {
@@ -91,7 +117,7 @@ func Scan(root, machine string, maxAge time.Duration, now time.Time) ([]api.Repo
 		if age > maxAge {
 			continue
 		}
-		info, err := transcript.Parse(p)
+		info, err := s.parse(p, fi, fresh)
 		if err != nil {
 			continue
 		}
@@ -114,7 +140,24 @@ func Scan(root, machine string, maxAge time.Duration, now time.Time) ([]api.Repo
 			Timestamp:  fi.ModTime().UTC().Format(time.RFC3339),
 		})
 	}
+	s.cache = fresh // drop entries for files no longer scanned
 	return reports, nil
+}
+
+// parse returns the transcript Info for p, reusing the cached parse when the
+// file is unchanged (same mod time and size) since the last scan. The reused or
+// freshly parsed entry is recorded in fresh (the next scan's cache).
+func (s *scanner) parse(p string, fi os.FileInfo, fresh map[string]cacheEntry) (*transcript.Info, error) {
+	if e, ok := s.cache[p]; ok && e.modTime.Equal(fi.ModTime()) && e.size == fi.Size() {
+		fresh[p] = e
+		return e.info, nil
+	}
+	info, err := transcript.Parse(p)
+	if err != nil {
+		return nil, err
+	}
+	fresh[p] = cacheEntry{modTime: fi.ModTime(), size: fi.Size(), info: info}
+	return info, nil
 }
 
 // statusFor derives a session's status, preferring the reliable process-presence
