@@ -55,6 +55,7 @@ func (s *Server) Handler() http.Handler {
 	mux.Handle("POST /api/usage", s.auth(http.HandlerFunc(s.handlePostUsage)))
 	mux.Handle("GET /api/usage", s.auth(http.HandlerFunc(s.handleGetUsage)))
 	mux.Handle("GET /api/events", s.auth(http.HandlerFunc(s.handleEvents)))
+	mux.Handle("GET /api/watcher", s.auth(http.HandlerFunc(s.handleWatcher)))
 	return mux
 }
 

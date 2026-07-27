@@ -15,9 +15,10 @@ func Run(cfg *config.Config) error {
 	go subscribeEvents(cfg, events)
 
 	m := model{
-		fetch:      func() ([]api.SessionView, error) { return fetchSessions(cfg) },
-		fetchUsage: func() (api.UsageReport, error) { return fetchUsage(cfg) },
-		events:     events,
+		fetch:        func() ([]api.SessionView, error) { return fetchSessions(cfg) },
+		fetchUsage:   func() (api.UsageReport, error) { return fetchUsage(cfg) },
+		fetchWatcher: func() (api.WatcherStatus, error) { return fetchWatcher(cfg) },
+		events:       events,
 	}
 	_, err := tea.NewProgram(m, tea.WithAltScreen()).Run()
 	return err
