@@ -32,6 +32,7 @@ func (s *Server) handleReport(w http.ResponseWriter, r *http.Request) {
 	}
 
 	sess := applyReport(existing, isNew, req)
+	sess.ReportedAt = time.Now().UTC().Format(time.RFC3339) // server-side heartbeat
 	if err := s.store.UpsertSession(ctx, sess); err != nil {
 		s.log.Error("upserting session", "error", err)
 		s.writeError(w, http.StatusInternalServerError, "internal error")

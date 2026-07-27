@@ -17,6 +17,7 @@ type Session struct {
 	LastSeenAt    string // RFC3339
 	EndedAt       string // RFC3339, empty while the session is active
 	RemoteControl bool   // operator-toggled remote-control flag
+	ReportedAt    string // RFC3339 server time of the last report (heartbeat)
 }
 
 // Usage holds cumulative token counters for a session.
