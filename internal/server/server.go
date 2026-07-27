@@ -34,6 +34,7 @@ type Server struct {
 	store Store
 	token string
 	log   *slog.Logger
+	hub   *hub
 }
 
 // New returns a Server backed by st, authenticating with token.
@@ -41,7 +42,7 @@ func New(st Store, token string, log *slog.Logger) *Server {
 	if log == nil {
 		log = slog.Default()
 	}
-	return &Server{store: st, token: token, log: log}
+	return &Server{store: st, token: token, log: log, hub: newHub()}
 }
 
 // Handler returns the root HTTP handler with all routes registered.
@@ -53,6 +54,7 @@ func (s *Server) Handler() http.Handler {
 	mux.Handle("POST /api/usage/lease", s.auth(http.HandlerFunc(s.handleUsageLease)))
 	mux.Handle("POST /api/usage", s.auth(http.HandlerFunc(s.handlePostUsage)))
 	mux.Handle("GET /api/usage", s.auth(http.HandlerFunc(s.handleGetUsage)))
+	mux.Handle("GET /api/events", s.auth(http.HandlerFunc(s.handleEvents)))
 	return mux
 }
 
