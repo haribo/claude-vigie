@@ -28,3 +28,22 @@ func TestIsActive(t *testing.T) {
 		}
 	}
 }
+
+func TestWatcherStale(t *testing.T) {
+	cases := []struct {
+		name string
+		seen string
+		want bool
+	}{
+		{"never seen", "", true},
+		{"recent", time.Now().Add(-2 * time.Second).UTC().Format(time.RFC3339), false},
+		{"old", time.Now().Add(-time.Minute).UTC().Format(time.RFC3339), true},
+		{"unparseable is not stale", "not-a-time", false},
+	}
+	for _, c := range cases {
+		m := model{watcherSeen: c.seen}
+		if got := m.watcherStale(); got != c.want {
+			t.Errorf("%s: watcherStale = %v, want %v", c.name, got, c.want)
+		}
+	}
+}

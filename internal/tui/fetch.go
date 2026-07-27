@@ -67,3 +67,31 @@ func fetchUsage(cfg *config.Config) (api.UsageReport, error) {
 	}
 	return u, nil
 }
+
+// fetchWatcher retrieves when the server last received a watch report.
+func fetchWatcher(cfg *config.Config) (api.WatcherStatus, error) {
+	url := strings.TrimRight(cfg.ServerURL, "/") + "/api/watcher"
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+	if err != nil {
+		return api.WatcherStatus{}, err
+	}
+	req.Header.Set("Authorization", "Bearer "+cfg.Token)
+
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return api.WatcherStatus{}, err
+	}
+	defer func() { _ = resp.Body.Close() }()
+	if resp.StatusCode != http.StatusOK {
+		return api.WatcherStatus{}, fmt.Errorf("server returned %s", resp.Status)
+	}
+
+	var s api.WatcherStatus
+	if err := json.NewDecoder(resp.Body).Decode(&s); err != nil {
+		return api.WatcherStatus{}, fmt.Errorf("decoding watcher status: %w", err)
+	}
+	return s, nil
+}

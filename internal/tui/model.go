@@ -59,23 +59,26 @@ var groupNames = map[groupBy]string{
 }
 
 type model struct {
-	fetch      func() ([]api.SessionView, error)
-	fetchUsage func() (api.UsageReport, error)
-	sessions   []api.SessionView
-	usage      api.UsageReport
-	err        error
-	updated    string
-	width      int
-	tab        tab
-	cursor     int
-	detail     bool
-	history    []int
-	filter     string
-	filtering  bool
-	sortKey    sortKey
-	groupBy    groupBy
-	showAll    bool
-	events     <-chan struct{}
+	fetch        func() ([]api.SessionView, error)
+	fetchUsage   func() (api.UsageReport, error)
+	fetchWatcher func() (api.WatcherStatus, error)
+	sessions     []api.SessionView
+	usage        api.UsageReport
+	watcherSeen  string
+	gotWatcher   bool
+	err          error
+	updated      string
+	width        int
+	tab          tab
+	cursor       int
+	detail       bool
+	history      []int
+	filter       string
+	filtering    bool
+	sortKey      sortKey
+	groupBy      groupBy
+	showAll      bool
+	events       <-chan struct{}
 }
 
 // staleAfter is how long a session may go unseen before it is hidden by default
@@ -96,6 +99,23 @@ func isActive(s api.SessionView, now time.Time) bool {
 	return now.Sub(t) < staleAfter
 }
 
+// watcherStaleAfter is how long the server may go without a watch report before
+// the TUI warns that statuses may be stale.
+const watcherStaleAfter = 15 * time.Second
+
+// watcherStale reports whether no watch report has reached the server recently
+// (so the watcher is likely down and statuses are frozen).
+func (m model) watcherStale() bool {
+	if m.watcherSeen == "" {
+		return true
+	}
+	t, err := time.Parse(time.RFC3339, m.watcherSeen)
+	if err != nil {
+		return false // unknown format: don't cry wolf
+	}
+	return time.Since(t) > watcherStaleAfter
+}
+
 type sessionsMsg struct {
 	sessions []api.SessionView
 	err      error
@@ -110,8 +130,13 @@ type usageMsg struct {
 
 type eventMsg struct{}
 
+type watcherMsg struct {
+	seen string
+	err  error
+}
+
 func (m model) Init() tea.Cmd {
-	return tea.Batch(m.fetchCmd(), m.fetchUsageCmd(), tickCmd(), m.waitForEventCmd())
+	return tea.Batch(m.fetchCmd(), m.fetchUsageCmd(), m.watcherCmd(), tickCmd(), m.waitForEventCmd())
 }
 
 func (m model) fetchCmd() tea.Cmd {
@@ -125,6 +150,16 @@ func (m model) fetchUsageCmd() tea.Cmd {
 	return func() tea.Msg {
 		u, err := m.fetchUsage()
 		return usageMsg{usage: u, err: err}
+	}
+}
+
+func (m model) watcherCmd() tea.Cmd {
+	if m.fetchWatcher == nil {
+		return nil
+	}
+	return func() tea.Msg {
+		s, err := m.fetchWatcher()
+		return watcherMsg{seen: s.LastSeen, err: err}
 	}
 }
 
@@ -164,10 +199,15 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if msg.err == nil {
 			m.usage = msg.usage
 		}
+	case watcherMsg:
+		if msg.err == nil {
+			m.watcherSeen = msg.seen
+			m.gotWatcher = true
+		}
 	case eventMsg:
 		return m, tea.Batch(m.fetchCmd(), m.fetchUsageCmd(), m.waitForEventCmd())
 	case tickMsg:
-		return m, tea.Batch(m.fetchCmd(), m.fetchUsageCmd(), tickCmd())
+		return m, tea.Batch(m.fetchCmd(), m.fetchUsageCmd(), m.watcherCmd(), tickCmd())
 	}
 	return m, nil
 }
@@ -279,7 +319,11 @@ func (m model) View() string {
 	}
 	b.WriteString("\n")
 	b.WriteString(renderTabBar(m.tab))
-	b.WriteString("\n\n")
+	b.WriteString("\n")
+	if m.gotWatcher && m.watcherStale() {
+		b.WriteString(warnStyle.Render("⚠ no watcher reporting — statuses may be stale") + "\n")
+	}
+	b.WriteString("\n")
 
 	switch m.tab {
 	case tabSessions:

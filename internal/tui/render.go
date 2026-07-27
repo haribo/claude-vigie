@@ -14,6 +14,7 @@ var (
 	headerStyle      = lipgloss.NewStyle().Bold(true).Foreground(cAccent)
 	dimStyle         = lipgloss.NewStyle().Foreground(cMuted)
 	errStyle         = lipgloss.NewStyle().Foreground(cRed)
+	warnStyle        = lipgloss.NewStyle().Bold(true).Foreground(cAmber)
 	labelStyle       = lipgloss.NewStyle().Foreground(cMuted)
 	cursorStyle      = lipgloss.NewStyle().Bold(true).Foreground(cAccent)
 	tabActiveStyle   = lipgloss.NewStyle().Bold(true).Foreground(cAccent).Underline(true)
