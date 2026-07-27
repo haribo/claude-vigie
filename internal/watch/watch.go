@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"net/http"
 	"os"
+	"os/user"
 	"path/filepath"
 	"strings"
 	"time"
@@ -36,6 +37,19 @@ const (
 
 // gcInterval is how often the watcher garbage-collects dead session mappings.
 const gcInterval = 5 * time.Minute
+
+// systemUser returns the OS account the watcher runs as (which, on a typical
+// single-user machine, is the account that launched the sessions): the USER env
+// var if set, else the current user, else "".
+func systemUser() string {
+	if u := os.Getenv("USER"); u != "" {
+		return u
+	}
+	if u, err := user.Current(); err == nil {
+		return u.Username
+	}
+	return ""
+}
 
 // ProjectsDir returns the Claude Code transcripts root (~/.claude/projects).
 func ProjectsDir() (string, error) {
@@ -125,6 +139,7 @@ func (s *scanner) scan(root, machine string, maxAge time.Duration, now time.Time
 		return nil, fmt.Errorf("globbing transcripts: %w", err)
 	}
 
+	osUser := systemUser()
 	var reports []api.ReportRequest
 	fresh := make(map[string]cacheEntry, len(s.cache))
 	for _, p := range paths {
@@ -149,6 +164,7 @@ func (s *scanner) scan(root, machine string, maxAge time.Duration, now time.Time
 		reports = append(reports, api.ReportRequest{
 			Event:      "watch",
 			SessionID:  id,
+			User:       osUser,
 			Machine:    machine,
 			ProjectDir: info.Cwd,
 			GitBranch:  info.GitBranch,
