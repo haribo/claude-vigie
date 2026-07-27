@@ -22,15 +22,6 @@ func TestShortModel(t *testing.T) {
 	}
 }
 
-func TestClockTime(t *testing.T) {
-	if got := clockTime("2026-07-26T17:01:32Z"); got != "17:01:32" {
-		t.Errorf("clockTime = %q, want 17:01:32", got)
-	}
-	if got := clockTime("weird"); got != "weird" {
-		t.Errorf("clockTime fallback = %q, want weird", got)
-	}
-}
-
 func TestPadAndTruncate(t *testing.T) {
 	if got := pad("ab", 5); got != "ab   " {
 		t.Errorf("pad = %q, want %q", got, "ab   ")
@@ -72,7 +63,8 @@ func TestRenderTableWide(t *testing.T) {
 		Usage:      api.Usage{OutputTokens: 1500, InputTokens: 500},
 		LastSeenAt: "2026-07-26T17:01:32Z",
 	}}, 200, -1)
-	for _, want := range []string{"NAME", "my-session", "SESSION", "5c483c16", "DIR", "proj", "main", "opus-4-8", "1.5k", "17:01:32", "STATUS", "working"} {
+	// SEEN is a relative age now (depends on time.Now()), so it is not asserted here.
+	for _, want := range []string{"NAME", "my-session", "SESSION", "5c483c16", "DIR", "proj", "main", "opus-4-8", "1.5k", "STATUS", "working"} {
 		if !strings.Contains(out, want) {
 			t.Errorf("wide table missing %q:\n%s", want, out)
 		}
