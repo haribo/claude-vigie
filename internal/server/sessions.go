@@ -2,10 +2,16 @@ package server
 
 import (
 	"net/http"
+	"time"
 
 	"github.com/haribo/claude-fleet/internal/api"
 	"github.com/haribo/claude-fleet/internal/store"
 )
+
+// staleReportAfter is how long a session may go without a report before it is
+// shown as ended: the watcher re-reports every scan (~2s), so a live session
+// stays well within this, while one that dropped out of scan settles to ended.
+const staleReportAfter = 60 * time.Second
 
 func (s *Server) handleSessions(w http.ResponseWriter, r *http.Request) {
 	sessions, err := s.store.ListSessions(r.Context())
@@ -15,18 +21,36 @@ func (s *Server) handleSessions(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	now := time.Now()
 	views := make([]api.SessionView, 0, len(sessions))
 	for _, ss := range sessions {
 		samples, err := s.store.ListSamples(r.Context(), ss.ID, 30)
 		if err != nil {
 			s.log.Error("listing samples", "error", err)
 		}
-		views = append(views, toView(ss, samples))
+		views = append(views, toView(ss, samples, now))
 	}
 	s.writeJSON(w, http.StatusOK, views)
 }
 
-func toView(s store.Session, samples []int64) api.SessionView {
+// reportStale reports whether the last report is too old (or never happened),
+// meaning the session is no longer being refreshed and should read as ended.
+func reportStale(reportedAt string, now time.Time) bool {
+	if reportedAt == "" {
+		return true
+	}
+	t, err := time.Parse(time.RFC3339, reportedAt)
+	if err != nil {
+		return false
+	}
+	return now.Sub(t) > staleReportAfter
+}
+
+func toView(s store.Session, samples []int64, now time.Time) api.SessionView {
+	status := s.Status
+	if s.Status != "ended" && reportStale(s.ReportedAt, now) {
+		status = "ended"
+	}
 	return api.SessionView{
 		ID:         s.ID,
 		Title:      s.Title,
@@ -35,7 +59,7 @@ func toView(s store.Session, samples []int64) api.SessionView {
 		ProjectDir: s.ProjectDir,
 		GitBranch:  s.GitBranch,
 		Model:      s.Model,
-		Status:     s.Status,
+		Status:     status,
 		LastTool:   s.LastTool,
 		Usage: api.Usage{
 			InputTokens:         s.Usage.InputTokens,
