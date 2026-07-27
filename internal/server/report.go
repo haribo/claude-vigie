@@ -48,6 +48,7 @@ func (s *Server) handleReport(w http.ResponseWriter, r *http.Request) {
 	}
 
 	s.maybeSample(ctx, sess.ID, req.Timestamp, sess.Usage.OutputTokens)
+	s.hub.publish()
 
 	w.WriteHeader(http.StatusNoContent)
 }
