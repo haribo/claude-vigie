@@ -31,8 +31,8 @@ type Options struct {
 
 // Status thresholds derived from how recently a transcript changed.
 const (
-	activeWindow  = 10 * time.Second
-	waitingWindow = 15 * time.Minute
+	activeWindow = 10 * time.Second // transcript written this recently = working
+	toolWindow   = 5 * time.Minute  // a tool_use turn may run this long before writing
 )
 
 // gcInterval is how often the watcher garbage-collects dead session mappings.
@@ -195,39 +195,33 @@ func (s *scanner) parse(p string, fi os.FileInfo, fresh map[string]cacheEntry) (
 	return info, nil
 }
 
-// statusFor derives a session's status, preferring the reliable process-presence
-// signal when a SessionStart hook recorded a mapping for it:
-//   - process alive  → working if the transcript is actively changing, else idle
-//     (a live session is idle for any duration, never wrongly "ended")
-//   - process dead   → ended (reliable even on a hard kill, without SessionEnd)
-//
-// Without a mapping (session opened before the hook was installed, or on another
-// machine), it falls back to the activity-only heuristic.
+// statusFor derives a session's status from process presence and transcript
+// activity:
+//   - mapping present & dead → ended (reliable even on a hard kill)
+//   - transcript actively changing → working (mapping or not)
+//   - mapping present & alive but idle → idle (for any duration)
+//   - no mapping & inactive → ended (presumed closed; a live session gets a
+//     mapping via the SessionStart/UserPromptSubmit backfill)
 func statusFor(sessionID, lastStopReason string, age time.Duration) string {
 	m, ok, err := presence.Load(sessionID)
-	if err != nil || !ok {
-		return deriveStatus(lastStopReason, age)
-	}
-	if !presence.Alive(m) {
+	hasMapping := err == nil && ok
+	switch {
+	case hasMapping && !presence.Alive(m):
+		return "ended"
+	case activelyWorking(lastStopReason, age):
+		return "working"
+	case hasMapping:
+		return "idle"
+	default:
 		return "ended"
 	}
-	if lastStopReason == "tool_use" || age < activeWindow {
-		return "working"
-	}
-	return "idle"
 }
 
-// deriveStatus maps a transcript's last stop_reason and age to a status. It is
-// the fallback used only when no process-presence mapping exists.
-func deriveStatus(lastStopReason string, age time.Duration) string {
-	switch {
-	case lastStopReason == "tool_use" || age < activeWindow:
-		return "working"
-	case age < waitingWindow:
-		return "waiting"
-	default:
-		return "idle"
-	}
+// activelyWorking reports whether the transcript shows work in progress: it
+// changed within activeWindow, or the last turn stopped on a tool call still
+// within toolWindow (a long-running tool that has not written yet).
+func activelyWorking(lastStopReason string, age time.Duration) bool {
+	return age < activeWindow || (lastStopReason == "tool_use" && age < toolWindow)
 }
 
 func post(cfg *config.Config, req api.ReportRequest) error {

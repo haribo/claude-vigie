@@ -11,20 +11,20 @@ import (
 	"github.com/haribo/claude-fleet/internal/presence"
 )
 
-func TestDeriveStatus(t *testing.T) {
+func TestActivelyWorking(t *testing.T) {
 	cases := []struct {
 		stop string
 		age  time.Duration
-		want string
+		want bool
 	}{
-		{"tool_use", time.Hour, "working"},       // tool_use → working regardless of age
-		{"end_turn", 3 * time.Second, "working"}, // very recent activity → working
-		{"end_turn", 2 * time.Minute, "waiting"},
-		{"end_turn", time.Hour, "idle"},
+		{"end_turn", 3 * time.Second, true}, // very recent write
+		{"end_turn", time.Hour, false},      // idle between turns
+		{"tool_use", 2 * time.Minute, true}, // tool running, within toolWindow
+		{"tool_use", time.Hour, false},      // stuck/old tool, past toolWindow
 	}
 	for _, c := range cases {
-		if got := deriveStatus(c.stop, c.age); got != c.want {
-			t.Errorf("deriveStatus(%q, %s) = %q, want %q", c.stop, c.age, got, c.want)
+		if got := activelyWorking(c.stop, c.age); got != c.want {
+			t.Errorf("activelyWorking(%q, %s) = %v, want %v", c.stop, c.age, got, c.want)
 		}
 	}
 }
@@ -130,8 +130,11 @@ func TestStatusForPresence(t *testing.T) {
 	if got := statusFor("live", "end_turn", time.Hour); got != "idle" {
 		t.Errorf("alive + old + end_turn = %q, want idle (live sessions never go stale)", got)
 	}
-	if got := statusFor("live", "tool_use", time.Hour); got != "working" {
-		t.Errorf("alive + tool_use = %q, want working", got)
+	if got := statusFor("live", "tool_use", 2*time.Minute); got != "working" {
+		t.Errorf("alive + tool_use in window = %q, want working", got)
+	}
+	if got := statusFor("live", "tool_use", time.Hour); got != "idle" {
+		t.Errorf("alive + stuck tool = %q, want idle (tool_use is bounded)", got)
 	}
 
 	// A dead mapping = a pid that does not exist → ended.
@@ -142,9 +145,13 @@ func TestStatusForPresence(t *testing.T) {
 		t.Errorf("dead process = %q, want ended", got)
 	}
 
-	// No mapping → activity fallback (old transcript → idle).
-	if got := statusFor("unmapped", "end_turn", time.Hour); got != "idle" {
-		t.Errorf("no mapping + old = %q, want idle (fallback)", got)
+	// No mapping + inactive → ended (presumed closed).
+	if got := statusFor("unmapped", "end_turn", time.Hour); got != "ended" {
+		t.Errorf("no mapping + inactive = %q, want ended", got)
+	}
+	// No mapping but actively writing → working (not yet backfilled).
+	if got := statusFor("unmapped", "end_turn", 2*time.Second); got != "working" {
+		t.Errorf("no mapping + active = %q, want working", got)
 	}
 }
 
