@@ -17,12 +17,16 @@ func (s *Server) handleSessions(w http.ResponseWriter, r *http.Request) {
 
 	views := make([]api.SessionView, 0, len(sessions))
 	for _, ss := range sessions {
-		views = append(views, toView(ss))
+		samples, err := s.store.ListSamples(r.Context(), ss.ID, 30)
+		if err != nil {
+			s.log.Error("listing samples", "error", err)
+		}
+		views = append(views, toView(ss, samples))
 	}
 	s.writeJSON(w, http.StatusOK, views)
 }
 
-func toView(s store.Session) api.SessionView {
+func toView(s store.Session, samples []int64) api.SessionView {
 	return api.SessionView{
 		ID:         s.ID,
 		Title:      s.Title,
@@ -41,5 +45,6 @@ func toView(s store.Session) api.SessionView {
 		StartedAt:  s.StartedAt,
 		LastSeenAt: s.LastSeenAt,
 		EndedAt:    s.EndedAt,
+		Samples:    samples,
 	}
 }

@@ -219,6 +219,16 @@ func TestRenderGroupedTableHasHeaders(t *testing.T) {
 	}
 }
 
+func TestActivitySpark(t *testing.T) {
+	if got := activitySpark([]int64{100}); got != "" {
+		t.Errorf("single sample = %q, want empty", got)
+	}
+	// deltas between 100,150,150,400 → 50, 0, 250 (3 blocks)
+	if got := []rune(activitySpark([]int64{100, 150, 150, 400})); len(got) != 3 {
+		t.Errorf("spark length = %d, want 3", len(got))
+	}
+}
+
 func TestFooterHasHints(t *testing.T) {
 	out := footer()
 	for _, want := range []string{"tabs", "select", "filter", "sort", "group", "quit"} {

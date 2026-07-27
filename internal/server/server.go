@@ -20,6 +20,9 @@ type Store interface {
 	GetSession(ctx context.Context, id string) (store.Session, error)
 	ListSessions(ctx context.Context) ([]store.Session, error)
 	AppendEvent(ctx context.Context, e store.Event) error
+	AddSample(ctx context.Context, sessionID, at string, outputTokens int64) error
+	LastSampleAt(ctx context.Context, sessionID string) (string, error)
+	ListSamples(ctx context.Context, sessionID string, limit int) ([]int64, error)
 }
 
 // Server is the HTTP handler set for the fleet API.

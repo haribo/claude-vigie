@@ -71,6 +71,7 @@ var columns = []column{
 	{"OUT", 8, 3, false, func(s api.SessionView) string { return humanizeTokens(s.Usage.OutputTokens) }},
 	{"TOTAL", 9, 2, false, func(s api.SessionView) string { return humanizeTokens(totalTokens(s)) }},
 	{"SEEN", 8, 6, false, func(s api.SessionView) string { return clockTime(s.LastSeenAt) }},
+	{"ACT", 10, 9, false, func(s api.SessionView) string { return activitySpark(s.Samples) }},
 	{"STATUS", 13, 0, true, func(s api.SessionView) string { return s.Status }},
 }
 
@@ -231,6 +232,22 @@ func sparkline(values []int) string {
 		b.WriteRune(sparkBlocks[v*(len(sparkBlocks)-1)/maxV])
 	}
 	return b.String()
+}
+
+// activitySpark renders a per-session sparkline of token deltas between samples.
+func activitySpark(samples []int64) string {
+	if len(samples) < 2 {
+		return ""
+	}
+	deltas := make([]int, 0, len(samples)-1)
+	for i := 1; i < len(samples); i++ {
+		d := int(samples[i] - samples[i-1])
+		if d < 0 {
+			d = 0
+		}
+		deltas = append(deltas, d)
+	}
+	return sparkline(deltas)
 }
 
 func countByStatus(sessions []api.SessionView, status string) int {
