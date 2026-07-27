@@ -102,7 +102,7 @@ func applyReport(sess store.Session, isNew bool, req api.ReportRequest) store.Se
 	}
 	sess.LastSeenAt = req.Timestamp
 	if req.Status != "" {
-		sess.Status = req.Status // explicit status wins (watcher)
+		sess.Status = mergeStatus(sess.Status, req.Status)
 	} else {
 		sess.Status = deriveStatus(req.Event, sess.Status)
 	}
@@ -123,6 +123,18 @@ func applyReport(sess store.Session, isNew bool, req api.ReportRequest) store.Se
 	return sess
 }
 
+// mergeStatus applies an explicit (watcher) status, but keeps a "waiting"
+// session waiting when the watcher only sees it as "idle" (alive but between
+// turns). "waiting" is a semantic state — Claude asked for input — that the
+// watcher cannot detect, so it persists until real activity resumes or the
+// session ends.
+func mergeStatus(current, incoming string) string {
+	if current == "waiting" && incoming == "idle" {
+		return "waiting"
+	}
+	return incoming
+}
+
 // deriveStatus maps a hook event to a session status, keeping the current
 // status for events that do not change it.
 func deriveStatus(event, current string) string {
@@ -135,7 +147,7 @@ func deriveStatus(event, current string) string {
 	case "UserPromptSubmit":
 		return "working"
 	case "Notification":
-		return "waiting_input"
+		return "waiting"
 	case "Stop":
 		return "idle"
 	case "SessionEnd":
