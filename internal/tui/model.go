@@ -73,6 +73,7 @@ type model struct {
 	filtering  bool
 	sortKey    sortKey
 	groupBy    groupBy
+	events     <-chan struct{}
 }
 
 type sessionsMsg struct {
@@ -87,8 +88,10 @@ type usageMsg struct {
 	err   error
 }
 
+type eventMsg struct{}
+
 func (m model) Init() tea.Cmd {
-	return tea.Batch(m.fetchCmd(), m.fetchUsageCmd(), tickCmd())
+	return tea.Batch(m.fetchCmd(), m.fetchUsageCmd(), tickCmd(), m.waitForEventCmd())
 }
 
 func (m model) fetchCmd() tea.Cmd {
@@ -102,6 +105,16 @@ func (m model) fetchUsageCmd() tea.Cmd {
 	return func() tea.Msg {
 		u, err := m.fetchUsage()
 		return usageMsg{usage: u, err: err}
+	}
+}
+
+func (m model) waitForEventCmd() tea.Cmd {
+	if m.events == nil {
+		return nil
+	}
+	return func() tea.Msg {
+		<-m.events
+		return eventMsg{}
 	}
 }
 
@@ -131,6 +144,8 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if msg.err == nil {
 			m.usage = msg.usage
 		}
+	case eventMsg:
+		return m, tea.Batch(m.fetchCmd(), m.fetchUsageCmd(), m.waitForEventCmd())
 	case tickMsg:
 		return m, tea.Batch(m.fetchCmd(), m.fetchUsageCmd(), tickCmd())
 	}
