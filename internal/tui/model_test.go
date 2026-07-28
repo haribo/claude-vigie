@@ -332,3 +332,26 @@ func TestCursorTracksSessionOnReorder(t *testing.T) {
 		t.Errorf("clamp out of range: %d", got)
 	}
 }
+
+func TestStaleFetchAndOptimisticRC(t *testing.T) {
+	var m tea.Model = model{
+		tab: tabSessions, fetchSeq: 5, appliedSeq: 5,
+		toggleRC: func(id string, en bool) error { return nil },
+		sessions: []api.SessionView{{ID: "x", RemoteControl: false}},
+	}
+	// 'c' flips rc optimistically, at once.
+	m, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("c")})
+	if !m.(model).sessions[0].RemoteControl {
+		t.Fatal("optimistic rc not applied")
+	}
+	// A stale fetch (older generation, rc=false) must NOT overwrite.
+	m, _ = m.Update(sessionsMsg{gen: 3, sessions: []api.SessionView{{ID: "x", RemoteControl: false}}})
+	if !m.(model).sessions[0].RemoteControl {
+		t.Error("stale fetch overwrote fresh rc state")
+	}
+	// A newer fetch applies.
+	m, _ = m.Update(sessionsMsg{gen: 6, sessions: []api.SessionView{{ID: "x", RemoteControl: true}}})
+	if m.(model).appliedSeq != 6 || !m.(model).sessions[0].RemoteControl {
+		t.Error("newer fetch not applied")
+	}
+}
