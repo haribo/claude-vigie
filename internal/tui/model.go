@@ -21,9 +21,13 @@ const (
 	tabSessions tab = iota
 	tabUsage
 	tabMachines
+	tabSettings
 )
 
-var tabNames = []string{"Sessions", "Usage", "Machines"}
+var tabNames = []string{"Sessions", "Usage", "Machines", "Settings"}
+
+// settingsCount is the number of editable rows in the Settings tab.
+const settingsCount = 2
 
 // sortKey identifies how the sessions table is ordered.
 type sortKey int
@@ -62,29 +66,30 @@ var groupNames = map[groupBy]string{
 }
 
 type model struct {
-	fetch        func() ([]api.SessionView, error)
-	fetchUsage   func() (api.UsageReport, error)
-	fetchWatcher func() (api.WatcherStatus, error)
-	toggleRC     func(id string, enabled bool) error
-	sessions     []api.SessionView
-	usage        api.UsageReport
-	watcherSeen  string
-	gotWatcher   bool
-	err          error
-	updatedAt    time.Time
-	width        int
-	tab          tab
-	cursor       int
-	detail       bool
-	history      []int
-	filter       string
-	filtering    bool
-	sortKey      sortKey
-	sortReversed bool
-	groupBy      groupBy
-	showAll      bool
-	prefs        prefs
-	events       <-chan struct{}
+	fetch          func() ([]api.SessionView, error)
+	fetchUsage     func() (api.UsageReport, error)
+	fetchWatcher   func() (api.WatcherStatus, error)
+	toggleRC       func(id string, enabled bool) error
+	sessions       []api.SessionView
+	usage          api.UsageReport
+	watcherSeen    string
+	gotWatcher     bool
+	err            error
+	updatedAt      time.Time
+	width          int
+	tab            tab
+	cursor         int
+	detail         bool
+	history        []int
+	filter         string
+	filtering      bool
+	sortKey        sortKey
+	sortReversed   bool
+	groupBy        groupBy
+	showAll        bool
+	prefs          prefs
+	settingsCursor int
+	events         <-chan struct{}
 }
 
 // watcherStaleAfter is how long the server may go without a watch report before
@@ -243,8 +248,19 @@ func (m model) handleViewKey(msg tea.KeyMsg) model {
 	switch msg.String() {
 	case "tab":
 		m.tab = (m.tab + 1) % tab(len(tabNames))
+		return m
 	case "shift+tab":
 		m.tab = (m.tab + tab(len(tabNames)) - 1) % tab(len(tabNames))
+		return m
+	}
+	if m.tab == tabSettings {
+		return m.handleSettingsKey(msg)
+	}
+	return m.handleSessionsKey(msg)
+}
+
+func (m model) handleSessionsKey(msg tea.KeyMsg) model {
+	switch msg.String() {
 	case "/":
 		m.filtering = true
 	case "s":
@@ -259,6 +275,37 @@ func (m model) handleViewKey(msg tea.KeyMsg) model {
 	default:
 		return m.handleNavKey(msg)
 	}
+	return m
+}
+
+func (m model) handleSettingsKey(msg tea.KeyMsg) model {
+	switch msg.String() {
+	case "down", "j":
+		if m.settingsCursor < settingsCount-1 {
+			m.settingsCursor++
+		}
+	case "up", "k":
+		if m.settingsCursor > 0 {
+			m.settingsCursor--
+		}
+	case " ", "enter", "right", "l":
+		m = m.editSetting(1)
+	case "left", "h":
+		m = m.editSetting(-1)
+	}
+	return m
+}
+
+// editSetting changes the selected preference and persists it. dir is the cycle
+// direction for multi-value settings; booleans just toggle.
+func (m model) editSetting(dir int) model {
+	switch m.settingsCursor {
+	case 0:
+		m.prefs.hideEnded = !m.prefs.hideEnded
+	case 1:
+		m.prefs.idleHideAfter = cyclePreset(m.prefs.idleHideAfter, dir)
+	}
+	savePrefs(m.prefs)
 	return m
 }
 
@@ -342,10 +389,44 @@ func (m model) View() string {
 		b.WriteString(renderUsage(m.usage))
 	case tabMachines:
 		b.WriteString(dimStyle.Render("Machines — coming soon"))
+	case tabSettings:
+		b.WriteString(m.renderSettings())
 	}
 
-	b.WriteString("\n" + rule(m.width) + "\n" + footer())
+	b.WriteString("\n" + rule(m.width) + "\n" + footer(m.tab))
 	return b.String()
+}
+
+// renderSettings renders the editable preferences.
+func (m model) renderSettings() string {
+	var b strings.Builder
+	b.WriteString(dimStyle.Render("Preferences — saved to ~/.config/claude-fleet/tui.toml") + "\n\n")
+	rows := []struct{ label, value string }{
+		{"Hide ended sessions", onOffLabel(m.prefs.hideEnded)},
+		{"Hide idle after", idleLabel(m.prefs.idleHideAfter)},
+	}
+	for i, r := range rows {
+		gutter := "  "
+		if i == m.settingsCursor {
+			gutter = cursorStyle.Render("❯ ")
+		}
+		b.WriteString(gutter + labelStyle.Render(pad(r.label, 24)) + r.value + "\n")
+	}
+	return b.String()
+}
+
+func onOffLabel(on bool) string {
+	if on {
+		return statusStyle("working").Render("on")
+	}
+	return dimStyle.Render("off")
+}
+
+func idleLabel(d time.Duration) string {
+	if d == 0 {
+		return dimStyle.Render("off (never)")
+	}
+	return humanizeDuration(d)
 }
 
 func (m model) viewSessions() string {

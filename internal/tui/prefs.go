@@ -1,6 +1,7 @@
 package tui
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"time"
@@ -49,15 +50,54 @@ func prefsPath() (string, error) {
 	return filepath.Join(dir, "claude-fleet", "tui.toml"), nil
 }
 
-const defaultPrefsTOML = `# claude-fleet TUI preferences
+// renderPrefsTOML renders a commented TOML file for the given preferences, so
+// edits (from the Settings tab) keep the file readable rather than a bare dump.
+func renderPrefsTOML(p prefs) string {
+	idle := ""
+	if p.idleHideAfter > 0 {
+		idle = p.idleHideAfter.String()
+	}
+	return fmt.Sprintf(`# claude-fleet TUI preferences
 
 # Hide ended (closed) sessions from the list.
-hide_ended = true
+hide_ended = %t
 
 # Hide sessions inactive for longer than this (Go duration, e.g. "30m", "2h").
 # Empty = never hide by inactivity.
-idle_hide_after = ""
-`
+idle_hide_after = %q
+`, p.hideEnded, idle)
+}
+
+// savePrefs writes the preferences file (best-effort; the UI must not block).
+func savePrefs(p prefs) {
+	path, err := prefsPath()
+	if err != nil {
+		return
+	}
+	if err := os.MkdirAll(filepath.Dir(path), 0o750); err != nil {
+		return
+	}
+	_ = os.WriteFile(path, []byte(renderPrefsTOML(p)), 0o600)
+}
+
+// idlePresets are the selectable values for idle_hide_after in the Settings tab
+// (0 = never hide by inactivity).
+var idlePresets = []time.Duration{
+	0, 15 * time.Minute, 30 * time.Minute, time.Hour, 3 * time.Hour, 6 * time.Hour,
+}
+
+// cyclePreset returns the next/previous idle preset relative to cur.
+func cyclePreset(cur time.Duration, dir int) time.Duration {
+	i := 0
+	for j, d := range idlePresets {
+		if d == cur {
+			i = j
+			break
+		}
+	}
+	i = (i + dir + len(idlePresets)) % len(idlePresets)
+	return idlePresets[i]
+}
 
 // loadPrefs reads the preferences file, creating a commented default on first
 // run. Any error falls back to the defaults: preferences must never block the UI.
@@ -69,7 +109,7 @@ func loadPrefs() prefs {
 	}
 	data, err := os.ReadFile(path)
 	if os.IsNotExist(err) {
-		writeDefaultPrefs(path)
+		savePrefs(p) // create a commented default file
 		return p
 	}
 	if err != nil {
@@ -84,12 +124,4 @@ func loadPrefs() prefs {
 		p.idleHideAfter = d
 	}
 	return p
-}
-
-// writeDefaultPrefs writes the commented default file (best-effort).
-func writeDefaultPrefs(path string) {
-	if err := os.MkdirAll(filepath.Dir(path), 0o750); err != nil {
-		return
-	}
-	_ = os.WriteFile(path, []byte(defaultPrefsTOML), 0o600)
 }

@@ -43,3 +43,12 @@ func TestLoadPrefsParsesFile(t *testing.T) {
 		t.Errorf("idleHideAfter = %s, want 90m", p.idleHideAfter)
 	}
 }
+
+func TestCyclePreset(t *testing.T) {
+	if cyclePreset(0, 1) != 15*time.Minute {
+		t.Error("forward from off should be 15m")
+	}
+	if cyclePreset(0, -1) != idlePresets[len(idlePresets)-1] {
+		t.Error("backward from off should wrap to the last preset")
+	}
+}
