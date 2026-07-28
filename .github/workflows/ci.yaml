@@ -1,20 +1,13 @@
 name: CI
 
 on:
+  # No paths-ignore: branch protection requires these checks, and a filtered-out
+  # workflow never reports them, so a docs-only PR can never merge (#134). The Go
+  # jobs are cheap and pass trivially when no code changed, so we always run them.
   push:
     branches: [main, develop]
-    paths-ignore:
-      - "**.md"
-      - "docs/**"
-      - "LICENSE"
-      - ".github/ISSUE_TEMPLATE/**"
   pull_request:
     branches: [develop, main]
-    paths-ignore:
-      - "**.md"
-      - "docs/**"
-      - "LICENSE"
-      - ".github/ISSUE_TEMPLATE/**"
 
 concurrency:
   group: ci-${{ github.event.pull_request.number || github.ref }}
