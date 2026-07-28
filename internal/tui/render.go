@@ -23,12 +23,17 @@ var (
 	keycapStyle      = lipgloss.NewStyle().Foreground(cText).Background(cSurface)
 )
 
-// footer renders the keycap-style key hints.
-func footer() string {
+// footer renders the keycap-style key hints for the active tab.
+func footer(t tab) string {
 	hints := [][2]string{
 		{"⇥", "switch"}, {"↑↓", "select"}, {"enter", "detail"},
 		{"/", "filter"}, {"s", "sort"}, {"S", "reverse"}, {"g", "group"}, {"a", "all"}, {"c", "control"},
 		{"r", "refresh"}, {"q", "quit"},
+	}
+	if t == tabSettings {
+		hints = [][2]string{
+			{"↑↓", "select"}, {"space/←→", "change"}, {"⇥", "switch"}, {"r", "refresh"}, {"q", "quit"},
+		}
 	}
 	parts := make([]string, len(hints))
 	for i, h := range hints {

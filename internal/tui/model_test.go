@@ -3,6 +3,7 @@ package tui
 import (
 	"strings"
 	"testing"
+	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
 
@@ -34,10 +35,10 @@ func TestTabNavigation(t *testing.T) {
 	if m.(model).tab != tabSessions {
 		t.Errorf("Shift+Tab back = %v, want Sessions", m.(model).tab)
 	}
-	// Shift+Tab from the first tab wraps to the last.
+	// Shift+Tab from the first tab wraps to the last (Settings).
 	m, _ = m.Update(shiftTab)
-	if m.(model).tab != tabMachines {
-		t.Errorf("Shift+Tab wrap = %v, want Machines", m.(model).tab)
+	if m.(model).tab != tabSettings {
+		t.Errorf("Shift+Tab wrap = %v, want Settings", m.(model).tab)
 	}
 }
 
@@ -235,7 +236,7 @@ func TestActivitySpark(t *testing.T) {
 }
 
 func TestFooterHasHints(t *testing.T) {
-	out := footer()
+	out := footer(tabSessions)
 	for _, want := range []string{"switch", "select", "filter", "sort", "group", "quit"} {
 		if !strings.Contains(out, want) {
 			t.Errorf("footer missing %q: %s", want, out)
@@ -289,5 +290,24 @@ func TestRCSortAndFilter(t *testing.T) {
 	vis = m.visibleSessions()
 	if len(vis) != 1 || !vis[0].RemoteControl {
 		t.Errorf("filter rc = %d rows, want 1 rc-active", len(vis))
+	}
+}
+
+func TestSettingsEdit(t *testing.T) {
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+	m := model{tab: tabSettings, prefs: defaultPrefs()}
+	// cursor 0 = hide_ended; space toggles it off
+	space := tea.KeyMsg{Type: tea.KeySpace}
+	m2, _ := m.Update(space)
+	if m2.(model).prefs.hideEnded {
+		t.Error("space did not toggle hide_ended off")
+	}
+	// move to cursor 1 (idle) and cycle it forward
+	down := tea.KeyMsg{Type: tea.KeyDown}
+	right := tea.KeyMsg{Type: tea.KeyRight}
+	m3, _ := m2.Update(down)
+	m4, _ := m3.Update(right)
+	if m4.(model).prefs.idleHideAfter != 15*time.Minute {
+		t.Errorf("idle after cycle = %s, want 15m", m4.(model).prefs.idleHideAfter)
 	}
 }
