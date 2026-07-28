@@ -83,25 +83,8 @@ type model struct {
 	sortReversed bool
 	groupBy      groupBy
 	showAll      bool
+	prefs        prefs
 	events       <-chan struct{}
-}
-
-// staleAfter is how long a session may go unseen before it is hidden by default
-// (along with ended sessions). Press "a" to show everything.
-const staleAfter = time.Hour
-
-// isActive reports whether a session should be shown by default: not ended and
-// seen recently. A session with an unparseable timestamp is kept (never hidden
-// on a parse error).
-func isActive(s api.SessionView, now time.Time) bool {
-	if s.Status == "ended" {
-		return false
-	}
-	t, err := time.Parse(time.RFC3339, s.LastSeenAt)
-	if err != nil {
-		return true
-	}
-	return now.Sub(t) < staleAfter
 }
 
 // watcherStaleAfter is how long the server may go without a watch report before
@@ -324,7 +307,7 @@ func (m model) visibleSessions() []api.SessionView {
 	now := time.Now()
 	out := make([]api.SessionView, 0, len(m.sessions))
 	for _, s := range m.sessions {
-		if !m.showAll && !isActive(s, now) {
+		if !m.showAll && !m.prefs.visible(s, now) {
 			continue
 		}
 		if m.matchesFilter(s) {
@@ -440,7 +423,7 @@ func (m model) hiddenCount() int {
 	now := time.Now()
 	n := 0
 	for _, s := range m.sessions {
-		if !isActive(s, now) {
+		if !m.prefs.visible(s, now) {
 			n++
 		}
 	}

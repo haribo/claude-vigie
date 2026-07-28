@@ -19,6 +19,7 @@ func Run(cfg *config.Config) error {
 		fetchUsage:   func() (api.UsageReport, error) { return fetchUsage(cfg) },
 		fetchWatcher: func() (api.WatcherStatus, error) { return fetchWatcher(cfg) },
 		toggleRC:     func(id string, enabled bool) error { return toggleRemoteControl(cfg, id, enabled) },
+		prefs:        loadPrefs(),
 		events:       events,
 	}
 	_, err := tea.NewProgram(m, tea.WithAltScreen()).Run()

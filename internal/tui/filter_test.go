@@ -7,25 +7,29 @@ import (
 	"github.com/haribo/claude-fleet/internal/api"
 )
 
-func TestIsActive(t *testing.T) {
+func TestPrefsVisible(t *testing.T) {
 	now := time.Date(2026, 7, 27, 12, 0, 0, 0, time.UTC)
 	rfc := func(d time.Duration) string { return now.Add(-d).Format(time.RFC3339) }
 
-	cases := []struct {
-		name string
-		s    api.SessionView
-		want bool
-	}{
-		{"recent working", api.SessionView{Status: "working", LastSeenAt: rfc(time.Minute)}, true},
-		{"recent idle", api.SessionView{Status: "idle", LastSeenAt: rfc(30 * time.Minute)}, true},
-		{"ended is hidden", api.SessionView{Status: "ended", LastSeenAt: rfc(time.Minute)}, false},
-		{"stale is hidden", api.SessionView{Status: "idle", LastSeenAt: rfc(2 * time.Hour)}, false},
-		{"unparseable is kept", api.SessionView{Status: "idle", LastSeenAt: "not-a-time"}, true},
+	// Defaults: hide ended, never hide idle by age.
+	def := defaultPrefs()
+	if !def.visible(api.SessionView{Status: "idle", LastSeenAt: rfc(3 * time.Hour)}, now) {
+		t.Error("default: an old idle session should stay visible")
 	}
-	for _, c := range cases {
-		if got := isActive(c.s, now); got != c.want {
-			t.Errorf("%s: isActive = %v, want %v", c.name, got, c.want)
-		}
+	if def.visible(api.SessionView{Status: "ended", LastSeenAt: rfc(time.Minute)}, now) {
+		t.Error("default: ended should be hidden")
+	}
+
+	// With idle_hide_after set, stale sessions are hidden; recent ones stay.
+	p := prefs{hideEnded: true, idleHideAfter: time.Hour}
+	if p.visible(api.SessionView{Status: "idle", LastSeenAt: rfc(2 * time.Hour)}, now) {
+		t.Error("idleHideAfter: a 2h-old idle session should be hidden")
+	}
+	if !p.visible(api.SessionView{Status: "idle", LastSeenAt: rfc(30 * time.Minute)}, now) {
+		t.Error("idleHideAfter: a 30m-old idle session should be visible")
+	}
+	if !p.visible(api.SessionView{Status: "idle", LastSeenAt: "not-a-time"}, now) {
+		t.Error("unparseable timestamp should be kept")
 	}
 }
 
