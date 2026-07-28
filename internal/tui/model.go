@@ -75,7 +75,6 @@ type model struct {
 	fetchUsage      func() (api.UsageReport, error)
 	fetchWatcher    func() (api.WatcherStatus, error)
 	fetchSettings   func() (api.Settings, error)
-	toggleRC        func(id string, enabled bool) error
 	setRetention    func(v string) error
 	serverRetention time.Duration
 	sessions        []api.SessionView
@@ -139,8 +138,6 @@ type watcherMsg struct {
 	seen string
 	err  error
 }
-
-type rcDoneMsg struct{ err error }
 
 type settingsMsg struct {
 	retention string
@@ -225,11 +222,6 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.width = msg.Width
 	case tea.KeyMsg:
 		return m.handleKey(msg)
-	case rcDoneMsg:
-		if msg.err != nil {
-			m.err = msg.err
-		}
-		return m, m.refreshSessions() // confirm the new rc state
 	case retentionDoneMsg:
 		if msg.err != nil {
 			m.err = msg.err
@@ -296,34 +288,8 @@ func (m model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, tea.Quit
 	case "r":
 		return m, m.refreshSessions()
-	case "c":
-		return m.toggleSelectedRC()
 	}
 	return m.handleViewKey(msg)
-}
-
-// toggleSelectedRC flips the remote-control flag of the selected session (only
-// on the Sessions tab), updating the model optimistically so the change shows at
-// once, then POSTing it. Returns the model unchanged when there is nothing to do.
-func (m model) toggleSelectedRC() (tea.Model, tea.Cmd) {
-	if m.tab != tabSessions || m.toggleRC == nil {
-		return m, nil
-	}
-	vis := m.visibleSessions()
-	if len(vis) == 0 {
-		return m, nil
-	}
-	s := vis[clamp(m.cursor, len(vis))]
-	id, enabled := s.ID, !s.RemoteControl
-	for i := range m.sessions {
-		if m.sessions[i].ID == id {
-			m.sessions[i].RemoteControl = enabled // optimistic
-			break
-		}
-	}
-	return m, func() tea.Msg {
-		return rcDoneMsg{err: m.toggleRC(id, enabled)}
-	}
 }
 
 func (m model) handleViewKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {

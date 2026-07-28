@@ -140,6 +140,7 @@ func (s *scanner) scan(root, machine string, maxAge time.Duration, now time.Time
 	}
 
 	osUser := systemUser()
+	rcMap := remoteControlled()
 	var reports []api.ReportRequest
 	fresh := make(map[string]cacheEntry, len(s.cache))
 	for _, p := range paths {
@@ -161,18 +162,20 @@ func (s *scanner) scan(root, machine string, maxAge time.Duration, now time.Time
 			id = strings.TrimSuffix(filepath.Base(p), ".jsonl")
 		}
 		usage := info.Usage
+		rc := rcMap[id]
 		reports = append(reports, api.ReportRequest{
-			Event:      "watch",
-			SessionID:  id,
-			User:       osUser,
-			Machine:    machine,
-			ProjectDir: info.Cwd,
-			GitBranch:  info.GitBranch,
-			Model:      info.Model,
-			Title:      info.Title,
-			Status:     statusFor(id, info.LastStopReason, age),
-			Usage:      &usage,
-			Timestamp:  fi.ModTime().UTC().Format(time.RFC3339),
+			Event:         "watch",
+			SessionID:     id,
+			User:          osUser,
+			Machine:       machine,
+			ProjectDir:    info.Cwd,
+			GitBranch:     info.GitBranch,
+			Model:         info.Model,
+			Title:         info.Title,
+			Status:        statusFor(id, info.LastStopReason, age),
+			RemoteControl: &rc,
+			Usage:         &usage,
+			Timestamp:     fi.ModTime().UTC().Format(time.RFC3339),
 		})
 	}
 	s.cache = fresh // drop entries for files no longer scanned

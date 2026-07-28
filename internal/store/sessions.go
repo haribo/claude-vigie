@@ -36,12 +36,13 @@ func (s *Store) UpsertSession(ctx context.Context, sess Session) error {
 INSERT INTO sessions (
 	id, title, os_user, machine, project_dir, git_branch, model, status, last_tool,
 	input_tokens, output_tokens, cache_creation_tokens, cache_read_tokens,
-	started_at, last_seen_at, ended_at, last_report_at
-) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+	started_at, last_seen_at, ended_at, last_report_at, remote_control
+) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 ON CONFLICT(id) DO UPDATE SET
 	title = excluded.title,
 	os_user = excluded.os_user,
 	last_report_at = excluded.last_report_at,
+	remote_control = excluded.remote_control,
 	machine = excluded.machine,
 	project_dir = excluded.project_dir,
 	git_branch = excluded.git_branch,
@@ -56,7 +57,7 @@ ON CONFLICT(id) DO UPDATE SET
 	ended_at = excluded.ended_at`,
 		sess.ID, sess.Title, sess.User, sess.Machine, sess.ProjectDir, sess.GitBranch, sess.Model, sess.Status, sess.LastTool,
 		sess.Usage.InputTokens, sess.Usage.OutputTokens, sess.Usage.CacheCreationTokens, sess.Usage.CacheReadTokens,
-		sess.StartedAt, sess.LastSeenAt, sess.EndedAt, sess.ReportedAt,
+		sess.StartedAt, sess.LastSeenAt, sess.EndedAt, sess.ReportedAt, sess.RemoteControl,
 	)
 	if err != nil {
 		return fmt.Errorf("upserting session %s: %w", sess.ID, err)
@@ -75,20 +76,6 @@ func (s *Store) GetSession(ctx context.Context, id string) (Session, error) {
 		return Session{}, fmt.Errorf("getting session %s: %w", id, err)
 	}
 	return sess, nil
-}
-
-// SetRemoteControl updates only a session's remote-control flag, leaving the
-// fields that reports keep refreshing untouched. Returns ErrNotFound if the
-// session does not exist.
-func (s *Store) SetRemoteControl(ctx context.Context, id string, enabled bool) error {
-	res, err := s.db.ExecContext(ctx, `UPDATE sessions SET remote_control = ? WHERE id = ?`, enabled, id)
-	if err != nil {
-		return fmt.Errorf("setting remote control for %s: %w", id, err)
-	}
-	if n, err := res.RowsAffected(); err == nil && n == 0 {
-		return ErrNotFound
-	}
-	return nil
 }
 
 // ListSessions returns all sessions, most recently active first.
