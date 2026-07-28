@@ -1,6 +1,7 @@
 # Remote control — Design Specification
 
-**Status:** Detection decided; activation (send `/rc`) is an open decision (§ 4).
+**Status:** Accepted. rc is detected and read-only; activation is out of scope
+per [ADR-0005](../adr/0005-observe-only.md).
 
 Source of truth for what "remote control" (rc) means in claude-fleet and how the
 operator interacts with it — the user-observable behavior, not the code.
@@ -45,28 +46,13 @@ disconnected from reality and must be removed.
 
 ---
 
-## 4. Activation (send `/rc`) — open decision
+## 4. Activation is out of scope
 
-The operator also wants to turn rc on from claude-fleet, which means **executing
-`/rc` inside the target session**. There is **no clean channel** for this:
-
-- The Claude daemon is transient (exits when idle) and its control socket uses an
-  internal, key-authenticated protocol — reusing it means fragile reverse
-  engineering that breaks on Claude Code updates.
-- The only "raw" option is injecting `/rc\n` into the session's PTY
-  (`/dev/pts/N`), which is fragile and can corrupt whatever the operator is
-  typing.
-
-**Options to decide:**
-
-| Option | What it gives | Cost |
-|--------|---------------|------|
-| A — detection only | The `RC` column shows real `/rc` state; operator runs `/rc` by hand in the terminal | none extra; honest but no remote action |
-| B — PTY injection | claude-fleet types `/rc` into the session's terminal | hacky, fragile, can clash with live input |
-| C — wait for a supported channel | Do it right if Claude Code exposes one | rc activation deferred |
-
-Recommended split: ship **§ 2 detection now** (real, clean), decide activation
-(A/B/C) separately.
+claude-fleet does **not** turn `/rc` on or off. Activation means executing a
+command inside a running session — a downstream control channel that
+[ADR-0005](../adr/0005-observe-only.md) rules out (claude-fleet is observe-only).
+The operator activates rc with the native tools: `/rc` in the session terminal,
+or the web / mobile app. claude-fleet shows *that* it is on; it never toggles it.
 
 ---
 
