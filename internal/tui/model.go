@@ -12,7 +12,10 @@ import (
 	"github.com/haribo/claude-fleet/internal/api"
 )
 
-const pollInterval = 2 * time.Second
+// pollInterval is the fallback refresh. SSE pushes data changes instantly, so
+// the poll only refreshes time-derived views (relative SEEN, the ended
+// threshold, idle hiding, the watcher-absent banner) and covers SSE dropouts.
+const pollInterval = 5 * time.Second
 
 // tab identifies the active top-level view.
 type tab int
