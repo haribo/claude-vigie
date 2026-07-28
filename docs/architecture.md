@@ -111,7 +111,9 @@ All `/api/*` routes require the shared token in the `Authorization` header.
 
 A single shared token (v1). The reporter, watcher, and clients send it in the
 `Authorization` header; the server rejects requests without it. Suitable for
-personal use or a small trusted team. Per-machine tokens may come later.
+personal use or a small trusted team. Per-machine tokens may come later. For
+exposing the daemon safely (TLS front, localhost bind, token handling), see
+[`deployment.md`](deployment.md).
 
 ## Storage
 
