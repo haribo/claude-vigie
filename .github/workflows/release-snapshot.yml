@@ -1,0 +1,92 @@
+name: Snapshot
+
+# Manual, unversioned build of develop. Publishes a GitHub pre-release under a
+# rolling `snapshot` tag (overwritten each run) plus a server container image.
+# This is NOT a release: snapshots are mutable, unstable, and never SemVer.
+# Versioned releases are cut separately from `main` (see docs/release.md).
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  packages: write
+
+concurrency:
+  group: snapshot
+  cancel-in-progress: true
+
+env:
+  IMAGE: ghcr.io/haribo/claude-fleetd
+
+jobs:
+  snapshot:
+    name: Build & publish snapshot
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: develop
+          fetch-depth: 0
+
+      - uses: actions/setup-go@v6
+        with:
+          go-version: "1.26"
+          cache: true
+
+      - name: Compute build stamp
+        id: stamp
+        run: echo "stamp=develop-$(date -u +%Y%m%d)-$(git rev-parse --short HEAD)" >> "$GITHUB_OUTPUT"
+
+      # Gate: a snapshot must at least vet and pass tests.
+      - name: Vet
+        run: go vet ./...
+
+      - name: Test
+        run: go test ./...
+
+      - name: Build binaries
+        env:
+          STAMP: ${{ steps.stamp.outputs.stamp }}
+        run: |
+          set -euo pipefail
+          mkdir -p dist
+          ldflags="-s -w -X github.com/haribo/claude-fleet/internal/version.Version=${STAMP}"
+          for arch in amd64 arm64; do
+            for bin in claude-fleet claude-fleetd; do
+              GOOS=linux GOARCH="$arch" CGO_ENABLED=0 \
+                go build -ldflags "$ldflags" -o "dist/${bin}-linux-${arch}-${STAMP}" "./cmd/${bin}"
+            done
+          done
+          ls -l dist
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ github.token }}
+
+      - name: Build & push server image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: true
+          tags: ${{ env.IMAGE }}:snapshot
+          build-args: |
+            STAMP=${{ steps.stamp.outputs.stamp }}
+
+      - name: Publish snapshot pre-release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          STAMP: ${{ steps.stamp.outputs.stamp }}
+        run: |
+          set -euo pipefail
+          # Roll the tag: remove the previous snapshot and its tag, then recreate.
+          gh release delete snapshot --cleanup-tag --yes || true
+          gh release create snapshot \
+            --target develop \
+            --prerelease \
+            --title "Snapshot ${STAMP}" \
+            --notes "Unstable build of \`develop\` (\`${STAMP}\`). **Not a release** — mutable, overwritten on every snapshot run, not SemVer. Server image: \`${IMAGE}:snapshot\`. See docs/release.md." \
+            dist/*
