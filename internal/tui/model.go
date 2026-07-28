@@ -88,6 +88,7 @@ type model struct {
 	width           int
 	tab             tab
 	cursor          int
+	selectedID      string // session under the cursor, tracked across reorders
 	detail          bool
 	history         []int
 	filter          string
@@ -249,6 +250,7 @@ func (m model) applyDataMsg(msg tea.Msg) model {
 			if len(m.history) > sparkWindow {
 				m.history = m.history[len(m.history)-sparkWindow:]
 			}
+			m.cursor = m.cursorForSelection() // keep the cursor on the same session
 		}
 	case usageMsg:
 		if msg.err == nil {
@@ -372,9 +374,10 @@ func (m model) editSetting(dir int) (tea.Model, tea.Cmd) {
 }
 
 func (m model) handleNavKey(msg tea.KeyMsg) model {
+	vis := m.visibleSessions()
 	switch msg.String() {
 	case "down", "j":
-		if m.cursor < len(m.visibleSessions())-1 {
+		if m.cursor < len(vis)-1 {
 			m.cursor++
 		}
 	case "up", "k":
@@ -382,7 +385,7 @@ func (m model) handleNavKey(msg tea.KeyMsg) model {
 			m.cursor--
 		}
 	case "enter":
-		if len(m.visibleSessions()) > 0 {
+		if len(vis) > 0 {
 			m.detail = true
 		}
 	case "esc":
@@ -392,7 +395,29 @@ func (m model) handleNavKey(msg tea.KeyMsg) model {
 			m.filter = ""
 		}
 	}
+	m.selectedID = idAt(vis, m.cursor) // pin the selection to a session
 	return m
+}
+
+// cursorForSelection returns the cursor index that keeps selectedID under the
+// cursor after a reorder, clamping if the session is gone or none is pinned.
+func (m model) cursorForSelection() int {
+	vis := m.visibleSessions()
+	if m.selectedID != "" {
+		for i, s := range vis {
+			if s.ID == m.selectedID {
+				return i
+			}
+		}
+	}
+	return clamp(m.cursor, len(vis))
+}
+
+func idAt(vis []api.SessionView, i int) string {
+	if i >= 0 && i < len(vis) {
+		return vis[i].ID
+	}
+	return ""
 }
 
 func (m model) handleFilterKey(msg tea.KeyMsg) model {
