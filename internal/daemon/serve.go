@@ -24,6 +24,7 @@ func runServe(args []string) int {
 	addr := fs.String("addr", ":8080", "address the server listens on")
 	dbPath := fs.String("db", "claude-fleet.db", "path to the SQLite database file")
 	tokenFlag := fs.String("token", "", "shared auth token (else $FLEET_TOKEN, else auto-generated)")
+	retention := fs.Duration("session-retention", 24*time.Hour, "delete sessions not reported within this window (0 disables)")
 	if err := fs.Parse(args); err != nil {
 		return 2
 	}
@@ -69,6 +70,10 @@ func runServe(args []string) int {
 		close(idle)
 	}()
 
+	if *retention > 0 {
+		go pruneLoop(st, *retention, log)
+	}
+
 	log.Info("claude-fleetd listening", "addr", *addr, "db", *dbPath)
 	if err := srv.Serve(ln); err != nil && !errors.Is(err, http.ErrServerClosed) {
 		log.Error("serving", "error", err)
@@ -76,6 +81,28 @@ func runServe(args []string) int {
 	}
 	<-idle
 	return 0
+}
+
+// pruneInterval is how often stale sessions are garbage-collected.
+const pruneInterval = time.Hour
+
+// pruneLoop garbage-collects sessions older than retention, on start and then
+// hourly, so the database stays bounded.
+func pruneLoop(st *store.Store, retention time.Duration, log *slog.Logger) {
+	prune := func() {
+		n, err := st.PruneSessions(context.Background(), retention, time.Now())
+		if err != nil {
+			log.Error("pruning sessions", "error", err)
+		} else if n > 0 {
+			log.Info("pruned old sessions", "count", n)
+		}
+	}
+	prune()
+	t := time.NewTicker(pruneInterval)
+	defer t.Stop()
+	for range t.C {
+		prune()
+	}
 }
 
 // resolveToken returns the auth token: the flag, else $FLEET_TOKEN, else the
