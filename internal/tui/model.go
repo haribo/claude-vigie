@@ -95,6 +95,8 @@ type model struct {
 	sortKey         sortKey
 	sortReversed    bool
 	groupBy         groupBy
+	fetchSeq        int // generation of the last issued sessions fetch
+	appliedSeq      int // generation of the last applied sessions result
 	showAll         bool
 	prefs           prefs
 	settingsCursor  int
@@ -121,6 +123,7 @@ func (m model) watcherStale() bool {
 type sessionsMsg struct {
 	sessions []api.SessionView
 	err      error
+	gen      int // fetch generation, to drop stale out-of-order responses
 }
 
 type tickMsg struct{}
@@ -147,7 +150,7 @@ type settingsMsg struct {
 type retentionDoneMsg struct{ err error }
 
 func (m model) Init() tea.Cmd {
-	return tea.Batch(m.fetchCmd(), m.fetchUsageCmd(), m.watcherCmd(), m.settingsCmd(), tickCmd(), m.waitForEventCmd())
+	return tea.Batch(m.fetchCmd(m.fetchSeq), m.fetchUsageCmd(), m.watcherCmd(), m.settingsCmd(), tickCmd(), m.waitForEventCmd())
 }
 
 func (m model) settingsCmd() tea.Cmd {
@@ -171,11 +174,18 @@ func (m model) setRetentionCmd(d time.Duration) tea.Cmd {
 	return func() tea.Msg { return retentionDoneMsg{err: m.setRetention(v)} }
 }
 
-func (m model) fetchCmd() tea.Cmd {
+func (m model) fetchCmd(gen int) tea.Cmd {
 	return func() tea.Msg {
 		s, err := m.fetch()
-		return sessionsMsg{sessions: s, err: err}
+		return sessionsMsg{sessions: s, err: err, gen: gen}
 	}
+}
+
+// refreshSessions bumps the fetch generation and returns the fetch command, so
+// a later out-of-order response can be dropped as stale.
+func (m *model) refreshSessions() tea.Cmd {
+	m.fetchSeq++
+	return m.fetchCmd(m.fetchSeq)
 }
 
 func (m model) fetchUsageCmd() tea.Cmd {
@@ -219,16 +229,18 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if msg.err != nil {
 			m.err = msg.err
 		}
-		return m, m.fetchCmd() // reflect the new rc state
+		return m, m.refreshSessions() // confirm the new rc state
 	case retentionDoneMsg:
 		if msg.err != nil {
 			m.err = msg.err
 		}
 		return m, m.settingsCmd() // confirm the saved value
 	case eventMsg:
-		return m, tea.Batch(m.fetchCmd(), m.fetchUsageCmd(), m.waitForEventCmd())
+		sc := m.refreshSessions()
+		return m, tea.Batch(sc, m.fetchUsageCmd(), m.waitForEventCmd())
 	case tickMsg:
-		return m, tea.Batch(m.fetchCmd(), m.fetchUsageCmd(), m.watcherCmd(), tickCmd())
+		sc := m.refreshSessions()
+		return m, tea.Batch(sc, m.fetchUsageCmd(), m.watcherCmd(), tickCmd())
 	default:
 		return m.applyDataMsg(msg), nil
 	}
@@ -239,6 +251,10 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 func (m model) applyDataMsg(msg tea.Msg) model {
 	switch msg := msg.(type) {
 	case sessionsMsg:
+		if msg.gen <= m.appliedSeq {
+			return m // stale out-of-order response; keep the newer state
+		}
+		m.appliedSeq = msg.gen
 		if msg.err != nil {
 			m.err = msg.err
 		} else {
@@ -279,26 +295,33 @@ func (m model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case "q", "ctrl+c":
 		return m, tea.Quit
 	case "r":
-		return m, m.fetchCmd()
+		return m, m.refreshSessions()
 	case "c":
-		return m, m.toggleSelectedRC()
+		return m.toggleSelectedRC()
 	}
 	return m.handleViewKey(msg)
 }
 
 // toggleSelectedRC flips the remote-control flag of the selected session (only
-// on the Sessions tab). Returns nil when there is nothing to toggle.
-func (m model) toggleSelectedRC() tea.Cmd {
+// on the Sessions tab), updating the model optimistically so the change shows at
+// once, then POSTing it. Returns the model unchanged when there is nothing to do.
+func (m model) toggleSelectedRC() (tea.Model, tea.Cmd) {
 	if m.tab != tabSessions || m.toggleRC == nil {
-		return nil
+		return m, nil
 	}
 	vis := m.visibleSessions()
 	if len(vis) == 0 {
-		return nil
+		return m, nil
 	}
 	s := vis[clamp(m.cursor, len(vis))]
 	id, enabled := s.ID, !s.RemoteControl
-	return func() tea.Msg {
+	for i := range m.sessions {
+		if m.sessions[i].ID == id {
+			m.sessions[i].RemoteControl = enabled // optimistic
+			break
+		}
+	}
+	return m, func() tea.Msg {
 		return rcDoneMsg{err: m.toggleRC(id, enabled)}
 	}
 }

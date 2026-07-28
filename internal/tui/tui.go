@@ -22,6 +22,7 @@ func Run(cfg *config.Config) error {
 		toggleRC:      func(id string, enabled bool) error { return toggleRemoteControl(cfg, id, enabled) },
 		setRetention:  func(v string) error { return setSessionRetention(cfg, v) },
 		prefs:         loadPrefs(),
+		fetchSeq:      1, // Init issues generation 1
 		events:        events,
 	}
 	_, err := tea.NewProgram(m, tea.WithAltScreen()).Run()
