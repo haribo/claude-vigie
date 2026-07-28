@@ -1,70 +1,77 @@
 # Remote control — Design Specification
 
-**Status:** Draft — pending decisions (§ 3). Do not implement until § 3 is resolved.
+**Status:** Detection decided; activation (send `/rc`) is an open decision (§ 4).
 
-This document is the source of truth for what "remote control" (rc) means in
-claude-fleet and how the operator interacts with it. It describes the intended
-user-observable behavior, not the implementation.
-
----
-
-## 1. Intent
-
-The operator wants **two** capabilities on each session, together:
-
-1. **See the real state** — whether a session *is actually* remote-controlled,
-   detected automatically. Not a value the operator sets by hand.
-2. **Turn it on/off** — enable or disable remote control for a session, from
-   claude-fleet.
-
-The current implementation only does a hand-set boolean flag (the `c` key),
-disconnected from any real state. That satisfies neither intent fully and is the
-source of the confusion this document exists to resolve.
+Source of truth for what "remote control" (rc) means in claude-fleet and how the
+operator interacts with it — the user-observable behavior, not the code.
 
 ---
 
-## 2. Vocabulary to pin down
+## 1. What rc is
 
-Before behavior, we must agree on what the words denote. These are **claims to
-confirm or correct**, not established facts:
-
-- **"Remote control" of a Claude Code session** — candidate meanings:
-  - (a) the session is pilotable/piloted from **claude.ai** (web) — a session
-    you started locally is attached to the cloud and can be driven remotely;
-  - (b) the session is driven from the **mobile** app;
-  - (c) a local mode you enable on the session;
-  - (d) something else entirely.
-- **"Activated"** — does turning rc on *do* something to the session (it becomes
-  actually remotely pilotable), or is it only a marker/label in claude-fleet?
+Remote control is Claude Code's **`/rc` slash command**: running it in a session
+lets that session be driven from the web (claude.ai) or the Claude Android app.
+claude-fleet **does not pilot anything** — it only reflects, and (if decided,
+§ 4) triggers, `/rc` on the session itself.
 
 ---
 
-## 3. Open decisions (to resolve together)
+## 2. Real state (detection) — decided
 
-Nothing is implemented until these are answered.
+A session is remotely controlled **iff its Claude session file has a non-empty
+`bridgeSessionId`**.
 
-| # | Question | Why it blocks |
-|---|----------|---------------|
-| Q1 | What *is* remote control for a Claude session? (§ 2 — pick a/b/c/d) | Defines the whole feature |
-| Q2 | How is the **real state** observable? Which source — the transcript, a session file, the `claude` process, a claude.ai API, a hook signal? | Determines what the watcher reads to detect it |
-| Q3 | What does **enable/disable** concretely *do* to the session? A real effect, or a claude-fleet-side intent that something else honors? | Determines whether rc is a control or a label |
-| Q4 | Who has authority when the **detected state** and the **operator toggle** disagree? Which wins, and for how long? | Determines the reconciliation rule |
-| Q5 | Is rc **per session** or **per machine/account**? | Determines storage scope and the API shape |
+- Source: `~/.claude/sessions/<pid>.json`, written by Claude Code, e.g.
+  `{"sessionId": "...", "name": "tribnest", "status": "idle", "bridgeSessionId": "session_014wi…"}`.
+- `bridgeSessionId` present → `/rc` active; absent/empty → not.
+- Verified: tribnest, plain-note, claude-fleet carry a bridge (rc on); shellf,
+  melonia, sirius do not (rc off) — matching what the operator sees in each
+  session's terminal footer.
 
----
+This **replaces** the current hand-set boolean flag (the `c` toggle), which was
+disconnected from reality and must be removed.
 
-## 4. To be filled once § 3 is decided
-
-- **Detection** — the exact source and rule the watcher uses to read the real state.
-- **Toggle** — what the on/off action sends, to whom, and its real effect.
-- **Reconciliation** — how detected state and operator intent combine.
-- **Display** — the `RC` column and any summary counter (states, colors).
+> Note: `~/.claude/sessions/<pid>.json` also exposes `sessionId`, `cwd`, `name`,
+> and `status` directly — a cleaner source than parsing transcripts. Whether to
+> adopt it for those fields too is out of scope here (separate design).
 
 ---
 
-## Appendix — how tribnest's docs are structured (adopted here)
+## 3. Display
 
-`docs/design/` holds user-observable behavior (the *what*); `docs/adr/` holds
-decisions with rationale (the *why*); code holds the *how*. Docs never
-paraphrase code. This file is a design doc; the eventual detection/toggle
-decision (Q1–Q5) will also get an ADR capturing the rejected alternatives.
+- The `RC` column shows the **detected** state: active vs inactive.
+- It is read-only with respect to reality — it never shows an operator wish that
+  isn't true on the session.
+
+---
+
+## 4. Activation (send `/rc`) — open decision
+
+The operator also wants to turn rc on from claude-fleet, which means **executing
+`/rc` inside the target session**. There is **no clean channel** for this:
+
+- The Claude daemon is transient (exits when idle) and its control socket uses an
+  internal, key-authenticated protocol — reusing it means fragile reverse
+  engineering that breaks on Claude Code updates.
+- The only "raw" option is injecting `/rc\n` into the session's PTY
+  (`/dev/pts/N`), which is fragile and can corrupt whatever the operator is
+  typing.
+
+**Options to decide:**
+
+| Option | What it gives | Cost |
+|--------|---------------|------|
+| A — detection only | The `RC` column shows real `/rc` state; operator runs `/rc` by hand in the terminal | none extra; honest but no remote action |
+| B — PTY injection | claude-fleet types `/rc` into the session's terminal | hacky, fragile, can clash with live input |
+| C — wait for a supported channel | Do it right if Claude Code exposes one | rc activation deferred |
+
+Recommended split: ship **§ 2 detection now** (real, clean), decide activation
+(A/B/C) separately.
+
+---
+
+## Appendix — doc conventions (from tribnest)
+
+`docs/design/` = the *what* (user-observable); `docs/adr/` = decisions with
+rationale; code = the *how*. Docs never paraphrase code. Adding/modifying design
+docs requires explicit consent — propose first.
