@@ -333,25 +333,19 @@ func TestCursorTracksSessionOnReorder(t *testing.T) {
 	}
 }
 
-func TestStaleFetchAndOptimisticRC(t *testing.T) {
+func TestStaleFetchIgnored(t *testing.T) {
 	var m tea.Model = model{
-		tab: tabSessions, fetchSeq: 5, appliedSeq: 5,
-		toggleRC: func(id string, en bool) error { return nil },
-		sessions: []api.SessionView{{ID: "x", RemoteControl: false}},
+		fetchSeq: 5, appliedSeq: 5,
+		sessions: []api.SessionView{{ID: "x", Title: "current"}},
 	}
-	// 'c' flips rc optimistically, at once.
-	m, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("c")})
-	if !m.(model).sessions[0].RemoteControl {
-		t.Fatal("optimistic rc not applied")
-	}
-	// A stale fetch (older generation, rc=false) must NOT overwrite.
-	m, _ = m.Update(sessionsMsg{gen: 3, sessions: []api.SessionView{{ID: "x", RemoteControl: false}}})
-	if !m.(model).sessions[0].RemoteControl {
-		t.Error("stale fetch overwrote fresh rc state")
+	// A stale fetch (older generation) must NOT overwrite the current state.
+	m, _ = m.Update(sessionsMsg{gen: 3, sessions: []api.SessionView{{ID: "x", Title: "stale"}}})
+	if m.(model).sessions[0].Title != "current" {
+		t.Error("stale fetch overwrote current state")
 	}
 	// A newer fetch applies.
-	m, _ = m.Update(sessionsMsg{gen: 6, sessions: []api.SessionView{{ID: "x", RemoteControl: true}}})
-	if m.(model).appliedSeq != 6 || !m.(model).sessions[0].RemoteControl {
+	m, _ = m.Update(sessionsMsg{gen: 6, sessions: []api.SessionView{{ID: "x", Title: "fresh"}}})
+	if m.(model).appliedSeq != 6 || m.(model).sessions[0].Title != "fresh" {
 		t.Error("newer fetch not applied")
 	}
 }

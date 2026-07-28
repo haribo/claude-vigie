@@ -27,7 +27,7 @@ var (
 func footer(t tab) string {
 	hints := [][2]string{
 		{"⇥", "switch"}, {"↑↓", "select"}, {"enter", "detail"},
-		{"/", "filter"}, {"s", "sort"}, {"S", "reverse"}, {"g", "group"}, {"a", "all"}, {"c", "control"},
+		{"/", "filter"}, {"s", "sort"}, {"S", "reverse"}, {"g", "group"}, {"a", "all"},
 		{"r", "refresh"}, {"q", "quit"},
 	}
 	if t == tabSettings {

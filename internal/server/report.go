@@ -109,6 +109,9 @@ func applyReport(sess store.Session, isNew bool, req api.ReportRequest) store.Se
 	if req.Event == "SessionEnd" {
 		sess.EndedAt = req.Timestamp
 	}
+	if req.RemoteControl != nil {
+		sess.RemoteControl = *req.RemoteControl // detected /rc state (read-only)
+	}
 	if req.LastTool != "" {
 		sess.LastTool = req.LastTool
 	}

@@ -18,7 +18,6 @@ import (
 // Store is the persistence surface the server depends on (accept interfaces).
 type Store interface {
 	UpsertSession(ctx context.Context, s store.Session) error
-	SetRemoteControl(ctx context.Context, id string, enabled bool) error
 	GetSession(ctx context.Context, id string) (store.Session, error)
 	ListSessions(ctx context.Context) ([]store.Session, error)
 	AppendEvent(ctx context.Context, e store.Event) error
@@ -57,7 +56,6 @@ func (s *Server) Handler() http.Handler {
 	mux.Handle("GET /api/usage", s.auth(http.HandlerFunc(s.handleGetUsage)))
 	mux.Handle("GET /api/events", s.auth(http.HandlerFunc(s.handleEvents)))
 	mux.Handle("GET /api/watcher", s.auth(http.HandlerFunc(s.handleWatcher)))
-	mux.Handle("POST /api/sessions/{id}/rc", s.auth(http.HandlerFunc(s.handleSetRC)))
 	mux.Handle("GET /api/settings", s.auth(http.HandlerFunc(s.handleGetSettings)))
 	mux.Handle("POST /api/settings", s.auth(http.HandlerFunc(s.handleSetSettings)))
 	return mux

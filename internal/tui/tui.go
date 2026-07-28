@@ -19,7 +19,6 @@ func Run(cfg *config.Config) error {
 		fetchUsage:    func() (api.UsageReport, error) { return fetchUsage(cfg) },
 		fetchWatcher:  func() (api.WatcherStatus, error) { return fetchWatcher(cfg) },
 		fetchSettings: func() (api.Settings, error) { return fetchSettings(cfg) },
-		toggleRC:      func(id string, enabled bool) error { return toggleRemoteControl(cfg, id, enabled) },
 		setRetention:  func(v string) error { return setSessionRetention(cfg, v) },
 		prefs:         loadPrefs(),
 		fetchSeq:      1, // Init issues generation 1
