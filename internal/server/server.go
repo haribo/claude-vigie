@@ -24,7 +24,7 @@ type Store interface {
 	AppendEvent(ctx context.Context, e store.Event) error
 	AddSample(ctx context.Context, sessionID, at string, outputTokens int64) error
 	LastSampleAt(ctx context.Context, sessionID string) (string, error)
-	ListSamples(ctx context.Context, sessionID string, limit int) ([]int64, error)
+	ListSamples(ctx context.Context, sessionID, since string, limit int) ([]int64, error)
 	AcquireLease(ctx context.Context, holder string, ttl time.Duration, now time.Time) (bool, string, error)
 	GetMeta(ctx context.Context, key string) (string, bool, error)
 	SetMeta(ctx context.Context, key, value string) error
