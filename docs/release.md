@@ -21,11 +21,9 @@ A snapshot lets you install and test the current `develop` without cutting a
 version. Each run **overwrites** the previous one.
 
 **Produce one:** GitHub → Actions → **Snapshot** → *Run workflow*. It builds from
-`develop`, gates on `go vet` + `go test`, and publishes:
-
-- a GitHub **pre-release** under the rolling `snapshot` tag, with the Linux
-  binaries `claude-fleet` and `claude-fleetd` (amd64, arm64);
-- the server container image `ghcr.io/haribo/claude-fleetd:snapshot`.
+`develop`, gates on `go vet` + `go test`, and publishes a GitHub **pre-release**
+under the rolling `snapshot` tag, with the Linux binaries `claude-fleet` and
+`claude-fleetd` (amd64, arm64).
 
 **Build stamp.** Every snapshot binary is stamped `develop-<date>-<sha7>`,
 injected into `internal/version` and visible via:
@@ -37,19 +35,17 @@ claude-fleet version      # claude-fleet develop-20260728-ab74e54 (...)
 **Install:**
 
 ```bash
-# binaries — from the "snapshot" pre-release on the Releases page
-curl -sSL -o claude-fleet \
-  https://github.com/haribo/claude-fleet/releases/download/snapshot/claude-fleet-linux-amd64-<stamp>
-
-# server image
-docker pull ghcr.io/haribo/claude-fleetd:snapshot
-docker run --rm -p 8080:8080 -e FLEET_TOKEN=<token> \
-  -v claude-fleet-data:/data ghcr.io/haribo/claude-fleetd:snapshot
+# from the "snapshot" pre-release on the Releases page
+curl -sSL -o claude-fleetd \
+  https://github.com/haribo/claude-fleet/releases/download/snapshot/claude-fleetd-linux-amd64-<stamp>
+chmod +x claude-fleetd
 ```
 
-The image runs as a non-root user; the SQLite database lives at `/data` (mount a
-volume to persist it). The token comes from `FLEET_TOKEN`; override the command
-to change `--addr` or `--db`.
+Deployment is out of scope: claude-fleet ships **binaries**. How you run
+`claude-fleetd` (container, systemd, …), terminate TLS (a reverse proxy such as
+Caddy), and expose it is the deployer's call. The clients speak whatever scheme
+is in their `server_url`, so point them at your `https://` endpoint; the shared
+token is only safe over TLS.
 
 ## SemVer releases
 
