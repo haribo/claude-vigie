@@ -1,25 +1,26 @@
 # Claude Fleet
 
-Monitor your Claude Code sessions across machines — from a web dashboard or the
-terminal. See which sessions are running, what they're working on, and how many
-tokens they consume.
+Monitor your Claude Code sessions across machines from a terminal dashboard. See
+which sessions are running, what they're working on, and how many tokens they
+consume.
 
-> **Status: early development.** The project skeleton, tooling, and conventions
-> are in place. The server, reporter, and clients are being implemented feature
-> by feature. See the [roadmap](#roadmap).
+> **Status: v0.1 — functional.** The server, reporter, watcher, and terminal
+> dashboard (TUI) work end to end. A web dashboard is planned; today the TUI is
+> the client. See the [roadmap](#roadmap).
 
 ## How it works
 
-Claude Fleet is a central server plus two clients. Each Claude Code session
-reports to the server through **hooks** — a small `claude-fleet report` command
-wired into `~/.claude/settings.json`, so it works automatically for every
-session on a machine.
+Claude Fleet is a central server and a client you install on every machine. Each
+Claude Code session reaches the server two ways: through **hooks** — a small
+`claude-fleet report` command wired into `~/.claude/settings.json` — and through
+a **watcher** that scans transcripts to cover sessions the hooks miss.
 
 ```
-Claude Code hook  →  claude-fleet report  →  POST /api/report  →  SQLite
-   (settings.json)      (reads the JSONL          (server)           │
-                         transcript for tokens)                      ▼
-Web dashboard / TUI  ←──────── SSE /api/events ←────────────── current state
+Claude Code hook  →  claude-fleet report  ┐
+                                          ├─→  POST /api/report  →  claude-fleetd  →  SQLite
+claude-fleet watch (scans transcripts)  ──┘        (server)              │
+                                                                         ▼
+              Terminal dashboard (TUI)  ←──── SSE /api/events ←──── current state
 ```
 
 The unit of tracking is one Claude Code session. Sessions are grouped by
@@ -29,9 +30,11 @@ full design.
 ## Two binaries
 
 ```
-claude-fleetd serve     # server: HTTP API + web dashboard (SQLite, SSE) — runs on the host
+claude-fleetd serve     # server: HTTP + SSE API, SQLite — runs on the host
+claude-fleetd token     # server: print/generate the shared auth token
 claude-fleet  init      # client: install hooks + write the config
 claude-fleet  report    # client: reporter invoked by Claude Code hooks
+claude-fleet  watch     # client: watcher — scans transcripts, covers all sessions
 claude-fleet  tui       # client: terminal dashboard
 ```
 
@@ -112,23 +115,23 @@ The watcher reads the client config, so run `fleet-connect` once so it knows the
 server URL and token.
 
 Port 8080 already taken? Override it (same value for both recipes):
-`just fleet_port=9090 fleet-serve` and `just fleet_port=9090 fleet-connect`.
+`just fleet_port=9090 app-serve` and `just fleet_port=9090 fleet-connect`.
 
 For a remote server, point init at it directly:
 `claude-fleet init --server <url> --token <token>`.
 
 ## Roadmap
 
-- [x] Project skeleton, tooling, CI, conventions
-- [x] Split into client (`claude-fleet`) and daemon (`claude-fleetd`) binaries
-- [x] Client config (XDG) load/save
-- [x] SQLite store (sessions, events)
-- [x] Server: `/api/report`, `/api/sessions`, Bearer auth
-- [ ] Server: SSE realtime stream
+- [x] Client (`claude-fleet`) / daemon (`claude-fleetd`) split, SQLite store
+- [x] Server: `/api/report`, `/api/sessions`, Bearer auth, SSE realtime stream
 - [x] Reporter: hook payload + transcript parsing
 - [x] `init`: merge hooks into `settings.json`, write config
+- [x] Watcher: transcript scan + process-presence status (idle vs ended)
+- [x] Terminal client (Bubble Tea): sort, filter, group, detail, settings
+- [x] Subscription usage (5-hour / 7-day), single leased fetcher
+- [x] Remote-control (`/rc`) detection, observe-only
+- [x] Session retention / pruning
 - [ ] Web dashboard (embedded)
-- [x] Terminal client (Bubble Tea)
 
 ## Contributing
 
