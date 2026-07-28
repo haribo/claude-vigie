@@ -22,7 +22,7 @@ func TestSamplesRoundtripAndRetention(t *testing.T) {
 		}
 	}
 
-	samples, err := st.ListSamples(ctx, "s1", 100)
+	samples, err := st.ListSamples(ctx, "s1", "", 100)
 	if err != nil {
 		t.Fatalf("ListSamples: %v", err)
 	}
@@ -39,5 +39,28 @@ func TestSamplesRoundtripAndRetention(t *testing.T) {
 
 	if last, err := st.LastSampleAt(ctx, "s1"); err != nil || last == "" {
 		t.Errorf("LastSampleAt after adds = (%q, %v), want non-empty", last, err)
+	}
+}
+
+func TestListSamplesSince(t *testing.T) {
+	st := openTestStore(t)
+	ctx := context.Background()
+	if err := st.AddSample(ctx, "s2", "2026-07-28T10:00:00Z", 100); err != nil {
+		t.Fatal(err)
+	}
+	if err := st.AddSample(ctx, "s2", "2026-07-28T12:00:00Z", 200); err != nil {
+		t.Fatal(err)
+	}
+	// Only the sample after the cutoff is returned.
+	got, err := st.ListSamples(ctx, "s2", "2026-07-28T11:00:00Z", 100)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got) != 1 || got[0] != 200 {
+		t.Errorf("since-filtered = %v, want [200]", got)
+	}
+	// A cutoff after everything returns nothing (idle session → empty ACT).
+	if got, _ := st.ListSamples(ctx, "s2", "2026-07-28T13:00:00Z", 100); len(got) != 0 {
+		t.Errorf("all-stale = %v, want empty", got)
 	}
 }

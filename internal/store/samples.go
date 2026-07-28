@@ -42,12 +42,13 @@ func (s *Store) LastSampleAt(ctx context.Context, sessionID string) (string, err
 	return at, nil
 }
 
-// ListSamples returns up to limit output-token samples for a session, oldest
-// first.
-func (s *Store) ListSamples(ctx context.Context, sessionID string, limit int) ([]int64, error) {
+// ListSamples returns up to limit output-token samples for a session newer than
+// since (an RFC3339 timestamp; "" for no lower bound), oldest first. Sample
+// timestamps are UTC, so a lexical comparison is chronological.
+func (s *Store) ListSamples(ctx context.Context, sessionID, since string, limit int) ([]int64, error) {
 	rows, err := s.db.QueryContext(ctx,
-		`SELECT output_tokens FROM token_samples WHERE session_id = ? ORDER BY at DESC LIMIT ?`,
-		sessionID, limit)
+		`SELECT output_tokens FROM token_samples WHERE session_id = ? AND at > ? ORDER BY at DESC LIMIT ?`,
+		sessionID, since, limit)
 	if err != nil {
 		return nil, fmt.Errorf("listing samples for %s: %w", sessionID, err)
 	}

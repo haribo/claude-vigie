@@ -45,7 +45,7 @@ func TestPruneSessions(t *testing.T) {
 	if _, err := st.GetSession(ctx, "stale"); err == nil {
 		t.Error("stale should be pruned")
 	}
-	if samples, _ := st.ListSamples(ctx, "stale", 10); len(samples) != 0 {
+	if samples, _ := st.ListSamples(ctx, "stale", "", 10); len(samples) != 0 {
 		t.Errorf("stale samples not pruned: %v", samples)
 	}
 }

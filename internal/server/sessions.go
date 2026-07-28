@@ -13,6 +13,10 @@ import (
 // stays well within this, while one that dropped out of scan settles to ended.
 const staleReportAfter = 60 * time.Second
 
+// activityWindow bounds the ACT sparkline to recent samples, so an idle session
+// (which stops producing samples) renders an empty graph instead of a frozen one.
+const activityWindow = 15 * time.Minute
+
 func (s *Server) handleSessions(w http.ResponseWriter, r *http.Request) {
 	sessions, err := s.store.ListSessions(r.Context())
 	if err != nil {
@@ -22,9 +26,10 @@ func (s *Server) handleSessions(w http.ResponseWriter, r *http.Request) {
 	}
 
 	now := time.Now()
+	since := now.Add(-activityWindow).UTC().Format(time.RFC3339)
 	views := make([]api.SessionView, 0, len(sessions))
 	for _, ss := range sessions {
-		samples, err := s.store.ListSamples(r.Context(), ss.ID, 30)
+		samples, err := s.store.ListSamples(r.Context(), ss.ID, since, 30)
 		if err != nil {
 			s.log.Error("listing samples", "error", err)
 		}
