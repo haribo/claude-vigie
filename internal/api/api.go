@@ -53,6 +53,11 @@ type RCRequest struct {
 	Enabled bool `json:"enabled"`
 }
 
+// Settings are the server-wide settings (read/written at /api/settings).
+type Settings struct {
+	SessionRetention string `json:"session_retention"` // Go duration; "" = disabled
+}
+
 // LeaseRequest asks for the usage-fetch lease.
 type LeaseRequest struct {
 	Holder string `json:"holder"`

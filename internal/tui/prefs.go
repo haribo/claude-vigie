@@ -80,23 +80,35 @@ func savePrefs(p prefs) {
 	_ = os.WriteFile(path, []byte(renderPrefsTOML(p)), 0o600)
 }
 
-// idlePresets are the selectable values for idle_hide_after in the Settings tab
-// (0 = never hide by inactivity).
+// idlePresets are the selectable values for idle_hide_after (0 = never hide).
 var idlePresets = []time.Duration{
 	0, 15 * time.Minute, 30 * time.Minute, time.Hour, 3 * time.Hour, 6 * time.Hour,
 }
 
-// cyclePreset returns the next/previous idle preset relative to cur.
-func cyclePreset(cur time.Duration, dir int) time.Duration {
+// retentionPresets are the selectable server session-retention windows (0 = keep all).
+var retentionPresets = []time.Duration{
+	0, 24 * time.Hour, 7 * 24 * time.Hour, 30 * 24 * time.Hour,
+}
+
+// cycleDuration returns the next/previous preset relative to cur (wrapping).
+func cycleDuration(presets []time.Duration, cur time.Duration, dir int) time.Duration {
 	i := 0
-	for j, d := range idlePresets {
+	for j, d := range presets {
 		if d == cur {
 			i = j
 			break
 		}
 	}
-	i = (i + dir + len(idlePresets)) % len(idlePresets)
-	return idlePresets[i]
+	i = (i + dir + len(presets)) % len(presets)
+	return presets[i]
+}
+
+func cyclePreset(cur time.Duration, dir int) time.Duration {
+	return cycleDuration(idlePresets, cur, dir)
+}
+
+func cycleRetention(cur time.Duration, dir int) time.Duration {
+	return cycleDuration(retentionPresets, cur, dir)
 }
 
 // loadPrefs reads the preferences file, creating a commented default on first

@@ -30,7 +30,10 @@ const (
 var tabNames = []string{"Sessions", "Usage", "Machines", "Settings"}
 
 // settingsCount is the number of editable rows in the Settings tab.
-const settingsCount = 2
+const settingsCount = 3
+
+// retentionRow is the index of the server session-retention row in Settings.
+const retentionRow = 2
 
 // sortKey identifies how the sessions table is ordered.
 type sortKey int
@@ -69,30 +72,33 @@ var groupNames = map[groupBy]string{
 }
 
 type model struct {
-	fetch          func() ([]api.SessionView, error)
-	fetchUsage     func() (api.UsageReport, error)
-	fetchWatcher   func() (api.WatcherStatus, error)
-	toggleRC       func(id string, enabled bool) error
-	sessions       []api.SessionView
-	usage          api.UsageReport
-	watcherSeen    string
-	gotWatcher     bool
-	err            error
-	updatedAt      time.Time
-	width          int
-	tab            tab
-	cursor         int
-	detail         bool
-	history        []int
-	filter         string
-	filtering      bool
-	sortKey        sortKey
-	sortReversed   bool
-	groupBy        groupBy
-	showAll        bool
-	prefs          prefs
-	settingsCursor int
-	events         <-chan struct{}
+	fetch           func() ([]api.SessionView, error)
+	fetchUsage      func() (api.UsageReport, error)
+	fetchWatcher    func() (api.WatcherStatus, error)
+	fetchSettings   func() (api.Settings, error)
+	toggleRC        func(id string, enabled bool) error
+	setRetention    func(v string) error
+	serverRetention time.Duration
+	sessions        []api.SessionView
+	usage           api.UsageReport
+	watcherSeen     string
+	gotWatcher      bool
+	err             error
+	updatedAt       time.Time
+	width           int
+	tab             tab
+	cursor          int
+	detail          bool
+	history         []int
+	filter          string
+	filtering       bool
+	sortKey         sortKey
+	sortReversed    bool
+	groupBy         groupBy
+	showAll         bool
+	prefs           prefs
+	settingsCursor  int
+	events          <-chan struct{}
 }
 
 // watcherStaleAfter is how long the server may go without a watch report before
@@ -133,8 +139,36 @@ type watcherMsg struct {
 
 type rcDoneMsg struct{ err error }
 
+type settingsMsg struct {
+	retention string
+	err       error
+}
+
+type retentionDoneMsg struct{ err error }
+
 func (m model) Init() tea.Cmd {
-	return tea.Batch(m.fetchCmd(), m.fetchUsageCmd(), m.watcherCmd(), tickCmd(), m.waitForEventCmd())
+	return tea.Batch(m.fetchCmd(), m.fetchUsageCmd(), m.watcherCmd(), m.settingsCmd(), tickCmd(), m.waitForEventCmd())
+}
+
+func (m model) settingsCmd() tea.Cmd {
+	if m.fetchSettings == nil {
+		return nil
+	}
+	return func() tea.Msg {
+		s, err := m.fetchSettings()
+		return settingsMsg{retention: s.SessionRetention, err: err}
+	}
+}
+
+func (m model) setRetentionCmd(d time.Duration) tea.Cmd {
+	if m.setRetention == nil {
+		return nil
+	}
+	v := ""
+	if d > 0 {
+		v = d.String()
+	}
+	return func() tea.Msg { return retentionDoneMsg{err: m.setRetention(v)} }
 }
 
 func (m model) fetchCmd() tea.Cmd {
@@ -181,6 +215,29 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.width = msg.Width
 	case tea.KeyMsg:
 		return m.handleKey(msg)
+	case rcDoneMsg:
+		if msg.err != nil {
+			m.err = msg.err
+		}
+		return m, m.fetchCmd() // reflect the new rc state
+	case retentionDoneMsg:
+		if msg.err != nil {
+			m.err = msg.err
+		}
+		return m, m.settingsCmd() // confirm the saved value
+	case eventMsg:
+		return m, tea.Batch(m.fetchCmd(), m.fetchUsageCmd(), m.waitForEventCmd())
+	case tickMsg:
+		return m, tea.Batch(m.fetchCmd(), m.fetchUsageCmd(), m.watcherCmd(), tickCmd())
+	default:
+		return m.applyDataMsg(msg), nil
+	}
+	return m, nil
+}
+
+// applyDataMsg folds a fetch result into the model (no follow-up command).
+func (m model) applyDataMsg(msg tea.Msg) model {
+	switch msg := msg.(type) {
 	case sessionsMsg:
 		if msg.err != nil {
 			m.err = msg.err
@@ -202,17 +259,15 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.watcherSeen = msg.seen
 			m.gotWatcher = true
 		}
-	case rcDoneMsg:
-		if msg.err != nil {
-			m.err = msg.err
+	case settingsMsg:
+		if msg.err == nil {
+			m.serverRetention = 0
+			if d, err := time.ParseDuration(msg.retention); err == nil {
+				m.serverRetention = d
+			}
 		}
-		return m, m.fetchCmd() // reflect the new rc state
-	case eventMsg:
-		return m, tea.Batch(m.fetchCmd(), m.fetchUsageCmd(), m.waitForEventCmd())
-	case tickMsg:
-		return m, tea.Batch(m.fetchCmd(), m.fetchUsageCmd(), m.watcherCmd(), tickCmd())
 	}
-	return m, nil
+	return m
 }
 
 func (m model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
@@ -227,7 +282,7 @@ func (m model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case "c":
 		return m, m.toggleSelectedRC()
 	}
-	return m.handleViewKey(msg), nil
+	return m.handleViewKey(msg)
 }
 
 // toggleSelectedRC flips the remote-control flag of the selected session (only
@@ -247,19 +302,19 @@ func (m model) toggleSelectedRC() tea.Cmd {
 	}
 }
 
-func (m model) handleViewKey(msg tea.KeyMsg) model {
+func (m model) handleViewKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	switch msg.String() {
 	case "tab":
 		m.tab = (m.tab + 1) % tab(len(tabNames))
-		return m
+		return m, nil
 	case "shift+tab":
 		m.tab = (m.tab + tab(len(tabNames)) - 1) % tab(len(tabNames))
-		return m
+		return m, nil
 	}
 	if m.tab == tabSettings {
 		return m.handleSettingsKey(msg)
 	}
-	return m.handleSessionsKey(msg)
+	return m.handleSessionsKey(msg), nil
 }
 
 func (m model) handleSessionsKey(msg tea.KeyMsg) model {
@@ -281,7 +336,7 @@ func (m model) handleSessionsKey(msg tea.KeyMsg) model {
 	return m
 }
 
-func (m model) handleSettingsKey(msg tea.KeyMsg) model {
+func (m model) handleSettingsKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	switch msg.String() {
 	case "down", "j":
 		if m.settingsCursor < settingsCount-1 {
@@ -292,24 +347,28 @@ func (m model) handleSettingsKey(msg tea.KeyMsg) model {
 			m.settingsCursor--
 		}
 	case " ", "enter", "right", "l":
-		m = m.editSetting(1)
+		return m.editSetting(1)
 	case "left", "h":
-		m = m.editSetting(-1)
+		return m.editSetting(-1)
 	}
-	return m
+	return m, nil
 }
 
-// editSetting changes the selected preference and persists it. dir is the cycle
-// direction for multi-value settings; booleans just toggle.
-func (m model) editSetting(dir int) model {
+// editSetting changes the selected preference. Local prefs (rows 0-1) are saved
+// to tui.toml; the server retention (row 2) is written to the server via a Cmd.
+func (m model) editSetting(dir int) (tea.Model, tea.Cmd) {
 	switch m.settingsCursor {
 	case 0:
 		m.prefs.hideEnded = !m.prefs.hideEnded
+		savePrefs(m.prefs)
 	case 1:
 		m.prefs.idleHideAfter = cyclePreset(m.prefs.idleHideAfter, dir)
+		savePrefs(m.prefs)
+	case retentionRow:
+		m.serverRetention = cycleRetention(m.serverRetention, dir)
+		return m, m.setRetentionCmd(m.serverRetention)
 	}
-	savePrefs(m.prefs)
-	return m
+	return m, nil
 }
 
 func (m model) handleNavKey(msg tea.KeyMsg) model {
@@ -400,22 +459,40 @@ func (m model) View() string {
 	return b.String()
 }
 
-// renderSettings renders the editable preferences.
+// renderSettings renders the editable preferences: local display prefs (saved
+// to tui.toml) and the server-wide retention.
 func (m model) renderSettings() string {
 	var b strings.Builder
-	b.WriteString(dimStyle.Render("Preferences — saved to ~/.config/claude-fleet/tui.toml") + "\n\n")
-	rows := []struct{ label, value string }{
-		{"Hide ended sessions", onOffLabel(m.prefs.hideEnded)},
-		{"Hide idle after", idleLabel(m.prefs.idleHideAfter)},
+	b.WriteString(dimStyle.Render("Preferences") + "\n\n")
+	rows := []struct {
+		label  string
+		value  string
+		server bool
+	}{
+		{"Hide ended sessions", onOffLabel(m.prefs.hideEnded), false},
+		{"Hide idle after", idleLabel(m.prefs.idleHideAfter), false},
+		{"Session retention", retentionLabel(m.serverRetention), true},
 	}
 	for i, r := range rows {
 		gutter := "  "
 		if i == m.settingsCursor {
 			gutter = cursorStyle.Render("❯ ")
 		}
-		b.WriteString(gutter + labelStyle.Render(pad(r.label, 24)) + r.value + "\n")
+		line := gutter + labelStyle.Render(pad(r.label, 24)) + r.value
+		if r.server {
+			line += dimStyle.Render("   (server)")
+		}
+		b.WriteString(line + "\n")
 	}
+	b.WriteString("\n" + dimStyle.Render("local → tui.toml · retention applies fleet-wide") + "\n")
 	return b.String()
+}
+
+func retentionLabel(d time.Duration) string {
+	if d == 0 {
+		return dimStyle.Render("off (keep all)")
+	}
+	return humanizeDuration(d)
 }
 
 func onOffLabel(on bool) string {
