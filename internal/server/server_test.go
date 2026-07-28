@@ -57,6 +57,41 @@ func TestProtectedRoutesRequireAuth(t *testing.T) {
 	}
 }
 
+// TestEveryAPIRouteRejectsUnauthenticated is the security invariant: every
+// /api/* route must reject a request that carries no token and one that carries
+// a wrong token. It guards against a future route registered without s.auth.
+// The list is maintained by hand (Go's ServeMux is not introspectable), so a
+// newly added protected route must be added here — and an unprotected one will
+// fail this test.
+func TestEveryAPIRouteRejectsUnauthenticated(t *testing.T) {
+	srv := newTestServer(t)
+	routes := []struct{ method, path string }{
+		{http.MethodPost, "/api/report"},
+		{http.MethodGet, "/api/sessions"},
+		{http.MethodGet, "/api/events"},
+		{http.MethodGet, "/api/usage"},
+		{http.MethodPost, "/api/usage"},
+		{http.MethodPost, "/api/usage/lease"},
+		{http.MethodGet, "/api/watcher"},
+		{http.MethodGet, "/api/settings"},
+		{http.MethodPost, "/api/settings"},
+	}
+	for _, r := range routes {
+		// No token at all.
+		if rec := do(t, srv, r.method, r.path, []byte(`{}`), false); rec.Code != http.StatusUnauthorized {
+			t.Errorf("%s %s without token = %d, want 401", r.method, r.path, rec.Code)
+		}
+		// Present but wrong token (the meaningful proxy for the token check).
+		req := httptest.NewRequest(r.method, r.path, bytes.NewReader([]byte(`{}`)))
+		req.Header.Set("Authorization", "Bearer wrong-token")
+		rec := httptest.NewRecorder()
+		srv.Handler().ServeHTTP(rec, req)
+		if rec.Code != http.StatusUnauthorized {
+			t.Errorf("%s %s with wrong token = %d, want 401", r.method, r.path, rec.Code)
+		}
+	}
+}
+
 func TestReportCreatesAndListsSession(t *testing.T) {
 	srv := newTestServer(t)
 
