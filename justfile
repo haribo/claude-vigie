@@ -137,7 +137,10 @@ install: app-build
     # not fail with "Text file busy".
     cp -f bin/claude-fleet {{home_bin}}/.claude-fleet.tmp && mv -f {{home_bin}}/.claude-fleet.tmp {{home_bin}}/claude-fleet
     cp -f bin/claude-fleetd {{home_bin}}/.claude-fleetd.tmp && mv -f {{home_bin}}/.claude-fleetd.tmp {{home_bin}}/claude-fleetd
-    @echo "installed claude-fleet + claude-fleetd into {{home_bin}}"
+    # Restart running services so the new binary takes effect (a copy alone
+    # leaves the old binary loaded). try-restart skips stopped services.
+    -@systemctl --user try-restart claude-fleetd.service claude-fleet-watch.service 2>/dev/null
+    @echo "installed claude-fleet + claude-fleetd into {{home_bin}} (restarted any running services)"
 
 # Print the local fleet auth token
 fleet-token: app-build
