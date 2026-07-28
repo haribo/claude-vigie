@@ -86,11 +86,28 @@ func runServe(args []string) int {
 // pruneInterval is how often stale sessions are garbage-collected.
 const pruneInterval = time.Hour
 
-// pruneLoop garbage-collects sessions older than retention, on start and then
-// hourly, so the database stays bounded.
-func pruneLoop(st *store.Store, retention time.Duration, log *slog.Logger) {
+// pruneLoop garbage-collects sessions older than the configured retention, on
+// start and then hourly, so the database stays bounded. The retention lives in
+// a meta key (editable via /api/settings); the flag only seeds it on first run.
+func pruneLoop(st *store.Store, defaultRetention time.Duration, log *slog.Logger) {
+	ctx := context.Background()
+	if v, ok, _ := st.GetMeta(ctx, server.RetentionMetaKey); !ok || v == "" {
+		_ = st.SetMeta(ctx, server.RetentionMetaKey, defaultRetention.String())
+	}
 	prune := func() {
-		n, err := st.PruneSessions(context.Background(), retention, time.Now())
+		retention := defaultRetention
+		if v, ok, _ := st.GetMeta(ctx, server.RetentionMetaKey); ok {
+			if v == "" {
+				return // disabled
+			}
+			if d, err := time.ParseDuration(v); err == nil {
+				retention = d
+			}
+		}
+		if retention <= 0 {
+			return
+		}
+		n, err := st.PruneSessions(ctx, retention, time.Now())
 		if err != nil {
 			log.Error("pruning sessions", "error", err)
 		} else if n > 0 {

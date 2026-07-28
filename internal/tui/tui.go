@@ -15,12 +15,14 @@ func Run(cfg *config.Config) error {
 	go subscribeEvents(cfg, events)
 
 	m := model{
-		fetch:        func() ([]api.SessionView, error) { return fetchSessions(cfg) },
-		fetchUsage:   func() (api.UsageReport, error) { return fetchUsage(cfg) },
-		fetchWatcher: func() (api.WatcherStatus, error) { return fetchWatcher(cfg) },
-		toggleRC:     func(id string, enabled bool) error { return toggleRemoteControl(cfg, id, enabled) },
-		prefs:        loadPrefs(),
-		events:       events,
+		fetch:         func() ([]api.SessionView, error) { return fetchSessions(cfg) },
+		fetchUsage:    func() (api.UsageReport, error) { return fetchUsage(cfg) },
+		fetchWatcher:  func() (api.WatcherStatus, error) { return fetchWatcher(cfg) },
+		fetchSettings: func() (api.Settings, error) { return fetchSettings(cfg) },
+		toggleRC:      func(id string, enabled bool) error { return toggleRemoteControl(cfg, id, enabled) },
+		setRetention:  func(v string) error { return setSessionRetention(cfg, v) },
+		prefs:         loadPrefs(),
+		events:        events,
 	}
 	_, err := tea.NewProgram(m, tea.WithAltScreen()).Run()
 	return err

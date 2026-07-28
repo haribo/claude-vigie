@@ -98,6 +98,61 @@ func fetchWatcher(cfg *config.Config) (api.WatcherStatus, error) {
 	return s, nil
 }
 
+// fetchSettings retrieves the server-wide settings.
+func fetchSettings(cfg *config.Config) (api.Settings, error) {
+	url := strings.TrimRight(cfg.ServerURL, "/") + "/api/settings"
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+	if err != nil {
+		return api.Settings{}, err
+	}
+	req.Header.Set("Authorization", "Bearer "+cfg.Token)
+
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return api.Settings{}, err
+	}
+	defer func() { _ = resp.Body.Close() }()
+	if resp.StatusCode != http.StatusOK {
+		return api.Settings{}, fmt.Errorf("server returned %s", resp.Status)
+	}
+	var s api.Settings
+	if err := json.NewDecoder(resp.Body).Decode(&s); err != nil {
+		return api.Settings{}, fmt.Errorf("decoding settings: %w", err)
+	}
+	return s, nil
+}
+
+// setSessionRetention writes the server-wide session-retention window ("" disables).
+func setSessionRetention(cfg *config.Config, v string) error {
+	body, err := json.Marshal(api.Settings{SessionRetention: v})
+	if err != nil {
+		return err
+	}
+	url := strings.TrimRight(cfg.ServerURL, "/") + "/api/settings"
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewReader(body))
+	if err != nil {
+		return err
+	}
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", "Bearer "+cfg.Token)
+
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = resp.Body.Close() }()
+	if resp.StatusCode >= http.StatusMultipleChoices {
+		return fmt.Errorf("server returned %s", resp.Status)
+	}
+	return nil
+}
+
 // toggleRemoteControl sets a session's remote-control flag on the server.
 func toggleRemoteControl(cfg *config.Config, id string, enabled bool) error {
 	body, err := json.Marshal(api.RCRequest{Enabled: enabled})
