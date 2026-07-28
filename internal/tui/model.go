@@ -22,12 +22,11 @@ type tab int
 
 const (
 	tabSessions tab = iota
-	tabUsage
 	tabMachines
 	tabSettings
 )
 
-var tabNames = []string{"Sessions", "Usage", "Machines", "Settings"}
+var tabNames = []string{"Sessions", "Machines", "Settings"}
 
 // settingsCount is the number of editable rows in the Settings tab.
 const settingsCount = 3
@@ -472,8 +471,6 @@ func (m model) View() string {
 	switch m.tab {
 	case tabSessions:
 		b.WriteString(m.viewSessions())
-	case tabUsage:
-		b.WriteString(renderUsage(m.usage))
 	case tabMachines:
 		b.WriteString(dimStyle.Render("Machines — coming soon"))
 	case tabSettings:
@@ -562,6 +559,7 @@ func (m model) viewSessions() string {
 	} else {
 		b.WriteString(renderGroupedTable(vis, m.width, cursor, m.groupBy, sortState{m.sortKey, m.sortReversed}))
 	}
+	b.WriteString("\n" + renderUsageStrip(m.usage))
 	return b.String()
 }
 

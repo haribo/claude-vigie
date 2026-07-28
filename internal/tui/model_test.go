@@ -11,15 +11,14 @@ import (
 )
 
 func TestRenderTabBar(t *testing.T) {
-	out := renderTabBar(tabUsage)
-	for _, want := range []string{"Sessions", "Usage", "Machines"} {
+	out := renderTabBar(tabMachines)
+	for _, want := range []string{"Sessions", "Machines", "Settings"} {
 		if !strings.Contains(out, want) {
 			t.Errorf("tab bar missing %q: %s", want, out)
 		}
 	}
-	// Labels no longer carry numbers (tabs switch with Tab/Shift+Tab).
-	if strings.Contains(out, "2 Usage") {
-		t.Errorf("tab labels should not carry numbers: %s", out)
+	if strings.Contains(out, "Usage") {
+		t.Errorf("Usage tab should be gone: %s", out)
 	}
 }
 
@@ -28,8 +27,8 @@ func TestTabNavigation(t *testing.T) {
 	shiftTab := tea.KeyMsg{Type: tea.KeyShiftTab}
 	var m tea.Model = model{}
 	m, _ = m.Update(tabKey)
-	if m.(model).tab != tabUsage {
-		t.Errorf("Tab from Sessions = %v, want Usage", m.(model).tab)
+	if m.(model).tab != tabMachines {
+		t.Errorf("Tab from Sessions = %v, want Machines", m.(model).tab)
 	}
 	m, _ = m.Update(shiftTab)
 	if m.(model).tab != tabSessions {
@@ -44,7 +43,7 @@ func TestTabNavigation(t *testing.T) {
 
 func TestViewHasTabBar(t *testing.T) {
 	out := model{}.View()
-	for _, want := range []string{"Sessions", "Usage", "Machines"} {
+	for _, want := range []string{"Sessions", "Machines", "Settings"} {
 		if !strings.Contains(out, want) {
 			t.Errorf("view missing tab %q", want)
 		}

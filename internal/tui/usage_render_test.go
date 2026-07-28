@@ -3,32 +3,34 @@ package tui
 import (
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/haribo/claude-fleet/internal/api"
 )
 
-func TestRenderUsageUnavailable(t *testing.T) {
-	if out := renderUsage(api.UsageReport{}); !strings.Contains(out, "unavailable") {
-		t.Errorf("empty usage should show unavailable:\n%s", out)
+func TestUsageStripUnavailable(t *testing.T) {
+	if out := renderUsageStrip(api.UsageReport{}); !strings.Contains(out, "not fetched") {
+		t.Errorf("empty usage should say not fetched:\n%s", out)
 	}
 }
 
-func TestRenderUsageGauges(t *testing.T) {
-	out := renderUsage(api.UsageReport{
-		FiveHourPct: 13, FiveHourReset: "2026-07-27T11:00:00Z",
-		SevenDayPct: 30, SevenDayReset: "2026-08-01T03:00:00Z",
-		FetchedAt: "2026-07-27T10:00:00Z",
+func TestUsageStrip(t *testing.T) {
+	out := renderUsageStrip(api.UsageReport{
+		FiveHourPct: 13, FiveHourReset: time.Now().Add(2 * time.Hour).UTC().Format(time.RFC3339),
+		SevenDayPct: 30, SevenDayReset: time.Now().Add(4 * 24 * time.Hour).UTC().Format(time.RFC3339),
+		FetchedAt: time.Now().UTC().Format(time.RFC3339),
 	})
-	for _, want := range []string{"Current session (5h)", "This week", "13%", "30%", "resets", "synced"} {
+	for _, want := range []string{"usage", "5h", "7d", "13%", "30%", "synced"} {
 		if !strings.Contains(out, want) {
-			t.Errorf("usage view missing %q:\n%s", want, out)
+			t.Errorf("usage strip missing %q:\n%s", want, out)
 		}
 	}
 }
 
-func TestResetLabelParsesFractional(t *testing.T) {
-	frac := "2026-07-27T11:00:00.033544+00:00"
-	if got := resetLabel(frac); got == frac {
-		t.Errorf("resetLabel did not parse fractional-second time: %s", got)
+func TestResetInParsesFractional(t *testing.T) {
+	// A future fractional-second time yields a non-empty remaining duration.
+	frac := time.Now().Add(90 * time.Minute).UTC().Format("2006-01-02T15:04:05.000000Z07:00")
+	if got := resetIn(frac); got == "" {
+		t.Errorf("resetIn did not parse fractional-second time: %q", frac)
 	}
 }

@@ -10,20 +10,21 @@ import (
 	"github.com/haribo/claude-fleet/internal/api"
 )
 
-// renderUsage renders the Usage tab: gauges for the 5-hour window and the week.
-func renderUsage(u api.UsageReport) string {
+// renderUsageStrip renders subscription usage as one compact, dim line for the
+// bottom of the Sessions body: short 5h and 7d gauges with % and time-to-reset.
+func renderUsageStrip(u api.UsageReport) string {
 	if u.FetchedAt == "" {
-		return dimStyle.Render("usage unavailable — the daemon hasn't fetched it yet")
+		return dimStyle.Render("usage — not fetched yet")
 	}
-	var b strings.Builder
-	b.WriteString(renderGauge("Current session (5h)", u.FiveHourPct, u.FiveHourReset) + "\n\n")
-	b.WriteString(renderGauge("This week", u.SevenDayPct, u.SevenDayReset) + "\n\n")
-	b.WriteString(dimStyle.Render("synced " + freshness(u.FetchedAt)))
-	return b.String()
+	return labelStyle.Render("usage  ") +
+		compactGauge("5h", u.FiveHourPct, u.FiveHourReset) +
+		dimStyle.Render("    ") +
+		compactGauge("7d", u.SevenDayPct, u.SevenDayReset) +
+		dimStyle.Render("    synced "+freshness(u.FetchedAt))
 }
 
-func renderGauge(label string, pct float64, reset string) string {
-	const width = 40
+func compactGauge(label string, pct float64, reset string) string {
+	const width = 10
 	filled := int(pct / 100 * float64(width))
 	switch {
 	case filled > width:
@@ -31,7 +32,6 @@ func renderGauge(label string, pct float64, reset string) string {
 	case filled < 0:
 		filled = 0
 	}
-
 	color := cGreen
 	switch {
 	case pct >= 80:
@@ -39,22 +39,25 @@ func renderGauge(label string, pct float64, reset string) string {
 	case pct >= 50:
 		color = cAmber
 	}
-
-	bar := lipgloss.NewStyle().Foreground(color).Render(strings.Repeat("█", filled)) +
+	bar := lipgloss.NewStyle().Foreground(color).Render(strings.Repeat("▓", filled)) +
 		dimStyle.Render(strings.Repeat("░", width-filled))
-	line := fmt.Sprintf("%-22s %s %3.0f%%", label, bar, pct)
-	if reset != "" {
-		line += dimStyle.Render("   resets " + resetLabel(reset))
+	s := labelStyle.Render(label+" ") + bar + fmt.Sprintf(" %3.0f%%", pct)
+	if r := resetIn(reset); r != "" {
+		s += dimStyle.Render(" (" + r + ")")
 	}
-	return line
+	return s
 }
 
-func resetLabel(rfc string) string {
+// resetIn renders the time remaining until a reset (compact), or "" if unknown.
+func resetIn(rfc string) string {
 	t, err := parseTime(rfc)
 	if err != nil {
-		return rfc
+		return ""
 	}
-	return t.Local().Format("Jan 2 15:04")
+	if d := time.Until(t); d > 0 {
+		return humanizeDuration(d)
+	}
+	return "now"
 }
 
 func freshness(rfc string) string {
