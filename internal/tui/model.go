@@ -76,6 +76,7 @@ type model struct {
 	fetchWatcher    func() (api.WatcherStatus, error)
 	fetchSettings   func() (api.Settings, error)
 	setRetention    func(v string) error
+	serverURL       string // read-only; set via `claude-fleet init`
 	serverRetention time.Duration
 	sessions        []api.SessionView
 	usage           api.UsageReport
@@ -474,6 +475,15 @@ func (m model) View() string {
 // to tui.toml) and the server-wide retention.
 func (m model) renderSettings() string {
 	var b strings.Builder
+
+	// Connection is read-only here: it is set per machine by `claude-fleet init`
+	// and shared with the watcher/reporter. Editing it from the TUI would only
+	// change this process and leave the watcher on the old server. The token is
+	// never shown.
+	b.WriteString(dimStyle.Render("Connection") + "\n\n")
+	b.WriteString("  " + labelStyle.Render(pad("Server", 24)) + m.serverURL +
+		dimStyle.Render("   (read-only — set via `claude-fleet init`)") + "\n\n")
+
 	b.WriteString(dimStyle.Render("Preferences") + "\n\n")
 	rows := []struct {
 		label  string
