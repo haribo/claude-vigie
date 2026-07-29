@@ -491,7 +491,6 @@ func (m model) View() string {
 	if m.gotWatcher && m.watcherStale() {
 		b.WriteString(warnStyle.Render("⚠ no watcher reporting — statuses may be stale") + "\n")
 	}
-	b.WriteString("\n")
 
 	switch m.tab {
 	case tabSessions:
@@ -581,8 +580,8 @@ func (m model) viewSessions() string {
 	}
 
 	var b strings.Builder
-	// Summary strip framed by rules at the top of the body.
-	b.WriteString(rule(m.width) + "\n")
+	// The tab-bar separator frames the summary strip above; a rule below
+	// separates it from the table.
 	b.WriteString(joinLR(renderSummary(m.sessions, m.history), m.summaryRight(), m.width) + "\n")
 	b.WriteString(rule(m.width) + "\n")
 	if m.filtering || m.filter != "" {
