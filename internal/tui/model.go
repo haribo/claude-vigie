@@ -22,11 +22,12 @@ type tab int
 
 const (
 	tabSessions tab = iota
+	tabStats
 	tabMachines
 	tabSettings
 )
 
-var tabNames = []string{"Sessions", "Machines", "Settings"}
+var tabNames = []string{"Sessions", "Stats", "Machines", "Settings"}
 
 // settingsCount is the number of editable rows in the Settings tab.
 const settingsCount = 3
@@ -75,9 +76,12 @@ type model struct {
 	fetchUsage      func() (api.UsageReport, error)
 	fetchWatcher    func() (api.WatcherStatus, error)
 	fetchSettings   func() (api.Settings, error)
+	fetchStats      func() (api.StatsResponse, error)
 	setRetention    func(v string) error
 	serverURL       string // read-only; set via `claude-fleet init`
 	serverRetention time.Duration
+	stats           api.StatsResponse
+	statsPeriod     period
 	sessions        []api.SessionView
 	usage           api.UsageReport
 	watcherSeen     string
@@ -147,8 +151,24 @@ type settingsMsg struct {
 
 type retentionDoneMsg struct{ err error }
 
+type statsMsg struct {
+	stats api.StatsResponse
+	err   error
+}
+
 func (m model) Init() tea.Cmd {
-	return tea.Batch(m.fetchCmd(m.fetchSeq), m.fetchUsageCmd(), m.watcherCmd(), m.settingsCmd(), tickCmd(), m.waitForEventCmd())
+	return tea.Batch(m.fetchCmd(m.fetchSeq), m.fetchUsageCmd(), m.watcherCmd(),
+		m.settingsCmd(), m.statsCmd(), tickCmd(), m.waitForEventCmd())
+}
+
+func (m model) statsCmd() tea.Cmd {
+	if m.fetchStats == nil {
+		return nil
+	}
+	return func() tea.Msg {
+		s, err := m.fetchStats()
+		return statsMsg{stats: s, err: err}
+	}
 }
 
 func (m model) settingsCmd() tea.Cmd {
@@ -230,10 +250,10 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, m.settingsCmd() // confirm the saved value
 	case eventMsg:
 		sc := m.refreshSessions()
-		return m, tea.Batch(sc, m.fetchUsageCmd(), m.waitForEventCmd())
+		return m, tea.Batch(sc, m.fetchUsageCmd(), m.statsCmd(), m.waitForEventCmd())
 	case tickMsg:
 		sc := m.refreshSessions()
-		return m, tea.Batch(sc, m.fetchUsageCmd(), m.watcherCmd(), tickCmd())
+		return m, tea.Batch(sc, m.fetchUsageCmd(), m.watcherCmd(), m.statsCmd(), tickCmd())
 	default:
 		return m.applyDataMsg(msg), nil
 	}
@@ -269,6 +289,10 @@ func (m model) applyDataMsg(msg tea.Msg) model {
 			m.watcherSeen = msg.seen
 			m.gotWatcher = true
 		}
+	case statsMsg:
+		if msg.err == nil {
+			m.stats = msg.stats
+		}
 	case settingsMsg:
 		if msg.err == nil {
 			m.serverRetention = 0
@@ -302,10 +326,21 @@ func (m model) handleViewKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.tab = (m.tab + tab(len(tabNames)) - 1) % tab(len(tabNames))
 		return m, nil
 	}
-	if m.tab == tabSettings {
+	switch m.tab {
+	case tabSettings:
 		return m.handleSettingsKey(msg)
+	case tabStats:
+		return m.handleStatsKey(msg), nil
+	default:
+		return m.handleSessionsKey(msg), nil
 	}
-	return m.handleSessionsKey(msg), nil
+}
+
+func (m model) handleStatsKey(msg tea.KeyMsg) model {
+	if p, ok := periodFromKey(msg.String()); ok {
+		m.statsPeriod = p
+	}
+	return m
 }
 
 func (m model) handleSessionsKey(msg tea.KeyMsg) model {
@@ -461,6 +496,8 @@ func (m model) View() string {
 	switch m.tab {
 	case tabSessions:
 		b.WriteString(m.viewSessions())
+	case tabStats:
+		b.WriteString(m.renderStats())
 	case tabMachines:
 		b.WriteString(dimStyle.Render("Machines — coming soon"))
 	case tabSettings:

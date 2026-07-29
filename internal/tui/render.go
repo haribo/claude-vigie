@@ -30,9 +30,14 @@ func footer(t tab) string {
 		{"/", "filter"}, {"s", "sort"}, {"S", "reverse"}, {"g", "group"}, {"a", "all"},
 		{"r", "refresh"}, {"q", "quit"},
 	}
-	if t == tabSettings {
+	switch t {
+	case tabSettings:
 		hints = [][2]string{
 			{"↑↓", "select"}, {"space/←→", "change"}, {"⇥", "switch"}, {"r", "refresh"}, {"q", "quit"},
+		}
+	case tabStats:
+		hints = [][2]string{
+			{"d/w/m/y/t", "period"}, {"⇥", "switch"}, {"r", "refresh"}, {"q", "quit"},
 		}
 	}
 	parts := make([]string, len(hints))

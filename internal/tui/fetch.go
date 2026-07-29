@@ -124,6 +124,33 @@ func fetchSettings(cfg *config.Config) (api.Settings, error) {
 	return s, nil
 }
 
+// fetchStats retrieves the analytics rollups and top sessions.
+func fetchStats(cfg *config.Config) (api.StatsResponse, error) {
+	url := strings.TrimRight(cfg.ServerURL, "/") + "/api/stats"
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+	if err != nil {
+		return api.StatsResponse{}, err
+	}
+	req.Header.Set("Authorization", "Bearer "+cfg.Token)
+
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return api.StatsResponse{}, err
+	}
+	defer func() { _ = resp.Body.Close() }()
+	if resp.StatusCode != http.StatusOK {
+		return api.StatsResponse{}, fmt.Errorf("server returned %s", resp.Status)
+	}
+	var s api.StatsResponse
+	if err := json.NewDecoder(resp.Body).Decode(&s); err != nil {
+		return api.StatsResponse{}, fmt.Errorf("decoding stats: %w", err)
+	}
+	return s, nil
+}
+
 // setSessionRetention writes the server-wide session-retention window ("" disables).
 func setSessionRetention(cfg *config.Config, v string) error {
 	body, err := json.Marshal(api.Settings{SessionRetention: v})
