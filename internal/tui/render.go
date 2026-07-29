@@ -161,7 +161,7 @@ func renderTable(sessions []api.SessionView, width, selected int, st sortState) 
 	cols := visibleColumns(width)
 	var b strings.Builder
 	b.WriteString(renderHeaderRow(cols, st) + "\n")
-	b.WriteString(rule(rowWidth(cols)) + "\n")
+	b.WriteString(rule(width) + "\n")
 	for idx, s := range sessions {
 		b.WriteString(renderRow(cols, s, idx == selected, width) + "\n")
 	}
@@ -243,7 +243,7 @@ func renderGroupedTable(sessions []api.SessionView, width, selected int, gb grou
 	cols := visibleColumns(width)
 	var b strings.Builder
 	b.WriteString(renderHeaderRow(cols, st) + "\n")
-	b.WriteString(rule(rowWidth(cols)) + "\n")
+	b.WriteString(rule(width) + "\n")
 	lastKey, first := "", true
 	for idx, s := range sessions {
 		k := groupKey(s, gb)

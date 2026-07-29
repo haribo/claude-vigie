@@ -587,13 +587,12 @@ func (m model) viewSessions() string {
 	if m.filtering || m.filter != "" {
 		b.WriteString(m.filterLine() + "\n")
 	}
-	b.WriteString("\n")
 	if len(vis) == 0 {
 		b.WriteString(dimStyle.Render("no sessions match the filter"))
 	} else {
 		b.WriteString(renderGroupedTable(vis, m.width, cursor, m.groupBy, sortState{m.sortKey, m.sortReversed}))
 	}
-	b.WriteString("\n" + renderUsageStrip(m.usage))
+	b.WriteString(rule(m.width) + "\n" + renderUsageStrip(m.usage))
 	return b.String()
 }
 
