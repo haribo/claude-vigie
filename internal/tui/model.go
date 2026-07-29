@@ -486,7 +486,7 @@ func (m model) View() string {
 	var b strings.Builder
 
 	// No title/clock line: open straight on the tab bar.
-	b.WriteString(renderTabBar(m.tab))
+	b.WriteString(renderTabBar(m.tab, m.width))
 	b.WriteString("\n")
 	if m.gotWatcher && m.watcherStale() {
 		b.WriteString(warnStyle.Render("⚠ no watcher reporting — statuses may be stale") + "\n")
