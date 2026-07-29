@@ -25,6 +25,8 @@ func Run(args []string) int {
 	switch cmd {
 	case "init":
 		return runInit(rest)
+	case "hooks":
+		return runHooks(rest)
 	case "report":
 		return runReport(rest)
 	case "watch":
@@ -52,6 +54,7 @@ Usage:
 
 Commands:
   init       Install hooks and write the client config
+  hooks      Install/remove reporting hooks for one leg (FLEET_CONFIG-selected)
   report     Report a session event (invoked by Claude Code hooks)
   watch      Watch local transcripts and report all sessions
   tui        Run the terminal dashboard client

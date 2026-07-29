@@ -2,6 +2,8 @@ package store
 
 import (
 	"context"
+	"database/sql"
+	"errors"
 	"fmt"
 )
 
@@ -16,6 +18,23 @@ func (s *Store) AppendEvent(ctx context.Context, e Event) error {
 		return fmt.Errorf("appending event for session %s: %w", e.SessionID, err)
 	}
 	return nil
+}
+
+// LastEvent returns the most recent event for a session; ok is false if the
+// session has no events yet.
+func (s *Store) LastEvent(ctx context.Context, sessionID string) (Event, bool, error) {
+	var e Event
+	err := s.db.QueryRowContext(ctx,
+		`SELECT session_id, event, status, created_at FROM events
+		 WHERE session_id = ? ORDER BY id DESC LIMIT 1`, sessionID).
+		Scan(&e.SessionID, &e.Event, &e.Status, &e.CreatedAt)
+	if errors.Is(err, sql.ErrNoRows) {
+		return Event{}, false, nil
+	}
+	if err != nil {
+		return Event{}, false, fmt.Errorf("last event for session %s: %w", sessionID, err)
+	}
+	return e, true, nil
 }
 
 // ListEvents returns up to limit events for a session, most recent first.

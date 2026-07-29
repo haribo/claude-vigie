@@ -60,9 +60,10 @@ Two files, kept separate:
 
 - **Hooks** → `~/.claude/settings.json` (user level). One install covers every
   Claude Code session on the machine, present and future.
-- **Client config** → `~/.config/claude-fleet/config.json` (XDG). Holds the
+- **Client config** → `~/.config/claude-fleet/config.toml` (XDG). Holds the
   server URL, the shared auth token, and the machine name. Never committed — it
   contains a secret. Written by `claude-fleet init`, read by `report`/`watch`/`tui`.
+  A pre-TOML `config.json` is migrated on first load.
 
 The watcher and the daemon run as systemd user services
 (`claude-fleet-watch.service`, `claude-fleetd.service`).

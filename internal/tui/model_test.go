@@ -11,7 +11,7 @@ import (
 )
 
 func TestRenderTabBar(t *testing.T) {
-	out := renderTabBar(tabMachines)
+	out := renderTabBar(tabMachines, 80)
 	for _, want := range []string{"Sessions", "Machines", "Settings"} {
 		if !strings.Contains(out, want) {
 			t.Errorf("tab bar missing %q: %s", want, out)
@@ -27,8 +27,8 @@ func TestTabNavigation(t *testing.T) {
 	shiftTab := tea.KeyMsg{Type: tea.KeyShiftTab}
 	var m tea.Model = model{}
 	m, _ = m.Update(tabKey)
-	if m.(model).tab != tabMachines {
-		t.Errorf("Tab from Sessions = %v, want Machines", m.(model).tab)
+	if m.(model).tab != tabStats {
+		t.Errorf("Tab from Sessions = %v, want Stats", m.(model).tab)
 	}
 	m, _ = m.Update(shiftTab)
 	if m.(model).tab != tabSessions {

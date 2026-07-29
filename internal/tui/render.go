@@ -18,7 +18,8 @@ var (
 	warnStyle        = lipgloss.NewStyle().Bold(true).Foreground(cAmber)
 	labelStyle       = lipgloss.NewStyle().Foreground(cMuted)
 	cursorStyle      = lipgloss.NewStyle().Bold(true).Foreground(cAccent)
-	tabActiveStyle   = lipgloss.NewStyle().Bold(true).Foreground(cAccent).Underline(true)
+	tabActiveStyle   = lipgloss.NewStyle().Bold(true).Foreground(cAccent)
+	tabRuleStyle     = lipgloss.NewStyle().Foreground(cAccent)
 	groupHeaderStyle = lipgloss.NewStyle().Bold(true).Foreground(cAccent2)
 	keycapStyle      = lipgloss.NewStyle().Foreground(cText).Background(cSurface)
 )
@@ -30,9 +31,18 @@ func footer(t tab) string {
 		{"/", "filter"}, {"s", "sort"}, {"S", "reverse"}, {"g", "group"}, {"a", "all"},
 		{"r", "refresh"}, {"q", "quit"},
 	}
-	if t == tabSettings {
+	switch t {
+	case tabSettings:
 		hints = [][2]string{
 			{"↑↓", "select"}, {"space/←→", "change"}, {"⇥", "switch"}, {"r", "refresh"}, {"q", "quit"},
+		}
+	case tabStats:
+		hints = [][2]string{
+			{"d/w/m/y/t", "period"}, {"⇥", "switch"}, {"r", "refresh"}, {"q", "quit"},
+		}
+	case tabMachines:
+		hints = [][2]string{
+			{"⇥", "switch"}, {"r", "refresh"}, {"q", "quit"},
 		}
 	}
 	parts := make([]string, len(hints))
@@ -42,18 +52,35 @@ func footer(t tab) string {
 	return strings.Join(parts, "  ")
 }
 
-// renderTabBar renders the top-level tab bar with the active tab highlighted.
+// renderTabBar renders the top-level tab bar: the labels, then a full-width
+// separator whose segment under the active tab is an accent underline.
 // Tabs are switched with Tab/Shift+Tab, so labels carry no numbers.
-func renderTabBar(active tab) string {
+func renderTabBar(active tab, width int) string {
+	const sep = "   "
 	parts := make([]string, len(tabNames))
+	start, end, pos := 0, 0, 0
 	for i, name := range tabNames {
+		w := len([]rune(name))
 		if tab(i) == active {
 			parts[i] = tabActiveStyle.Render(name)
+			start, end = pos, pos+w
 		} else {
 			parts[i] = dimStyle.Render(name)
 		}
+		pos += w
+		if i < len(tabNames)-1 {
+			pos += len(sep)
+		}
 	}
-	return strings.Join(parts, "   ")
+
+	total := width
+	if total < end {
+		total = end
+	}
+	underline := dimStyle.Render(strings.Repeat("─", start)) +
+		tabRuleStyle.Render(strings.Repeat("━", end-start)) +
+		dimStyle.Render(strings.Repeat("─", total-end))
+	return strings.Join(parts, sep) + "\n" + underline
 }
 
 type column struct {
@@ -138,7 +165,7 @@ func renderTable(sessions []api.SessionView, width, selected int, st sortState) 
 	cols := visibleColumns(width)
 	var b strings.Builder
 	b.WriteString(renderHeaderRow(cols, st) + "\n")
-	b.WriteString(rule(rowWidth(cols)) + "\n")
+	b.WriteString(rule(width) + "\n")
 	for idx, s := range sessions {
 		b.WriteString(renderRow(cols, s, idx == selected, width) + "\n")
 	}
@@ -220,7 +247,7 @@ func renderGroupedTable(sessions []api.SessionView, width, selected int, gb grou
 	cols := visibleColumns(width)
 	var b strings.Builder
 	b.WriteString(renderHeaderRow(cols, st) + "\n")
-	b.WriteString(rule(rowWidth(cols)) + "\n")
+	b.WriteString(rule(width) + "\n")
 	lastKey, first := "", true
 	for idx, s := range sessions {
 		k := groupKey(s, gb)

@@ -80,3 +80,31 @@ type UsageReport struct {
 type WatcherStatus struct {
 	LastSeen string `json:"last_seen,omitempty"` // RFC3339
 }
+
+// DailyStat is one UTC day's aggregated activity for a model. The client sums
+// and re-buckets these rows into day/week/month/year/total views.
+type DailyStat struct {
+	Day            string `json:"day"` // YYYY-MM-DD (UTC)
+	Model          string `json:"model"`
+	OutputTokens   int64  `json:"output_tokens"`
+	WorkingSeconds int64  `json:"working_seconds"`
+	WaitingSeconds int64  `json:"waiting_seconds"`
+	IdleSeconds    int64  `json:"idle_seconds"`
+}
+
+// TopSession is a session ranked by output tokens for the stats view.
+type TopSession struct {
+	Name         string `json:"name"` // title if set, else the session id (a hash)
+	Machine      string `json:"machine"`
+	Model        string `json:"model"`
+	Status       string `json:"status"`
+	OutputTokens int64  `json:"output_tokens"`
+}
+
+// StatsResponse is what GET /api/stats returns: daily rollups plus a recent
+// top-sessions ranking and the current session count.
+type StatsResponse struct {
+	Daily        []DailyStat  `json:"daily"`
+	TopSessions  []TopSession `json:"top_sessions"`
+	SessionCount int          `json:"session_count"`
+}

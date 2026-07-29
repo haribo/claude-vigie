@@ -75,6 +75,7 @@ func TestEveryAPIRouteRejectsUnauthenticated(t *testing.T) {
 		{http.MethodGet, "/api/watcher"},
 		{http.MethodGet, "/api/settings"},
 		{http.MethodPost, "/api/settings"},
+		{http.MethodGet, "/api/stats"},
 	}
 	for _, r := range routes {
 		// No token at all.

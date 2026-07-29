@@ -38,23 +38,86 @@ func (s *Server) handleReport(w http.ResponseWriter, r *http.Request) {
 		s.writeError(w, http.StatusInternalServerError, "internal error")
 		return
 	}
+	// Tokens accrue on every report (analytics approach A): attribute the
+	// output-token delta to today's daily rollup.
+	s.rollupTokens(ctx, existing, sess, req)
+
 	// The watcher polls frequently; keep its scans out of the event log, but
 	// record a heartbeat so clients can detect an absent watcher.
 	if req.Event == "watch" {
 		if err := s.store.SetMeta(ctx, watchSeenKey, time.Now().UTC().Format(time.RFC3339)); err != nil {
 			s.log.Error("recording watch heartbeat", "error", err)
 		}
-	} else if err := s.store.AppendEvent(ctx, store.Event{
-		SessionID: sess.ID, Event: req.Event, Status: sess.Status, CreatedAt: req.Timestamp,
-	}); err != nil {
-		// The session is already updated; the event log is best-effort.
-		s.log.Error("appending event", "error", err)
+	} else {
+		// A hook event closes the previous status interval; roll up its
+		// duration before recording the transition.
+		s.rollupStatusInterval(ctx, sess, req)
+		if err := s.store.AppendEvent(ctx, store.Event{
+			SessionID: sess.ID, Event: req.Event, Status: sess.Status, CreatedAt: req.Timestamp,
+		}); err != nil {
+			// The session is already updated; the event log is best-effort.
+			s.log.Error("appending event", "error", err)
+		}
 	}
 
 	s.maybeSample(ctx, sess.ID, req.Timestamp, sess.Usage.OutputTokens)
 	s.hub.publish()
 
 	w.WriteHeader(http.StatusNoContent)
+}
+
+// rollupTokens adds the session's output-token growth since the last report to
+// today's daily rollup, bucketed by model. Best-effort.
+func (s *Server) rollupTokens(ctx context.Context, old, sess store.Session, req api.ReportRequest) {
+	delta := sess.Usage.OutputTokens - old.Usage.OutputTokens
+	if delta <= 0 {
+		return
+	}
+	if err := s.store.AddDailyTokens(ctx, dayOf(req.Timestamp), sess.Model, delta); err != nil {
+		s.log.Error("rolling up daily tokens", "error", err)
+	}
+}
+
+// rollupStatusInterval closes the interval since the session's previous event by
+// adding its duration to that status's daily bucket. Only hook events carry
+// status transitions, so the watcher's polls never reach here. Best-effort.
+func (s *Server) rollupStatusInterval(ctx context.Context, sess store.Session, req api.ReportRequest) {
+	last, ok, err := s.store.LastEvent(ctx, sess.ID)
+	if err != nil || !ok {
+		return
+	}
+	secs := secondsBetween(last.CreatedAt, req.Timestamp)
+	if secs <= 0 {
+		return
+	}
+	// Attribute the whole interval to its start day (no midnight split in v1).
+	if err := s.store.AddDailyStatusSeconds(ctx, dayOf(last.CreatedAt), sess.Model, last.Status, secs); err != nil {
+		s.log.Error("rolling up daily status", "error", err)
+	}
+}
+
+// dayOf returns the UTC calendar day (YYYY-MM-DD) of an RFC3339 timestamp,
+// falling back to the current day when it cannot be parsed.
+func dayOf(ts string) string {
+	t, err := time.Parse(time.RFC3339, ts)
+	if err != nil {
+		t = time.Now()
+	}
+	return t.UTC().Format("2006-01-02")
+}
+
+// secondsBetween returns the whole seconds from RFC3339 timestamp from to to,
+// or 0 if either is unparseable or the span is non-positive.
+func secondsBetween(from, to string) int64 {
+	a, err1 := time.Parse(time.RFC3339, from)
+	b, err2 := time.Parse(time.RFC3339, to)
+	if err1 != nil || err2 != nil {
+		return 0
+	}
+	if d := b.Sub(a); d > 0 {
+		return int64(d.Seconds())
+	}
+	return 0
 }
 
 // maybeSample records a token sample at most once per minute per session, so

@@ -21,7 +21,11 @@ type Store interface {
 	GetSession(ctx context.Context, id string) (store.Session, error)
 	ListSessions(ctx context.Context) ([]store.Session, error)
 	AppendEvent(ctx context.Context, e store.Event) error
+	LastEvent(ctx context.Context, sessionID string) (store.Event, bool, error)
 	AddSample(ctx context.Context, sessionID, at string, outputTokens int64) error
+	AddDailyTokens(ctx context.Context, day, model string, delta int64) error
+	AddDailyStatusSeconds(ctx context.Context, day, model, status string, secs int64) error
+	ListDailyStats(ctx context.Context, sinceDay string) ([]store.DailyStat, error)
 	LastSampleAt(ctx context.Context, sessionID string) (string, error)
 	ListSamples(ctx context.Context, sessionID, since string, limit int) ([]int64, error)
 	AcquireLease(ctx context.Context, holder string, ttl time.Duration, now time.Time) (bool, string, error)
@@ -56,6 +60,7 @@ func (s *Server) Handler() http.Handler {
 	mux.Handle("GET /api/usage", s.auth(http.HandlerFunc(s.handleGetUsage)))
 	mux.Handle("GET /api/events", s.auth(http.HandlerFunc(s.handleEvents)))
 	mux.Handle("GET /api/watcher", s.auth(http.HandlerFunc(s.handleWatcher)))
+	mux.Handle("GET /api/stats", s.auth(http.HandlerFunc(s.handleStats)))
 	mux.Handle("GET /api/settings", s.auth(http.HandlerFunc(s.handleGetSettings)))
 	mux.Handle("POST /api/settings", s.auth(http.HandlerFunc(s.handleSetSettings)))
 	return mux
