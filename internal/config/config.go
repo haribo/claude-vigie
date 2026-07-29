@@ -3,6 +3,9 @@
 // and the terminal client. It lives in the XDG config directory as a TOML file
 // (config.toml), is written by `claude-fleet init`, and is never committed (it
 // holds a secret token). A pre-TOML config.json is migrated on first load.
+//
+// FLEET_CONFIG overrides the path with an explicit file, so a dev run can point
+// at a local server without touching the installed production config.
 package config
 
 import (
@@ -35,8 +38,13 @@ func dir() (string, error) {
 	return filepath.Join(d, "claude-fleet"), nil
 }
 
-// Path returns the TOML config file path.
+// Path returns the config file path. FLEET_CONFIG, when set, overrides it with
+// an explicit file (used by dev runs to target a local server without touching
+// the installed production config).
 func Path() (string, error) {
+	if p := os.Getenv("FLEET_CONFIG"); p != "" {
+		return p, nil
+	}
 	d, err := dir()
 	if err != nil {
 		return "", err
@@ -62,10 +70,14 @@ func Load() (*Config, error) {
 	}
 	data, err := os.ReadFile(path)
 	if errors.Is(err, os.ErrNotExist) {
-		if cfg, ok, mErr := migrateLegacy(); mErr != nil {
-			return nil, mErr
-		} else if ok {
-			return cfg, nil
+		// Legacy config.json migration applies only to the default path, not to
+		// an explicit FLEET_CONFIG override.
+		if os.Getenv("FLEET_CONFIG") == "" {
+			if cfg, ok, mErr := migrateLegacy(); mErr != nil {
+				return nil, mErr
+			} else if ok {
+				return cfg, nil
+			}
 		}
 		return nil, fmt.Errorf("reading config %s: %w", path, err)
 	}

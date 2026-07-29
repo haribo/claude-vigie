@@ -1,6 +1,9 @@
 # Build artifacts
 /bin/
 /dist/
+
+# Local dev environment (dev-fleet-* recipes)
+/.dev/
 *.out
 *.html
 coverage.*
