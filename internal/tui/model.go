@@ -542,7 +542,6 @@ func (m model) renderSettings() string {
 		}
 		b.WriteString(line + "\n")
 	}
-	b.WriteString("\n" + dimStyle.Render("local → tui.toml · retention applies fleet-wide") + "\n")
 	return b.String()
 }
 
