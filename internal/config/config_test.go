@@ -40,6 +40,30 @@ func TestLoadMissingFile(t *testing.T) {
 	}
 }
 
+func TestFleetConfigOverride(t *testing.T) {
+	custom := filepath.Join(t.TempDir(), "custom.toml")
+	t.Setenv("FLEET_CONFIG", custom)
+
+	if p, err := Path(); err != nil || p != custom {
+		t.Fatalf("Path() = %q, %v; want %q", p, err, custom)
+	}
+
+	want := &Config{ServerURL: "http://localhost:8099", Token: "dev", Machine: "box-dev"}
+	if _, err := Save(want); err != nil {
+		t.Fatalf("Save: %v", err)
+	}
+	if _, err := os.Stat(custom); err != nil {
+		t.Errorf("override file not written: %v", err)
+	}
+	got, err := Load()
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if *got != *want {
+		t.Fatalf("roundtrip via FLEET_CONFIG: got %+v, want %+v", *got, *want)
+	}
+}
+
 func TestMigratesLegacyJSON(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("XDG_CONFIG_HOME", home)

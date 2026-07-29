@@ -53,6 +53,31 @@ you install on every machine running Claude Code sessions. See
 - **Tokens only** — no currency cost estimates (Claude Code subscriptions have
   no per-token price).
 
+## Install & run
+
+claude-fleet ships **binaries** (`claude-fleet`, `claude-fleetd`). How you run
+and expose them — systemd, containers, TLS front — is the deployer's call; see
+[docs/deployment.md](docs/deployment.md).
+
+```bash
+# on the host: run the server
+claude-fleetd serve --addr :8080 --db fleet.db
+
+# on each machine running Claude Code: connect (writes config + installs hooks)
+claude-fleet init --server http://host:8080 --token <token> --machine "$(hostname)"
+
+# cover already-open sessions too (run this as a service):
+claude-fleet watch
+
+# view the fleet:
+claude-fleet tui
+```
+
+Hooks cover sessions started *after* `init`; the watcher guarantees coverage by
+scanning `~/.claude/projects/`. `claude-fleet init --uninstall` removes the hooks.
+The client reads `~/.config/claude-fleet/config.toml` (override the path with
+`FLEET_CONFIG`).
+
 ## Development
 
 Requires Go 1.26+ and [`just`](https://github.com/casey/just).
@@ -60,65 +85,18 @@ Requires Go 1.26+ and [`just`](https://github.com/casey/just).
 ```bash
 just dev-setup      # configure git hooks
 just tool-install   # install golangci-lint + goimports into ./bin
-just app-build      # build ./bin/claude-fleet
 just code-check     # fmt + lint + build + test (run before every PR)
 ```
 
-## Self-hosting & connecting
-
-Install the binaries and connect a machine with `just`:
-
-```bash
-just install         # build + copy claude-fleet & claude-fleetd into ~/.local/bin
-
-# on the host that runs the server:
-just app-serve       # runs claude-fleetd (foreground; add fleet_port=9090 for another port)
-
-# on each machine running Claude Code (another terminal):
-just fleet-connect   # writes config + hooks; reads the token from the local db
-```
-
-`fleet-connect` runs `claude-fleet init`, which merges hooks into
-`~/.claude/settings.json` (all projects) and writes
-`~/.config/claude-fleet/config.toml`. New Claude Code sessions then report
-automatically. `just fleet-disconnect` removes the hooks.
-
-Hooks only cover sessions started *after* they're installed. To see **all** your
-sessions (including ones already open), run the watcher, which scans
-`~/.claude/projects/` and reports every recent session:
+Run the current source against a throwaway local server, fully isolated from any
+installed production client via `FLEET_CONFIG` (never touches `~/.config`):
 
 ```bash
-just app-watch       # keep running; covers all local sessions
+just dev-server     # background: builds & runs claude-fleetd on :8099 (dev db + token)
+just dev-watcher    # background: watcher → the dev server
+just dev-tui        # foreground: the TUI → the dev server
+just dev-down       # stop the background dev server + watcher
 ```
-
-The hooks refine real-time status; the watcher guarantees coverage.
-
-### Run as background services (systemd, Linux)
-
-The **server** is central (one host); the **watcher** runs on **every machine**
-with Claude sessions. Install only what each machine needs:
-
-```bash
-# on the host that runs the server:
-just fleet_port=9090 fleet-server-install
-
-# on every machine running Claude sessions (including the host, if it runs Claude):
-just fleet-watch-install
-just fleet_port=9090 fleet-connect     # config + hooks: point the client at the server
-
-journalctl --user -u claude-fleet-watch -f            # follow the watcher logs
-just fleet-server-uninstall                           # remove the server service
-just fleet-watch-uninstall                            # remove the watcher service
-```
-
-The watcher reads the client config, so run `fleet-connect` once so it knows the
-server URL and token.
-
-Port 8080 already taken? Override it (same value for both recipes):
-`just fleet_port=9090 app-serve` and `just fleet_port=9090 fleet-connect`.
-
-For a remote server, point init at it directly:
-`claude-fleet init --server <url> --token <token>`.
 
 ## Roadmap
 
