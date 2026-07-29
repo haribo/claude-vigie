@@ -33,6 +33,7 @@ full design.
 claude-fleetd serve     # server: HTTP + SSE API, SQLite — runs on the host
 claude-fleetd token     # server: print/generate the shared auth token
 claude-fleet  init      # client: install hooks + write the config
+claude-fleet  hooks     # client: add/remove reporting hooks (one leg per FLEET_CONFIG)
 claude-fleet  report    # client: reporter invoked by Claude Code hooks
 claude-fleet  watch     # client: watcher — scans transcripts, covers all sessions
 claude-fleet  tui       # client: terminal dashboard
@@ -105,10 +106,12 @@ just dev-down       # stop the background dev server + watcher
 - [x] Reporter: hook payload + transcript parsing
 - [x] `init`: merge hooks into `settings.json`, write config
 - [x] Watcher: transcript scan + process-presence status (idle vs ended)
-- [x] Terminal client (Bubble Tea): sort, filter, group, detail, settings
+- [x] Terminal client (Bubble Tea): sessions / stats / machines tabs — sort, filter, group, detail, settings
 - [x] Subscription usage (5-hour / 7-day), single leased fetcher
 - [x] Remote-control (`/rc`) detection, observe-only
 - [x] Session retention / pruning
+- [x] Analytics: daily rollups (`/api/stats`) — bottleneck time, tokens by model, top sessions
+- [x] Per-machine overview (machines tab)
 - [ ] Web dashboard (embedded)
 
 ## Contributing
