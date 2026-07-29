@@ -1,6 +1,11 @@
 // Package install merges claude-fleet reporting hooks into the user's Claude
 // Code settings (~/.claude/settings.json), idempotently, preserving any
 // existing hooks and settings. Client side; imports nothing heavy.
+//
+// A hook "leg" is identified by its FLEET_CONFIG value: the production leg has
+// none, a dev leg carries FLEET_CONFIG=<path>. Legs are independent, so a
+// session can report to several servers at once and each leg is installed or
+// removed without touching the others.
 package install
 
 import (
@@ -23,9 +28,9 @@ type hookMatcher struct {
 	Hooks   []hookCommand `json:"hooks"`
 }
 
-// ourMarker identifies hooks this tool manages, so re-running init replaces
-// them instead of duplicating and uninstall removes only ours.
-const ourMarker = "claude-fleet report"
+// reportMarker identifies a claude-fleet reporting hook, independent of the
+// binary path.
+const reportMarker = "report --event="
 
 // SettingsPath returns the path to the user's Claude Code settings file.
 func SettingsPath() (string, error) {
@@ -36,10 +41,30 @@ func SettingsPath() (string, error) {
 	return filepath.Join(home, ".claude", "settings.json"), nil
 }
 
-// Install merges reporting hooks for the given events (each invoking
-// "<binPath> report --event=<event>") into the settings file, and returns the
-// path written.
-func Install(events []string, binPath string, timeout int) (string, error) {
+// command builds the report hook command for one event and leg. configPath is
+// the FLEET_CONFIG for the leg ("" for the production leg).
+func command(binPath, configPath, event string) string {
+	if configPath == "" {
+		return fmt.Sprintf("%s report --event=%s", binPath, event)
+	}
+	return fmt.Sprintf("FLEET_CONFIG=%s %s report --event=%s", configPath, binPath, event)
+}
+
+// owns reports whether a hook command belongs to the leg identified by
+// configPath (production when empty).
+func owns(cmd, configPath string) bool {
+	if !strings.Contains(cmd, reportMarker) {
+		return false
+	}
+	if configPath == "" {
+		return !strings.Contains(cmd, "FLEET_CONFIG=")
+	}
+	return strings.Contains(cmd, "FLEET_CONFIG="+configPath)
+}
+
+// Install merges the reporting hooks for one leg (binPath, configPath) into the
+// settings file and returns the path written. Other legs are left untouched.
+func Install(events []string, binPath, configPath string, timeout int) (string, error) {
 	path, err := SettingsPath()
 	if err != nil {
 		return "", err
@@ -48,15 +73,16 @@ func Install(events []string, binPath string, timeout int) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	merged, err := mergeHooks(existing, events, binPath, timeout)
+	merged, err := mergeHooks(existing, events, binPath, configPath, timeout)
 	if err != nil {
 		return "", err
 	}
 	return path, writeSettings(path, merged)
 }
 
-// Uninstall removes only claude-fleet hooks from the settings file.
-func Uninstall() (string, error) {
+// Uninstall removes the hooks for one leg (configPath; production when empty),
+// leaving other legs and foreign hooks in place.
+func Uninstall(configPath string) (string, error) {
 	path, err := SettingsPath()
 	if err != nil {
 		return "", err
@@ -65,7 +91,7 @@ func Uninstall() (string, error) {
 	if err != nil {
 		return "", err
 	}
-	cleaned, err := removeHooks(existing)
+	cleaned, err := removeHooks(existing, configPath)
 	if err != nil {
 		return "", err
 	}
@@ -93,17 +119,17 @@ func writeSettings(path string, data []byte) error {
 	return nil
 }
 
-func mergeHooks(existing []byte, events []string, binPath string, timeout int) ([]byte, error) {
+func mergeHooks(existing []byte, events []string, binPath, configPath string, timeout int) ([]byte, error) {
 	s, hooks, err := parseSettings(existing)
 	if err != nil {
 		return nil, err
 	}
 	for _, ev := range events {
-		hooks[ev] = append(stripOurs(hooks[ev]), hookMatcher{
+		hooks[ev] = append(stripLeg(hooks[ev], configPath), hookMatcher{
 			Matcher: "",
 			Hooks: []hookCommand{{
 				Type:    "command",
-				Command: fmt.Sprintf("%s report --event=%s", binPath, ev),
+				Command: command(binPath, configPath, ev),
 				Timeout: timeout,
 			}},
 		})
@@ -111,13 +137,13 @@ func mergeHooks(existing []byte, events []string, binPath string, timeout int) (
 	return encodeSettings(s, hooks)
 }
 
-func removeHooks(existing []byte) ([]byte, error) {
+func removeHooks(existing []byte, configPath string) ([]byte, error) {
 	s, hooks, err := parseSettings(existing)
 	if err != nil {
 		return nil, err
 	}
 	for ev, matchers := range hooks {
-		kept := stripOurs(matchers)
+		kept := stripLeg(matchers, configPath)
 		if len(kept) == 0 {
 			delete(hooks, ev)
 		} else {
@@ -160,19 +186,19 @@ func encodeSettings(s map[string]json.RawMessage, hooks map[string][]hookMatcher
 	return append(out, '\n'), nil
 }
 
-func stripOurs(matchers []hookMatcher) []hookMatcher {
+func stripLeg(matchers []hookMatcher, configPath string) []hookMatcher {
 	kept := make([]hookMatcher, 0, len(matchers))
 	for _, m := range matchers {
-		if !matcherIsOurs(m) {
+		if !matcherIsLeg(m, configPath) {
 			kept = append(kept, m)
 		}
 	}
 	return kept
 }
 
-func matcherIsOurs(m hookMatcher) bool {
+func matcherIsLeg(m hookMatcher, configPath string) bool {
 	for _, h := range m.Hooks {
-		if strings.Contains(h.Command, ourMarker) {
+		if owns(h.Command, configPath) {
 			return true
 		}
 	}
