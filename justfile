@@ -81,6 +81,23 @@ dev-down:
       fi
     done
 
+# Add a dev hook leg — sessions report to the dev server too, alongside prod
+# (fills waiting/active in dev). No-ops silently when the dev server is down.
+dev-hooks-install: dev-config
+    #!/usr/bin/env bash
+    set -euo pipefail
+    mkdir -p "{{dev_bin}}"
+    go build -o "{{dev_bin}}/claude-fleet" ./cmd/claude-fleet
+    FLEET_CONFIG="{{dev_config}}" "{{dev_bin}}/claude-fleet" hooks install
+
+# Remove the dev hook leg (production hooks are never touched).
+dev-hooks-uninstall:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    mkdir -p "{{dev_bin}}"
+    [ -x "{{dev_bin}}/claude-fleet" ] || go build -o "{{dev_bin}}/claude-fleet" ./cmd/claude-fleet
+    FLEET_CONFIG="{{dev_config}}" "{{dev_bin}}/claude-fleet" hooks uninstall
+
 # =============================================================================
 # CODE
 # =============================================================================

@@ -28,7 +28,7 @@ func runInit(args []string) int {
 	}
 
 	if *uninstall {
-		path, err := install.Uninstall()
+		path, err := install.Uninstall("")
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "init: %v\n", err)
 			return 1
@@ -70,7 +70,7 @@ func runInit(args []string) int {
 	if *detailed {
 		events = append(events, "PostToolUse")
 	}
-	settingsPath, err := install.Install(events, binPath, 5)
+	settingsPath, err := install.Install(events, binPath, "", 5)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "init: %v\n", err)
 		return 1
