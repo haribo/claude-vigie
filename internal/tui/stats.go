@@ -308,15 +308,15 @@ func renderStatusBar(work, wait, idle int64) string {
 func renderTopSessions(top []api.TopSession) string {
 	var b strings.Builder
 	b.WriteString(dimStyle.Render("TOP SESSIONS") + "\n")
-	b.WriteString(dimStyle.Render(pad("SESSION", 22)+pad("MACHINE", 9)+pad("MODEL", 8)+pad("STATUS", 11)+"TOKENS") + "\n")
+	b.WriteString(dimStyle.Render(pad("SESSION", 22)+pad("MACHINE", 14)+pad("MODEL", 12)+pad("STATUS", 11)+"TOKENS") + "\n")
 	if len(top) == 0 {
 		b.WriteString(dimStyle.Render("  none"))
 		return b.String()
 	}
 	for _, s := range top {
 		b.WriteString(pad(clip(s.Name, 21), 22) +
-			dimStyle.Render(pad(orDash(s.Machine), 9)) +
-			dimStyle.Render(pad(shortModel(s.Model), 8)) +
+			dimStyle.Render(pad(orDash(s.Machine), 14)) +
+			dimStyle.Render(pad(shortModel(s.Model), 12)) +
 			statusStyle(s.Status).Render(pad("● "+s.Status, 11)) +
 			humanizeTokens(s.OutputTokens) + "\n")
 	}
