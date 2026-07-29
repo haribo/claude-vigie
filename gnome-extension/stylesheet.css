@@ -1,0 +1,28 @@
+/* Count badge shown next to the icon when sessions are waiting. */
+.cf-badge {
+    background-color: #e01b24;
+    color: #ffffff;
+    font-size: 0.7em;
+    font-weight: bold;
+    border-radius: 9px;
+    padding: 0 5px;
+    margin-left: 2px;
+}
+
+/* Symbolic icon recolored to the attention color when at least one session
+   is waiting for input. */
+.cf-attention {
+    color: #e01b24;
+}
+
+/* Dimmed/warning tint when the server is unreachable or misconfigured. */
+.cf-error {
+    color: #f9c440;
+}
+
+/* Secondary context line (machine · branch) in the session dropdown. */
+.cf-context {
+    margin-left: 12px;
+    color: rgba(255, 255, 255, 0.7);
+    font-size: 0.85em;
+}
