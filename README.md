@@ -80,7 +80,7 @@ just fleet-connect   # writes config + hooks; reads the token from the local db
 
 `fleet-connect` runs `claude-fleet init`, which merges hooks into
 `~/.claude/settings.json` (all projects) and writes
-`~/.config/claude-fleet/config.json`. New Claude Code sessions then report
+`~/.config/claude-fleet/config.toml`. New Claude Code sessions then report
 automatically. `just fleet-disconnect` removes the hooks.
 
 Hooks only cover sessions started *after* they're installed. To see **all** your

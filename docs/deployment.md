@@ -62,7 +62,7 @@ hold the token.
 - Supply it as a secret via `FLEET_TOKEN` (or `--token`). If none is provided and
   none is stored, `fleetd` generates one and logs it once — fine for a first run,
   but prefer providing it explicitly in production.
-- The client stores it in `~/.config/claude-fleet/config.json` (written `0600`).
+- The client stores it in `~/.config/claude-fleet/config.toml` (written `0600`).
 - It is a **single shared, static** credential with no per-machine revocation. If
   one machine leaks it, rotate everywhere.
 
