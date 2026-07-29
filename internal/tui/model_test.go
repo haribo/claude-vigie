@@ -11,7 +11,7 @@ import (
 )
 
 func TestRenderTabBar(t *testing.T) {
-	out := renderTabBar(tabMachines)
+	out := renderTabBar(tabMachines, 80)
 	for _, want := range []string{"Sessions", "Machines", "Settings"} {
 		if !strings.Contains(out, want) {
 			t.Errorf("tab bar missing %q: %s", want, out)
