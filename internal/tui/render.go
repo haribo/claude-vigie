@@ -40,6 +40,10 @@ func footer(t tab) string {
 		hints = [][2]string{
 			{"d/w/m/y/t", "period"}, {"⇥", "switch"}, {"r", "refresh"}, {"q", "quit"},
 		}
+	case tabMachines:
+		hints = [][2]string{
+			{"⇥", "switch"}, {"r", "refresh"}, {"q", "quit"},
+		}
 	}
 	parts := make([]string, len(hints))
 	for i, h := range hints {

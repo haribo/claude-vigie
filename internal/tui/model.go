@@ -331,6 +331,8 @@ func (m model) handleViewKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m.handleSettingsKey(msg)
 	case tabStats:
 		return m.handleStatsKey(msg), nil
+	case tabMachines:
+		return m, nil // read-only overview, no interactions
 	default:
 		return m.handleSessionsKey(msg), nil
 	}
@@ -498,7 +500,7 @@ func (m model) View() string {
 	case tabStats:
 		b.WriteString(m.renderStats())
 	case tabMachines:
-		b.WriteString(dimStyle.Render("Machines — coming soon"))
+		b.WriteString(renderMachines(m.sessions, m.width))
 	case tabSettings:
 		b.WriteString(m.renderSettings())
 	}
