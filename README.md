@@ -16,6 +16,13 @@
   <a href="LICENSE"><img src="https://img.shields.io/github/license/haribo/claude-fleet?color=blue" alt="License: MIT"></a>
 </p>
 
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="docs/assets/hero-dark.svg">
+    <img src="docs/assets/hero.svg" alt="claude-fleet TUI — the Sessions tab: per-session status, tokens, and subscription usage" width="900">
+  </picture>
+</p>
+
 ## How it works
 
 Claude Fleet is a central server and a client you install on every machine. Each
