@@ -1,12 +1,18 @@
-# Claude Fleet
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="docs/assets/wordmark-dark.svg">
+    <img src="docs/assets/wordmark.svg" alt="Claude Fleet" height="72">
+  </picture>
+</p>
 
-Monitor your Claude Code sessions across machines from a terminal dashboard. See
-which sessions are running, what they're working on, and how many tokens they
-consume.
+<p align="center">
+  Monitor your Claude Code sessions across machines from a terminal dashboard —<br>
+  which sessions are running, what they're working on, and how many tokens they consume.
+</p>
 
-> **Status: v0.1 — functional.** The server, reporter, watcher, and terminal
-> dashboard (TUI) work end to end. A web dashboard is planned; today the TUI is
-> the client. See the [roadmap](#roadmap).
+> **Status: v0.2 — functional.** The server, reporter, watcher, and terminal
+> dashboard (TUI) — sessions, stats, and machines tabs — work end to end. A web
+> dashboard is planned; today the TUI is the client. See the [roadmap](#roadmap).
 
 ## How it works
 
@@ -15,12 +21,20 @@ Claude Code session reaches the server two ways: through **hooks** — a small
 `claude-fleet report` command wired into `~/.claude/settings.json` — and through
 a **watcher** that scans transcripts to cover sessions the hooks miss.
 
-```
-Claude Code hook  →  claude-fleet report  ┐
-                                          ├─→  POST /api/report  →  claude-fleetd  →  SQLite
-claude-fleet watch (scans transcripts)  ──┘        (server)              │
-                                                                         ▼
-              Terminal dashboard (TUI)  ←──── SSE /api/events ←──── current state
+```mermaid
+flowchart LR
+    subgraph m["every machine running Claude Code"]
+      direction TB
+      S["Claude Code<br/>session"]
+      S -->|"lifecycle events"| H["claude-fleet report<br/>(hooks)"]
+      S -.->|"scans transcripts"| W["claude-fleet watch<br/>(watcher)"]
+    end
+    H -->|"POST /api/report"| D
+    W -->|"POST /api/report"| D
+    subgraph h["server host"]
+      D["claude-fleetd"] --> DB[("SQLite")]
+    end
+    D -->|"SSE /api/events"| T["claude-fleet tui"]
 ```
 
 The unit of tracking is one Claude Code session. Sessions are grouped by
