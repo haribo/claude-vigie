@@ -166,6 +166,7 @@ func applyReport(sess store.Session, isNew bool, req api.ReportRequest) store.Se
 	sess.LastSeenAt = req.Timestamp
 	if req.Status != "" {
 		sess.Status = mergeStatus(sess.Status, req.Status)
+		sess.APIErrorStatus = req.APIErrorStatus // watcher-derived; hooks carry no status
 	} else {
 		sess.Status = deriveStatus(req.Event, sess.Status)
 	}

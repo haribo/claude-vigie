@@ -72,10 +72,11 @@ func toView(s store.Session, samples []int64, now time.Time) api.SessionView {
 			CacheCreationTokens: s.Usage.CacheCreationTokens,
 			CacheReadTokens:     s.Usage.CacheReadTokens,
 		},
-		StartedAt:     s.StartedAt,
-		LastSeenAt:    s.LastSeenAt,
-		EndedAt:       s.EndedAt,
-		RemoteControl: s.RemoteControl,
-		Samples:       samples,
+		StartedAt:      s.StartedAt,
+		LastSeenAt:     s.LastSeenAt,
+		EndedAt:        s.EndedAt,
+		RemoteControl:  s.RemoteControl,
+		APIErrorStatus: s.APIErrorStatus,
+		Samples:        samples,
 	}
 }

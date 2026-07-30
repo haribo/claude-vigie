@@ -163,19 +163,25 @@ func (s *scanner) scan(root, machine string, maxAge time.Duration, now time.Time
 		}
 		usage := info.Usage
 		rc := rcMap[id]
+		status := sessionStatus(id, info.LastStopReason, info.LastAPIError, age)
+		apiErr := 0
+		if status == "error" {
+			apiErr = info.LastAPIError // carry the HTTP code only while the error is shown
+		}
 		reports = append(reports, api.ReportRequest{
-			Event:         "watch",
-			SessionID:     id,
-			User:          osUser,
-			Machine:       machine,
-			ProjectDir:    info.Cwd,
-			GitBranch:     info.GitBranch,
-			Model:         info.Model,
-			Title:         info.Title,
-			Status:        sessionStatus(id, info.LastStopReason, info.LastAPIError, age),
-			RemoteControl: &rc,
-			Usage:         &usage,
-			Timestamp:     fi.ModTime().UTC().Format(time.RFC3339),
+			Event:          "watch",
+			SessionID:      id,
+			User:           osUser,
+			Machine:        machine,
+			ProjectDir:     info.Cwd,
+			GitBranch:      info.GitBranch,
+			Model:          info.Model,
+			Title:          info.Title,
+			Status:         status,
+			RemoteControl:  &rc,
+			Usage:          &usage,
+			APIErrorStatus: apiErr,
+			Timestamp:      fi.ModTime().UTC().Format(time.RFC3339),
 		})
 	}
 	s.cache = fresh // drop entries for files no longer scanned
