@@ -9,7 +9,7 @@ claude-fleet, status is **detected**, never operator-set
 
 ---
 
-## 1. The four statuses
+## 1. The five statuses
 
 Every session shows exactly one status. What each tells the operator:
 
@@ -18,6 +18,7 @@ Every session shows exactly one status. What each tells the operator:
 | `working` | Claude is actively producing — a turn is running.                       |
 | `waiting` | Claude has stopped and is **waiting on the human** (a prompt or permission). |
 | `idle`    | The session is open and alive but between turns — nobody is acting.     |
+| `error`   | The session hit a live Claude API error (500 / 529 / 429). Transient — clears when it recovers. |
 | `ended`   | The session is over (closed, or its process is gone).                   |
 
 `waiting` is the one status that carries intent: it means *the operator is the
@@ -57,9 +58,12 @@ hooks aren't installed). It derives status from two signals — is the session's
 - process alive but quiet → `idle`, for any idle duration (a long idle session
   is not "gone");
 - no process mapping and quiet → `ended` (presumed closed — a live session would
-  have registered a mapping).
+  have registered a mapping);
+- last assistant line is an API error (`isApiErrorMessage` in the transcript) →
+  `error`, carrying the HTTP code; a later non-error line clears it.
 
-The watcher can see `working`, `idle`, and `ended`. It **cannot** see `waiting`.
+The watcher can see `working`, `idle`, `ended`, and `error`. It **cannot** see
+`waiting`.
 
 ---
 
@@ -78,6 +82,11 @@ scan, so a live session is refreshed constantly. If more than ~60 s pass with no
 report, the session is shown as `ended` — this catches the cases no explicit
 event covers: the watcher process died, the machine went offline, or a session
 dropped out of the scan window. A session already `ended` stays `ended`.
+
+**`error` overrides `working`/`idle`, never `ended`.** A live session that just
+hit an API error shows `error`; a closed session stays `ended`, so a stale
+transcript never lingers red. `error` is transient by construction — the next
+non-error line restores `working`/`idle`, so a recovered retry is not held red.
 
 ---
 
