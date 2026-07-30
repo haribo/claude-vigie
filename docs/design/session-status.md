@@ -9,17 +9,18 @@ claude-fleet, status is **detected**, never operator-set
 
 ---
 
-## 1. The five statuses
+## 1. The six statuses
 
 Every session shows exactly one status. What each tells the operator:
 
-| Status    | Meaning                                                                 |
-| --------- | ---------------------------------------------------------------------- |
-| `working` | Claude is actively producing — a turn is running.                       |
-| `waiting` | Claude has stopped and is **waiting on the human** (a prompt or permission). |
-| `idle`    | The session is open and alive but between turns — nobody is acting.     |
-| `error`   | The session hit a live Claude API error (500 / 529 / 429). Transient — clears when it recovers. |
-| `ended`   | The session is over (closed, or its process is gone).                   |
+| Status     | Meaning                                                                 |
+| ---------- | ---------------------------------------------------------------------- |
+| `working`  | Claude is actively producing — a turn is running.                       |
+| `thinking` | Claude is reasoning inside a turn — extended thinking, before it outputs text or a tool call. A sub-state of an active turn. |
+| `waiting`  | Claude has stopped and is **waiting on the human** (a prompt or permission). |
+| `idle`     | The session is open and alive but between turns — nobody is acting.     |
+| `error`    | The session hit a live Claude API error (500 / 529 / 429). Transient — clears when it recovers. |
+| `ended`    | The session is over (closed, or its process is gone).                   |
 
 `waiting` is the one status that carries intent: it means *the operator is the
 blocker*, not Claude. It is what the dashboard exists to surface — the session
@@ -60,10 +61,13 @@ hooks aren't installed). It derives status from two signals — is the session's
 - no process mapping and quiet → `ended` (presumed closed — a live session would
   have registered a mapping);
 - last assistant line is an API error (`isApiErrorMessage` in the transcript) →
-  `error`, carrying the HTTP code; a later non-error line clears it.
+  `error`, carrying the HTTP code; a later non-error line clears it;
+- last assistant block is a `thinking` block → `thinking` (reasoning before any
+  text/tool output); a later text/tool line clears it. A heuristic: at rest a
+  finished turn ends with text/tool, so this reads true only mid-turn.
 
-The watcher can see `working`, `idle`, `ended`, and `error`. It **cannot** see
-`waiting`.
+The watcher can see `working`, `thinking`, `idle`, `ended`, and `error`. It
+**cannot** see `waiting`.
 
 ---
 
@@ -71,11 +75,13 @@ The watcher can see `working`, `idle`, `ended`, and `error`. It **cannot** see
 
 The two sources can disagree; two rules keep the result honest.
 
-**`waiting` is sticky over the watcher's `idle`.** When a hook has set `waiting`,
-the watcher — which only ever sees that same session as `idle` (alive, quiet) —
-must not overwrite it. `waiting` persists until real activity resumes (back to
-`working`) or the session ends. Without this, every watcher scan would erase the
-"needs a human" signal a second after the hook set it.
+**`waiting` and `working` are sticky over the watcher's `idle`.** The watcher
+only ever sees a quiet-but-alive session as `idle`; it must not overwrite a
+hook-set active state. `waiting` means the operator is the blocker and would be
+erased a second after the hook set it. `working` means a turn is in progress —
+and Claude can reason for a long stretch without writing to the transcript, which
+the watcher alone would read as `idle`. Both persist until real activity resumes
+(`working`) or the session ends.
 
 **A session that stops reporting becomes `ended`.** The watcher re-reports every
 scan, so a live session is refreshed constantly. If more than ~60 s pass with no

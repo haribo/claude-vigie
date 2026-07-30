@@ -163,7 +163,7 @@ func (s *scanner) scan(root, machine string, maxAge time.Duration, now time.Time
 		}
 		usage := info.Usage
 		rc := rcMap[id]
-		status := sessionStatus(id, info.LastStopReason, info.LastAPIError, age)
+		status := withThinking(sessionStatus(id, info.LastStopReason, info.LastAPIError, age), info.Thinking)
 		apiErr := 0
 		if status == "error" {
 			apiErr = info.LastAPIError // carry the HTTP code only while the error is shown
@@ -215,6 +215,19 @@ func sessionStatus(sessionID, lastStopReason string, lastAPIError int, age time.
 		return "error"
 	}
 	return st
+}
+
+// withThinking refines an active status to "thinking" when the transcript's last
+// assistant block is a thinking block — Claude is reasoning inside the turn. It
+// only refines working/idle (a live turn); error, ended, and waiting are left as
+// is. Heuristic: at rest a completed turn's last block is text/tool, so this is
+// true only mid-turn (a turn aborted right after thinking may briefly mis-show it
+// until the next scan).
+func withThinking(status string, thinking bool) string {
+	if thinking && (status == "working" || status == "idle") {
+		return "thinking"
+	}
+	return status
 }
 
 // statusFor derives a session's status from process presence and transcript

@@ -196,8 +196,11 @@ func applyReport(sess store.Session, isNew bool, req api.ReportRequest) store.Se
 // watcher cannot detect, so it persists until real activity resumes or the
 // session ends.
 func mergeStatus(current, incoming string) string {
-	if current == "waiting" && incoming == "idle" {
-		return "waiting"
+	// The watcher only ever sees a quiet-but-alive session as idle; it must not
+	// clobber a hook-set active state — waiting on the human, or a turn in
+	// progress (working / thinking, both quiet between transcript writes).
+	if incoming == "idle" && (current == "waiting" || current == "working" || current == "thinking") {
+		return current
 	}
 	return incoming
 }

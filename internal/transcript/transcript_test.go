@@ -81,6 +81,34 @@ func TestParseAPIError(t *testing.T) {
 	}
 }
 
+func TestParseThinking(t *testing.T) {
+	dir := t.TempDir()
+
+	// Last assistant block is a thinking block → thinking.
+	thinking := filepath.Join(dir, "think.jsonl")
+	writeJSONL(t, thinking,
+		`{"type":"assistant","timestamp":"2026-07-26T10:00:00Z","message":{"id":"m1","content":[{"type":"thinking","thinking":"…"}]}}`,
+	)
+	if info, err := Parse(thinking); err != nil {
+		t.Fatal(err)
+	} else if !info.Thinking {
+		t.Error("Thinking = false, want true (last block is thinking)")
+	}
+
+	// A later text block clears it (thinking is transient).
+	produced := filepath.Join(dir, "text.jsonl")
+	writeJSONL(t, produced,
+		`{"type":"user","message":{"role":"user","content":"hello"}}`,
+		`{"type":"assistant","message":{"id":"m1","content":[{"type":"thinking","thinking":"…"}]}}`,
+		`{"type":"assistant","message":{"id":"m2","stop_reason":"end_turn","content":[{"type":"thinking","thinking":"…"},{"type":"text","text":"done"}]}}`,
+	)
+	if info, err := Parse(produced); err != nil {
+		t.Fatal(err)
+	} else if info.Thinking {
+		t.Error("Thinking = true, want false (last block is text)")
+	}
+}
+
 func writeJSONL(t *testing.T, path string, lines ...string) {
 	t.Helper()
 	if err := os.WriteFile(path, []byte(strings.Join(lines, "\n")+"\n"), 0o600); err != nil {

@@ -341,9 +341,14 @@ func renderSummary(sessions []api.SessionView, history []int) string {
 
 	parts := []string{
 		statusStyle("working").Render(fmt.Sprintf("● working %d", counts["working"])),
+	}
+	if n := counts["thinking"]; n > 0 { // a sub-state of active work: shown only when present
+		parts = append(parts, statusStyle("thinking").Render(fmt.Sprintf("● thinking %d", n)))
+	}
+	parts = append(parts,
 		statusStyle("waiting").Render(fmt.Sprintf("● waiting %d", counts["waiting"])),
 		statusStyle("idle").Render(fmt.Sprintf("● idle %d", counts["idle"])),
-	}
+	)
 	if n := counts["error"]; n > 0 { // an alert: shown only when present
 		parts = append(parts, statusStyle("error").Render(fmt.Sprintf("● error %d", n)))
 	}
@@ -482,6 +487,8 @@ func statusStyle(status string) lipgloss.Style {
 		return lipgloss.NewStyle().Foreground(cAmber)
 	case "idle":
 		return lipgloss.NewStyle().Foreground(cBlue)
+	case "thinking":
+		return lipgloss.NewStyle().Foreground(cAccent2) // violet — reasoning inside a turn
 	case "error":
 		return lipgloss.NewStyle().Foreground(cRed)
 	default:
