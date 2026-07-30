@@ -21,21 +21,12 @@ Claude Code session reaches the server two ways: through **hooks** — a small
 `claude-fleet report` command wired into `~/.claude/settings.json` — and through
 a **watcher** that scans transcripts to cover sessions the hooks miss.
 
-```mermaid
-flowchart LR
-    subgraph m["every machine running Claude Code"]
-      direction TB
-      S["Claude Code<br/>session"]
-      S -->|"lifecycle events"| H["claude-fleet report<br/>(hooks)"]
-      S -.->|"scans transcripts"| W["claude-fleet watch<br/>(watcher)"]
-    end
-    H -->|"POST /api/report"| D
-    W -->|"POST /api/report"| D
-    subgraph h["server host"]
-      D["claude-fleetd"] --> DB[("SQLite")]
-    end
-    D -->|"SSE /api/events"| T["claude-fleet tui"]
-```
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="docs/assets/how-it-works-dark.svg">
+    <img src="docs/assets/how-it-works.svg" alt="Claude Fleet architecture: hooks and a watcher on every machine POST to claude-fleetd, which stores to SQLite and streams to the TUI over SSE" width="820">
+  </picture>
+</p>
 
 The unit of tracking is one Claude Code session. Sessions are grouped by
 machine and project. See [docs/architecture.md](docs/architecture.md) for the
