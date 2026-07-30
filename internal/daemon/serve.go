@@ -52,8 +52,13 @@ func runServe(args []string) int {
 		return 1
 	}
 
+	srvInst := server.New(st, token, log)
+	// Poll the Claude platform status once for the whole fleet and fan it out
+	// over SSE (observe-only external signal). The goroutine stops on exit.
+	srvInst.StartPlatformPoller(context.Background(), server.DefaultPlatformStatusURL, server.PlatformPollInterval)
+
 	srv := &http.Server{
-		Handler:           server.New(st, token, log).Handler(),
+		Handler:           srvInst.Handler(),
 		ReadHeaderTimeout: 5 * time.Second,
 	}
 

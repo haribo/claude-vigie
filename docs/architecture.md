@@ -38,7 +38,7 @@ A fleet is *N* client machines all reporting to one daemon.
 
 | Component | Binary | Subcommand | Role |
 |-----------|--------|------------|------|
-| Server | `claude-fleetd` | `serve` | HTTP + SSE API, SQLite storage, session pruning |
+| Server | `claude-fleetd` | `serve` | HTTP + SSE API, SQLite storage, session pruning, platform-status polling |
 | Token | `claude-fleetd` | `token` | Print/generate the shared auth token (to connect clients) |
 | Installer | `claude-fleet` | `init` | Merges hooks into `~/.claude/settings.json`, writes the client config |
 | Reporter | `claude-fleet` | `report` | Invoked by Claude Code hooks; sends one event per hook |
@@ -96,6 +96,7 @@ All `/api/*` routes require the shared token in the `Authorization` header.
 | POST | `/api/usage/lease` | Acquire the fleet's usage-fetch lease |
 | GET · POST | `/api/usage` | Read · post subscription usage (percentages only) |
 | GET | `/api/watcher` | Last watcher heartbeat (drives the "no watcher" warning) |
+| GET | `/api/status` | Claude platform health (server-polled from status.claude.com) |
 | GET · POST | `/api/settings` | Read · update server settings (session retention) |
 
 ## Usage & remote control
