@@ -52,3 +52,38 @@ func TestParse(t *testing.T) {
 		t.Errorf("LastActivity = %q, want the last timestamp", info.LastActivity)
 	}
 }
+
+func TestParseAPIError(t *testing.T) {
+	dir := t.TempDir()
+
+	// A trailing API-error line surfaces its HTTP status.
+	errored := filepath.Join(dir, "err.jsonl")
+	writeJSONL(t, errored,
+		`{"type":"assistant","timestamp":"2026-07-26T10:00:00Z","message":{"id":"m1","stop_reason":"end_turn","usage":{"output_tokens":5}}}`,
+		`{"type":"assistant","timestamp":"2026-07-26T10:00:02Z","isApiErrorMessage":true,"apiErrorStatus":529,"message":{}}`,
+	)
+	if info, err := Parse(errored); err != nil {
+		t.Fatal(err)
+	} else if info.LastAPIError != 529 {
+		t.Errorf("LastAPIError = %d, want 529", info.LastAPIError)
+	}
+
+	// A later non-error assistant line clears it (transient/ephemeral).
+	recovered := filepath.Join(dir, "ok.jsonl")
+	writeJSONL(t, recovered,
+		`{"type":"assistant","timestamp":"2026-07-26T10:00:02Z","isApiErrorMessage":true,"apiErrorStatus":500,"message":{}}`,
+		`{"type":"assistant","timestamp":"2026-07-26T10:00:04Z","message":{"id":"m2","stop_reason":"end_turn"}}`,
+	)
+	if info, err := Parse(recovered); err != nil {
+		t.Fatal(err)
+	} else if info.LastAPIError != 0 {
+		t.Errorf("LastAPIError = %d, want 0 (cleared by a later ok line)", info.LastAPIError)
+	}
+}
+
+func writeJSONL(t *testing.T, path string, lines ...string) {
+	t.Helper()
+	if err := os.WriteFile(path, []byte(strings.Join(lines, "\n")+"\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+}

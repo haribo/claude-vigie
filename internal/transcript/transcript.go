@@ -22,6 +22,10 @@ type Info struct {
 	Usage          api.Usage
 	LastStopReason string // stop_reason of the last assistant message
 	LastActivity   string // RFC3339 timestamp of the last line
+	// LastAPIError is apiErrorStatus (HTTP code) of the last assistant line when
+	// it was an API error (Claude Code writes isApiErrorMessage into the
+	// transcript), else 0. A later non-error line clears it, so it is transient.
+	LastAPIError int
 }
 
 type usage struct {
@@ -39,14 +43,16 @@ type message struct {
 }
 
 type line struct {
-	Type        string  `json:"type"`
-	SessionID   string  `json:"sessionId"`
-	Cwd         string  `json:"cwd"`
-	GitBranch   string  `json:"gitBranch"`
-	CustomTitle string  `json:"customTitle"`
-	AiTitle     string  `json:"aiTitle"`
-	Timestamp   string  `json:"timestamp"`
-	Message     message `json:"message"`
+	Type           string  `json:"type"`
+	SessionID      string  `json:"sessionId"`
+	Cwd            string  `json:"cwd"`
+	GitBranch      string  `json:"gitBranch"`
+	CustomTitle    string  `json:"customTitle"`
+	AiTitle        string  `json:"aiTitle"`
+	Timestamp      string  `json:"timestamp"`
+	IsAPIError     bool    `json:"isApiErrorMessage"`
+	APIErrorStatus int     `json:"apiErrorStatus"`
+	Message        message `json:"message"`
 }
 
 // maxLine bounds a single JSONL line; transcript messages can be large
@@ -77,7 +83,7 @@ func Parse(path string) (*Info, error) {
 		}
 		info.applyMeta(l, &titles)
 		if l.Type == "assistant" {
-			info.applyAssistant(l.Message, seen)
+			info.applyAssistant(l, seen)
 		}
 	}
 	if err := sc.Err(); err != nil {
@@ -104,8 +110,17 @@ func (info *Info) applyMeta(l line, titles *titleTracker) {
 	titles.observe(l.CustomTitle, l.AiTitle)
 }
 
-func (info *Info) applyAssistant(m message, seen map[string]bool) {
+func (info *Info) applyAssistant(l line, seen map[string]bool) {
+	m := l.Message
 	info.LastStopReason = m.StopReason
+	// Track the last assistant line's API-error state (set before the retry
+	// dedup below, which only guards token accumulation): a later non-error line
+	// clears it, so a recovered session stops reporting the error.
+	if l.IsAPIError {
+		info.LastAPIError = l.APIErrorStatus
+	} else {
+		info.LastAPIError = 0
+	}
 	if m.Model != "" {
 		info.Model = m.Model
 	}
