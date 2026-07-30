@@ -12,7 +12,7 @@
 
 > **Status: v0.2 — functional.** The server, reporter, watcher, and terminal
 > dashboard (TUI) — sessions, stats, and machines tabs — work end to end. A web
-> dashboard is planned; today the TUI is the client. See the [roadmap](#roadmap).
+> dashboard is planned; today the TUI is the client.
 
 ## How it works
 
@@ -104,26 +104,17 @@ just dev-tui        # foreground: the TUI → the dev server
 just dev-down       # stop the background dev server + watcher
 ```
 
-## Roadmap
-
-- [x] Client (`claude-fleet`) / daemon (`claude-fleetd`) split, SQLite store
-- [x] Server: `/api/report`, `/api/sessions`, Bearer auth, SSE realtime stream
-- [x] Reporter: hook payload + transcript parsing
-- [x] `init`: merge hooks into `settings.json`, write config
-- [x] Watcher: transcript scan + process-presence status (idle vs ended)
-- [x] Terminal client (Bubble Tea): sessions / stats / machines tabs — sort, filter, group, detail, settings
-- [x] Subscription usage (5-hour / 7-day), single leased fetcher
-- [x] Remote-control (`/rc`) detection, observe-only
-- [x] Session retention / pruning
-- [x] Analytics: daily rollups (`/api/stats`) — bottleneck time, tokens by model, top sessions
-- [x] Per-machine overview (machines tab)
-- [ ] Web dashboard (embedded)
-
 ## Contributing
 
 Issue-first workflow, Conventional Commits, PRs target `develop`. See
 [docs/git-workflow.md](docs/git-workflow.md), [docs/git-commits.md](docs/git-commits.md),
 and [docs/git-issues.md](docs/git-issues.md).
+
+## Disclaimer
+
+claude-fleet is an independent, community project. It is **not** affiliated
+with, endorsed by, or sponsored by Anthropic. "Claude" and "Claude Code" are
+trademarks of Anthropic, PBC, used here only to describe interoperability.
 
 ## License
 
