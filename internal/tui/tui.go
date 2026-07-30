@@ -20,6 +20,7 @@ func Run(cfg *config.Config) error {
 		fetchWatcher:  func() (api.WatcherStatus, error) { return fetchWatcher(cfg) },
 		fetchSettings: func() (api.Settings, error) { return fetchSettings(cfg) },
 		fetchStats:    func() (api.StatsResponse, error) { return fetchStats(cfg) },
+		fetchPlatform: func() (api.PlatformStatus, error) { return fetchPlatform(cfg) },
 		setRetention:  func(v string) error { return setSessionRetention(cfg, v) },
 		serverURL:     cfg.ServerURL,
 		prefs:         loadPrefs(),

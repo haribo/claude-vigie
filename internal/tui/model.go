@@ -77,6 +77,7 @@ type model struct {
 	fetchWatcher    func() (api.WatcherStatus, error)
 	fetchSettings   func() (api.Settings, error)
 	fetchStats      func() (api.StatsResponse, error)
+	fetchPlatform   func() (api.PlatformStatus, error)
 	setRetention    func(v string) error
 	serverURL       string // read-only; set via `claude-fleet init`
 	serverRetention time.Duration
@@ -84,6 +85,7 @@ type model struct {
 	statsPeriod     period
 	sessions        []api.SessionView
 	usage           api.UsageReport
+	platform        api.PlatformStatus
 	watcherSeen     string
 	gotWatcher      bool
 	err             error
@@ -137,6 +139,11 @@ type usageMsg struct {
 	err   error
 }
 
+type platformMsg struct {
+	ps  api.PlatformStatus
+	err error
+}
+
 type eventMsg struct{}
 
 type watcherMsg struct {
@@ -158,7 +165,7 @@ type statsMsg struct {
 
 func (m model) Init() tea.Cmd {
 	return tea.Batch(m.fetchCmd(m.fetchSeq), m.fetchUsageCmd(), m.watcherCmd(),
-		m.settingsCmd(), m.statsCmd(), tickCmd(), m.waitForEventCmd())
+		m.settingsCmd(), m.statsCmd(), m.fetchPlatformCmd(), tickCmd(), m.waitForEventCmd())
 }
 
 func (m model) statsCmd() tea.Cmd {
@@ -213,6 +220,16 @@ func (m model) fetchUsageCmd() tea.Cmd {
 	}
 }
 
+func (m model) fetchPlatformCmd() tea.Cmd {
+	if m.fetchPlatform == nil {
+		return nil
+	}
+	return func() tea.Msg {
+		ps, err := m.fetchPlatform()
+		return platformMsg{ps: ps, err: err}
+	}
+}
+
 func (m model) watcherCmd() tea.Cmd {
 	if m.fetchWatcher == nil {
 		return nil
@@ -250,39 +267,50 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, m.settingsCmd() // confirm the saved value
 	case eventMsg:
 		sc := m.refreshSessions()
-		return m, tea.Batch(sc, m.fetchUsageCmd(), m.statsCmd(), m.waitForEventCmd())
+		return m, tea.Batch(sc, m.fetchUsageCmd(), m.statsCmd(), m.fetchPlatformCmd(), m.waitForEventCmd())
 	case tickMsg:
 		sc := m.refreshSessions()
-		return m, tea.Batch(sc, m.fetchUsageCmd(), m.watcherCmd(), m.statsCmd(), tickCmd())
+		return m, tea.Batch(sc, m.fetchUsageCmd(), m.watcherCmd(), m.statsCmd(), m.fetchPlatformCmd(), tickCmd())
 	default:
 		return m.applyDataMsg(msg), nil
 	}
 	return m, nil
 }
 
+// applySessions folds a sessions fetch into the model, dropping stale
+// out-of-order responses and keeping the cursor on the same session.
+func (m model) applySessions(msg sessionsMsg) model {
+	if msg.gen <= m.appliedSeq {
+		return m // stale out-of-order response; keep the newer state
+	}
+	m.appliedSeq = msg.gen
+	if msg.err != nil {
+		m.err = msg.err
+		return m
+	}
+	m.sessions = msg.sessions
+	m.err = nil
+	m.updatedAt = time.Now()
+	m.history = append(m.history, countByStatus(m.sessions, "working"))
+	if len(m.history) > sparkWindow {
+		m.history = m.history[len(m.history)-sparkWindow:]
+	}
+	m.cursor = m.cursorForSelection() // keep the cursor on the same session
+	return m
+}
+
 // applyDataMsg folds a fetch result into the model (no follow-up command).
 func (m model) applyDataMsg(msg tea.Msg) model {
 	switch msg := msg.(type) {
 	case sessionsMsg:
-		if msg.gen <= m.appliedSeq {
-			return m // stale out-of-order response; keep the newer state
-		}
-		m.appliedSeq = msg.gen
-		if msg.err != nil {
-			m.err = msg.err
-		} else {
-			m.sessions = msg.sessions
-			m.err = nil
-			m.updatedAt = time.Now()
-			m.history = append(m.history, countByStatus(m.sessions, "working"))
-			if len(m.history) > sparkWindow {
-				m.history = m.history[len(m.history)-sparkWindow:]
-			}
-			m.cursor = m.cursorForSelection() // keep the cursor on the same session
-		}
+		return m.applySessions(msg)
 	case usageMsg:
 		if msg.err == nil {
 			m.usage = msg.usage
+		}
+	case platformMsg:
+		if msg.err == nil {
+			m.platform = msg.ps
 		}
 	case watcherMsg:
 		if msg.err == nil {
@@ -594,7 +622,7 @@ func (m model) viewSessions() string {
 	} else {
 		b.WriteString(renderGroupedTable(vis, m.width, cursor, m.groupBy, sortState{m.sortKey, m.sortReversed}))
 	}
-	b.WriteString(rule(m.width) + "\n" + renderUsageStrip(m.usage))
+	b.WriteString(rule(m.width) + "\n" + renderUsageStrip(m.usage) + platformStrip(m.platform))
 	return b.String()
 }
 
