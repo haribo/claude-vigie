@@ -10,9 +10,11 @@
   which sessions are running, what they're working on, and how many tokens they consume.
 </p>
 
-> **Status: v0.2 — functional.** The server, reporter, watcher, and terminal
-> dashboard (TUI) — sessions, stats, and machines tabs — work end to end. A web
-> dashboard is planned; today the TUI is the client.
+<p align="center">
+  <a href="https://github.com/haribo/claude-fleet/releases/latest"><img src="https://img.shields.io/github/v/release/haribo/claude-fleet?sort=semver&color=D9663F" alt="Latest release"></a>
+  <a href="https://github.com/haribo/claude-fleet/actions/workflows/ci.yaml"><img src="https://img.shields.io/github/actions/workflow/status/haribo/claude-fleet/ci.yaml?branch=develop&label=CI" alt="CI"></a>
+  <a href="LICENSE"><img src="https://img.shields.io/github/license/haribo/claude-fleet?color=blue" alt="License: MIT"></a>
+</p>
 
 ## How it works
 
@@ -103,12 +105,6 @@ just dev-watcher    # background: watcher → the dev server
 just dev-tui        # foreground: the TUI → the dev server
 just dev-down       # stop the background dev server + watcher
 ```
-
-## Contributing
-
-Issue-first workflow, Conventional Commits, PRs target `develop`. See
-[docs/git-workflow.md](docs/git-workflow.md), [docs/git-commits.md](docs/git-commits.md),
-and [docs/git-issues.md](docs/git-issues.md).
 
 ## Disclaimer
 
