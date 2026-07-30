@@ -1,0 +1,1 @@
+ALTER TABLE sessions ADD COLUMN api_error_status INTEGER NOT NULL DEFAULT 0;

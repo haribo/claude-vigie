@@ -18,6 +18,10 @@ type Session struct {
 	EndedAt       string // RFC3339, empty while the session is active
 	RemoteControl bool   // operator-toggled remote-control flag
 	ReportedAt    string // RFC3339 server time of the last report (heartbeat)
+	// APIErrorStatus is the HTTP code of a live API error the session hit
+	// (500/529/429…), else 0. Set by the watcher; transient — cleared when the
+	// session recovers.
+	APIErrorStatus int
 }
 
 // Usage holds cumulative token counters for a session.

@@ -163,19 +163,25 @@ func (s *scanner) scan(root, machine string, maxAge time.Duration, now time.Time
 		}
 		usage := info.Usage
 		rc := rcMap[id]
+		status := sessionStatus(id, info.LastStopReason, info.LastAPIError, age)
+		apiErr := 0
+		if status == "error" {
+			apiErr = info.LastAPIError // carry the HTTP code only while the error is shown
+		}
 		reports = append(reports, api.ReportRequest{
-			Event:         "watch",
-			SessionID:     id,
-			User:          osUser,
-			Machine:       machine,
-			ProjectDir:    info.Cwd,
-			GitBranch:     info.GitBranch,
-			Model:         info.Model,
-			Title:         info.Title,
-			Status:        statusFor(id, info.LastStopReason, age),
-			RemoteControl: &rc,
-			Usage:         &usage,
-			Timestamp:     fi.ModTime().UTC().Format(time.RFC3339),
+			Event:          "watch",
+			SessionID:      id,
+			User:           osUser,
+			Machine:        machine,
+			ProjectDir:     info.Cwd,
+			GitBranch:      info.GitBranch,
+			Model:          info.Model,
+			Title:          info.Title,
+			Status:         status,
+			RemoteControl:  &rc,
+			Usage:          &usage,
+			APIErrorStatus: apiErr,
+			Timestamp:      fi.ModTime().UTC().Format(time.RFC3339),
 		})
 	}
 	s.cache = fresh // drop entries for files no longer scanned
@@ -196,6 +202,19 @@ func (s *scanner) parse(p string, fi os.FileInfo, fresh map[string]cacheEntry) (
 	}
 	fresh[p] = cacheEntry{modTime: fi.ModTime(), size: fi.Size(), info: info}
 	return info, nil
+}
+
+// sessionStatus layers a transient "error" status on top of the base
+// derivation: when the last assistant line was an API error (500/529/429…), a
+// live session — one that would otherwise read working or idle — reports error
+// until a later non-error line clears it. A closed session (ended) is never
+// shown as error, so a stale transcript does not stay red forever.
+func sessionStatus(sessionID, lastStopReason string, lastAPIError int, age time.Duration) string {
+	st := statusFor(sessionID, lastStopReason, age)
+	if lastAPIError != 0 && (st == "working" || st == "idle") {
+		return "error"
+	}
+	return st
 }
 
 // statusFor derives a session's status from process presence and transcript
