@@ -97,6 +97,33 @@ func fetchWatcher(cfg *config.Config) (api.WatcherStatus, error) {
 	return s, nil
 }
 
+// fetchPlatform retrieves the Claude platform status the server polls.
+func fetchPlatform(cfg *config.Config) (api.PlatformStatus, error) {
+	url := strings.TrimRight(cfg.ServerURL, "/") + "/api/status"
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+	if err != nil {
+		return api.PlatformStatus{}, err
+	}
+	req.Header.Set("Authorization", "Bearer "+cfg.Token)
+
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return api.PlatformStatus{}, err
+	}
+	defer func() { _ = resp.Body.Close() }()
+	if resp.StatusCode != http.StatusOK {
+		return api.PlatformStatus{}, fmt.Errorf("server returned %s", resp.Status)
+	}
+	var ps api.PlatformStatus
+	if err := json.NewDecoder(resp.Body).Decode(&ps); err != nil {
+		return api.PlatformStatus{}, fmt.Errorf("decoding platform status: %w", err)
+	}
+	return ps, nil
+}
+
 // fetchSettings retrieves the server-wide settings.
 func fetchSettings(cfg *config.Config) (api.Settings, error) {
 	url := strings.TrimRight(cfg.ServerURL, "/") + "/api/settings"
