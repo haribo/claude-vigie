@@ -81,6 +81,19 @@ type WatcherStatus struct {
 	LastSeen string `json:"last_seen,omitempty"` // RFC3339
 }
 
+// PlatformStatus is the Claude platform health the server polls from
+// status.claude.com and returns at GET /api/status. Indicator mirrors the
+// Statuspage scale ("none", "minor", "major", "critical"); it is empty when the
+// server has not fetched it yet (or the endpoint is unavailable), in which case
+// the client shows nothing. This is a cross-fleet, read-only external signal —
+// polled once server-side, never per client (ADR-0005, observe-only).
+type PlatformStatus struct {
+	Indicator   string `json:"indicator,omitempty"`   // none | minor | major | critical
+	Description string `json:"description,omitempty"` // human summary, e.g. "All Systems Operational"
+	URL         string `json:"url,omitempty"`         // public status page
+	FetchedAt   string `json:"fetched_at,omitempty"`  // RFC3339
+}
+
 // DailyStat is one UTC day's aggregated activity for a model. The client sums
 // and re-buckets these rows into day/week/month/year/total views.
 type DailyStat struct {

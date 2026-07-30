@@ -60,6 +60,7 @@ func (s *Server) Handler() http.Handler {
 	mux.Handle("GET /api/usage", s.auth(http.HandlerFunc(s.handleGetUsage)))
 	mux.Handle("GET /api/events", s.auth(http.HandlerFunc(s.handleEvents)))
 	mux.Handle("GET /api/watcher", s.auth(http.HandlerFunc(s.handleWatcher)))
+	mux.Handle("GET /api/status", s.auth(http.HandlerFunc(s.handleGetPlatform)))
 	mux.Handle("GET /api/stats", s.auth(http.HandlerFunc(s.handleStats)))
 	mux.Handle("GET /api/settings", s.auth(http.HandlerFunc(s.handleGetSettings)))
 	mux.Handle("POST /api/settings", s.auth(http.HandlerFunc(s.handleSetSettings)))

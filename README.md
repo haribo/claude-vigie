@@ -1,12 +1,27 @@
-# Claude Fleet
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="docs/assets/wordmark-dark.svg">
+    <img src="docs/assets/wordmark.svg" alt="Claude Fleet" height="72">
+  </picture>
+</p>
 
-Monitor your Claude Code sessions across machines from a terminal dashboard. See
-which sessions are running, what they're working on, and how many tokens they
-consume.
+<p align="center">
+  Monitor your Claude Code sessions across machines from a terminal dashboard —<br>
+  which sessions are running, what they're working on, and how many tokens they consume.
+</p>
 
-> **Status: v0.1 — functional.** The server, reporter, watcher, and terminal
-> dashboard (TUI) work end to end. A web dashboard is planned; today the TUI is
-> the client. See the [roadmap](#roadmap).
+<p align="center">
+  <a href="https://github.com/haribo/claude-fleet/releases/latest"><img src="https://img.shields.io/github/v/release/haribo/claude-fleet?sort=semver&color=D9663F" alt="Latest release"></a>
+  <a href="https://github.com/haribo/claude-fleet/actions/workflows/ci.yaml"><img src="https://img.shields.io/github/actions/workflow/status/haribo/claude-fleet/ci.yaml?branch=develop&label=CI" alt="CI"></a>
+  <a href="LICENSE"><img src="https://img.shields.io/github/license/haribo/claude-fleet?color=blue" alt="License: MIT"></a>
+</p>
+
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="docs/assets/hero-dark.svg">
+    <img src="docs/assets/hero.svg" alt="claude-fleet TUI — the Sessions tab: per-session status, tokens, and subscription usage" width="900">
+  </picture>
+</p>
 
 ## How it works
 
@@ -15,13 +30,12 @@ Claude Code session reaches the server two ways: through **hooks** — a small
 `claude-fleet report` command wired into `~/.claude/settings.json` — and through
 a **watcher** that scans transcripts to cover sessions the hooks miss.
 
-```
-Claude Code hook  →  claude-fleet report  ┐
-                                          ├─→  POST /api/report  →  claude-fleetd  →  SQLite
-claude-fleet watch (scans transcripts)  ──┘        (server)              │
-                                                                         ▼
-              Terminal dashboard (TUI)  ←──── SSE /api/events ←──── current state
-```
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="docs/assets/how-it-works-dark.svg">
+    <img src="docs/assets/how-it-works.svg" alt="Claude Fleet architecture: hooks and a watcher on every machine POST to claude-fleetd, which stores to SQLite and streams to the TUI over SSE" width="820">
+  </picture>
+</p>
 
 The unit of tracking is one Claude Code session. Sessions are grouped by
 machine and project. See [docs/architecture.md](docs/architecture.md) for the
@@ -99,26 +113,11 @@ just dev-tui        # foreground: the TUI → the dev server
 just dev-down       # stop the background dev server + watcher
 ```
 
-## Roadmap
+## Disclaimer
 
-- [x] Client (`claude-fleet`) / daemon (`claude-fleetd`) split, SQLite store
-- [x] Server: `/api/report`, `/api/sessions`, Bearer auth, SSE realtime stream
-- [x] Reporter: hook payload + transcript parsing
-- [x] `init`: merge hooks into `settings.json`, write config
-- [x] Watcher: transcript scan + process-presence status (idle vs ended)
-- [x] Terminal client (Bubble Tea): sessions / stats / machines tabs — sort, filter, group, detail, settings
-- [x] Subscription usage (5-hour / 7-day), single leased fetcher
-- [x] Remote-control (`/rc`) detection, observe-only
-- [x] Session retention / pruning
-- [x] Analytics: daily rollups (`/api/stats`) — bottleneck time, tokens by model, top sessions
-- [x] Per-machine overview (machines tab)
-- [ ] Web dashboard (embedded)
-
-## Contributing
-
-Issue-first workflow, Conventional Commits, PRs target `develop`. See
-[docs/git-workflow.md](docs/git-workflow.md), [docs/git-commits.md](docs/git-commits.md),
-and [docs/git-issues.md](docs/git-issues.md).
+claude-fleet is an independent, community project. It is **not** affiliated
+with, endorsed by, or sponsored by Anthropic. "Claude" and "Claude Code" are
+trademarks of Anthropic, PBC, used here only to describe interoperability.
 
 ## License
 
