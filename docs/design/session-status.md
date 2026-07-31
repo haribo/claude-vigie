@@ -40,7 +40,7 @@ a status the moment it changes:
 | ------------------ | --------------------------------------- |
 | `SessionStart`     | `idle` (only if the session was unknown) |
 | `UserPromptSubmit` | `working`                               |
-| `Notification`     | `waiting` — Claude is asking for input  |
+| `Notification`     | `waiting` on `permission_prompt` (a human must decide); `idle` on `idle_prompt` (finished, awaiting the next prompt) — split by the payload's `notification_type` |
 | `Stop`             | `idle`                                  |
 | `SessionEnd`       | `ended`                                 |
 

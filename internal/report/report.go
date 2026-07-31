@@ -30,6 +30,9 @@ type hookPayload struct {
 	Cwd            string `json:"cwd"`
 	HookEventName  string `json:"hook_event_name"`
 	ToolName       string `json:"tool_name"`
+	// NotificationType is set on Notification events (permission_prompt,
+	// idle_prompt, …); it lets the server tell "waiting on a human" from "idle".
+	NotificationType string `json:"notification_type"`
 }
 
 // Run reads a hook payload from stdin, builds a report for the given event
@@ -56,14 +59,15 @@ func Run(event string, stdin io.Reader) error {
 	}
 
 	req := api.ReportRequest{
-		Event:      event,
-		SessionID:  p.SessionID,
-		User:       systemUser(),
-		Machine:    cfg.Machine,
-		ProjectDir: p.Cwd,
-		GitBranch:  gitBranch(p.Cwd),
-		LastTool:   p.ToolName,
-		Timestamp:  clock.Now().UTC().Format(time.RFC3339),
+		Event:            event,
+		SessionID:        p.SessionID,
+		User:             systemUser(),
+		Machine:          cfg.Machine,
+		ProjectDir:       p.Cwd,
+		GitBranch:        gitBranch(p.Cwd),
+		LastTool:         p.ToolName,
+		NotificationType: p.NotificationType,
+		Timestamp:        clock.Now().UTC().Format(time.RFC3339),
 	}
 	// The transcript is only worth reading at turn/session boundaries.
 	if event == "Stop" || event == "SessionEnd" {

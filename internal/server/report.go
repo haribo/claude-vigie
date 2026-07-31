@@ -168,7 +168,7 @@ func applyReport(sess store.Session, isNew bool, req api.ReportRequest) store.Se
 		sess.Status, sess.StatusSource = reconcileWatch(sess.Status, sess.StatusSource, req.Status)
 		sess.APIErrorStatus = req.APIErrorStatus // watcher-derived; hooks carry no status
 	} else {
-		sess.Status = deriveStatus(req.Event, sess.Status)
+		sess.Status = deriveStatus(req.Event, req.NotificationType, sess.Status)
 		sess.StatusSource = "hook" // a hook event is the authoritative observer
 	}
 	if req.Event == "SessionEnd" {
@@ -213,8 +213,9 @@ func reconcileWatch(current, currentSource, incoming string) (status, source str
 }
 
 // deriveStatus maps a hook event to a session status, keeping the current
-// status for events that do not change it.
-func deriveStatus(event, current string) string {
+// status for events that do not change it. notifType is the Notification hook's
+// notification_type; it splits "waiting on a human" from "idle".
+func deriveStatus(event, notifType, current string) string {
 	switch event {
 	case "SessionStart":
 		if current == "" {
@@ -224,6 +225,12 @@ func deriveStatus(event, current string) string {
 	case "UserPromptSubmit":
 		return "working"
 	case "Notification":
+		// A Notification means Claude wants attention. Only idle_prompt (finished,
+		// awaiting the next prompt) is truly idle; permission_prompt and the rest
+		// mean the operator is the blocker. Empty (older Claude Code) stays waiting.
+		if notifType == "idle_prompt" {
+			return "idle"
+		}
 		return "waiting"
 	case "Stop":
 		return "idle"
