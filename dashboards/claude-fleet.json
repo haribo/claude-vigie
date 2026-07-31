@@ -31,7 +31,7 @@
       "title": "Sessions by status",
       "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
       "gridPos": { "h": 8, "w": 12, "x": 0, "y": 1 },
-      "fieldConfig": { "defaults": { "custom": { "drawStyle": "line", "stacking": { "mode": "normal" } } } },
+      "fieldConfig": { "defaults": { "custom": { "drawStyle": "line", "stacking": { "mode": "none" }, "fillOpacity": 8 } } },
       "targets": [
         { "refId": "A", "expr": "fleet_sessions", "legendFormat": "{{status}}" }
       ]
