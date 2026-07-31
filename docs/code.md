@@ -65,7 +65,7 @@ the client never imports the server/store packages, so it never links them.
 
 - The client (`internal/client`, `report`, `tui`) MUST NOT import
   `internal/server`, `internal/store`, or `web/` — that is what keeps the
-  client binary minimal
+  client binary minimal (enforced by `depguard` in `.golangci.yml`)
 - `config`, `api`, and `version` are shared leaves — no business logic
 - Keep transport (HTTP handlers) separate from persistence (`store`)
 
@@ -84,9 +84,13 @@ directly:
 
 | Call | Replace with |
 |------|--------------|
-| `time.Now()` | an injected `Clock` / `func() time.Time` |
-| `os.Getenv()` | a config struct |
-| `http.DefaultClient` | an injected `*http.Client` |
+| `time.Now()` | an injected `func() time.Time` (default `clock.Now`) |
+| `os.Getenv()` | `internal/config` (the env-reading layer) |
+| `http.DefaultClient` | a client with a timeout (`http.DefaultClient` has none) |
+
+Enforced by `forbidigo` in `.golangci.yml`. The seams are excepted: `internal/clock`
+defines the wall clock, `internal/config` and `internal/daemon` (the composition
+root) read env, and tests use the real ones.
 
 ## Error handling
 
