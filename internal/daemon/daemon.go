@@ -27,7 +27,7 @@ func Run(args []string) int {
 	case "token":
 		return runToken(rest)
 	case "version", "--version", "-v":
-		fmt.Println(version.String())
+		fmt.Println(version.String("claude-fleetd"))
 		return 0
 	case "help", "--help", "-h":
 		usage(os.Stdout)
