@@ -37,6 +37,10 @@ Metrics are namespaced `fleet_*` (RED HTTP metrics, ingestion counters, a
 scrape-time `fleet_sessions` gauge by reconciled status, SSE and prune counters,
 DB size, watcher heartbeat) plus the default Go/process collectors.
 
+A ready-made Grafana dashboard ships in [`dashboards/claude-fleet.json`](../dashboards/claude-fleet.json)
+— import it and pick your Prometheus datasource (the dashboard uses a datasource
+variable, so it is not tied to any instance).
+
 ## Local / trusted-LAN use
 
 Plain HTTP is fine. Run it, point clients at `http://<host>:8080`, done. TLS only
