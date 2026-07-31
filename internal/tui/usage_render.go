@@ -20,7 +20,26 @@ func renderUsageStrip(u api.UsageReport) string {
 		compactGauge("5h", u.FiveHourPct, u.FiveHourReset) +
 		dimStyle.Render("    ") +
 		compactGauge("7d", u.SevenDayPct, u.SevenDayReset) +
-		dimStyle.Render("    synced "+freshness(u.FetchedAt))
+		dimStyle.Render("    ") + syncGlyph(u.FetchedAt)
+}
+
+// syncGlyph renders the usage snapshot's freshness as one colored ⟳: green when
+// fresh, amber when aging, red when stale. The snapshot is a periodic cache
+// (~5 min, longer under fetch backoff), never pushed over SSE — so its age is
+// what matters, not an exact "synced Xm ago".
+func syncGlyph(rfc string) string {
+	t, err := parseTime(rfc)
+	if err != nil {
+		return dimStyle.Render("⟳")
+	}
+	color := cGreen
+	switch d := time.Since(t); {
+	case d >= 30*time.Minute:
+		color = cRed
+	case d >= 10*time.Minute:
+		color = cAmber
+	}
+	return lipgloss.NewStyle().Foreground(color).Render("⟳")
 }
 
 func compactGauge(label string, pct float64, reset string) string {
@@ -58,21 +77,6 @@ func resetIn(rfc string) string {
 		return humanizeDuration(d)
 	}
 	return "now"
-}
-
-func freshness(rfc string) string {
-	t, err := parseTime(rfc)
-	if err != nil {
-		return rfc
-	}
-	switch d := time.Since(t); {
-	case d < time.Minute:
-		return "just now"
-	case d < time.Hour:
-		return fmt.Sprintf("%dm ago", int(d.Minutes()))
-	default:
-		return fmt.Sprintf("%dh ago", int(d.Hours()))
-	}
 }
 
 // parseTime accepts RFC3339 with or without fractional seconds (the endpoint
