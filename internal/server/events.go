@@ -22,6 +22,7 @@ func (h *hub) subscribe() chan struct{} {
 	h.mu.Lock()
 	h.subs[ch] = struct{}{}
 	h.mu.Unlock()
+	metricSSESubscribers.Inc()
 	return ch
 }
 
@@ -30,11 +31,13 @@ func (h *hub) unsubscribe(ch chan struct{}) {
 	if _, ok := h.subs[ch]; ok {
 		delete(h.subs, ch)
 		close(ch)
+		metricSSESubscribers.Dec()
 	}
 	h.mu.Unlock()
 }
 
 func (h *hub) publish() {
+	metricSSEPublished.Inc()
 	h.mu.Lock()
 	for ch := range h.subs {
 		select {

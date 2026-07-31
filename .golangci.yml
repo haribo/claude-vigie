@@ -110,6 +110,8 @@ linters:
               desc: client must not link the store (ADR-0003)
             - pkg: github.com/haribo/claude-fleet/web
               desc: client must not link the web dashboard (ADR-0003)
+            - pkg: github.com/prometheus/client_golang
+              desc: metrics live in the daemon only (ADR-0003); the client never links prometheus
 
     # No hidden global state in business logic (docs/code.md): inject time, env,
     # and HTTP clients instead of reaching for the process globals. The seams are

@@ -63,7 +63,6 @@ func (s *Server) now() time.Time {
 // Handler returns the root HTTP handler with all routes registered.
 func (s *Server) Handler() http.Handler {
 	mux := http.NewServeMux()
-	mux.HandleFunc("GET /healthz", s.handleHealth)
 	mux.Handle("POST /api/report", s.auth(http.HandlerFunc(s.handleReport)))
 	mux.Handle("GET /api/sessions", s.auth(http.HandlerFunc(s.handleSessions)))
 	mux.Handle("POST /api/usage/lease", s.auth(http.HandlerFunc(s.handleUsageLease)))
@@ -75,12 +74,17 @@ func (s *Server) Handler() http.Handler {
 	mux.Handle("GET /api/stats", s.auth(http.HandlerFunc(s.handleStats)))
 	mux.Handle("GET /api/settings", s.auth(http.HandlerFunc(s.handleGetSettings)))
 	mux.Handle("POST /api/settings", s.auth(http.HandlerFunc(s.handleSetSettings)))
-	return mux
+	// RED metrics wrap the whole API; auth stays per-route. /healthz and /metrics
+	// live on the ops listener (daemon), never on the token-protected API port.
+	return withMetrics(mux)
 }
 
-func (s *Server) handleHealth(w http.ResponseWriter, _ *http.Request) {
-	w.WriteHeader(http.StatusOK)
-	_, _ = w.Write([]byte("ok\n"))
+// HealthHandler is the liveness probe, served on the ops listener by the daemon.
+func (s *Server) HealthHandler() http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte("ok\n"))
+	})
 }
 
 // auth enforces a constant-time Bearer token check on protected routes.

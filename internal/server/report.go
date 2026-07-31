@@ -14,10 +14,12 @@ import (
 func (s *Server) handleReport(w http.ResponseWriter, r *http.Request) {
 	var req api.ReportRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		metricReportsRejected.WithLabelValues("bad_json").Inc()
 		s.writeError(w, http.StatusBadRequest, "invalid json body")
 		return
 	}
 	if req.SessionID == "" || req.Event == "" {
+		metricReportsRejected.WithLabelValues("missing_fields").Inc()
 		s.writeError(w, http.StatusBadRequest, "session_id and event are required")
 		return
 	}
@@ -63,6 +65,7 @@ func (s *Server) handleReport(w http.ResponseWriter, r *http.Request) {
 	s.maybeSample(ctx, sess.ID, req.Timestamp, sess.Usage.OutputTokens)
 	s.hub.publish()
 
+	metricReports.WithLabelValues(req.Event).Inc()
 	w.WriteHeader(http.StatusNoContent)
 }
 
@@ -73,6 +76,7 @@ func (s *Server) rollupTokens(ctx context.Context, old, sess store.Session, req 
 	if delta <= 0 {
 		return
 	}
+	metricOutputTokens.WithLabelValues(sess.Model).Add(float64(delta))
 	if err := s.store.AddDailyTokens(ctx, dayOf(req.Timestamp, s.now()), sess.Model, delta); err != nil {
 		s.log.Error("rolling up daily tokens", "error", err)
 	}
