@@ -11,7 +11,7 @@ boundary and the security implications; it changes no defaults.
 
 | Flag | Default | Purpose |
 |------|---------|---------|
-| `--addr` | `:8080` | listen address |
+| `--addr` | `127.0.0.1:8080` | listen address (bind a reachable interface for cross-machine clients) |
 | `--db` | `claude-fleet.db` | SQLite file path |
 | `--token` | — | shared auth token (else `$FLEET_TOKEN`, else the stored one, else generated) |
 | `--session-retention` | `24h` | delete sessions not reported within this window (`0` disables) |
@@ -43,8 +43,10 @@ variable, so it is not tied to any instance).
 
 ## Local / trusted-LAN use
 
-Plain HTTP is fine. Run it, point clients at `http://<host>:8080`, done. TLS only
-matters once traffic crosses an untrusted network.
+The daemon binds `127.0.0.1` by default. For cross-machine clients, bind a
+reachable interface explicitly (`--addr :8080`, or a specific LAN IP) and point
+clients at `http://<host>:8080`. Plain HTTP is fine on a trusted network; TLS
+only matters once traffic crosses an untrusted one.
 
 ## Public exposure
 
@@ -53,17 +55,13 @@ If `fleetd` is reachable from the internet, two rules:
 1. **Put a TLS front in front of it** (Caddy, nginx, Traefik). The front holds the
    certificate and forwards to `fleetd`. Clients talk `https://` to the front;
    `fleetd` stays plain HTTP on the host.
-2. **Bind `fleetd` to `127.0.0.1`** so only the front (same host) reaches it:
-
-   ```bash
-   claude-fleetd serve --addr 127.0.0.1:8080
-   ```
-
-   Otherwise the default `:8080` also listens on the public interface, and someone
-   can hit the raw HTTP port directly, **bypassing your TLS front**. They still
-   need the token (every `/api/*` route requires it), but a legitimate client that
-   ever reached that port in cleartext would leak the token. Close the door: bind
-   localhost, let only the front be public.
+2. **Keep `fleetd` on `127.0.0.1`** (the default) so only the front (same host)
+   reaches it — no extra flag needed. Expose the raw port widely only by an
+   explicit choice (`--addr :8080`); a public HTTP port would let someone hit it
+   directly, **bypassing your TLS front**. They still need the token (every
+   `/api/*` route requires it), but a legitimate client that ever reached that
+   port in cleartext would leak the token. Leave the door closed: let only the
+   front be public.
 
 > **The shared token is only meaningful over TLS on a public network.** It travels
 > in the `Authorization` header on every request; without TLS it is captured on

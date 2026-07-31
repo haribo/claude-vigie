@@ -24,7 +24,7 @@ import (
 
 func runServe(args []string) int {
 	fs := flag.NewFlagSet("serve", flag.ContinueOnError)
-	addr := fs.String("addr", ":8080", "address the server listens on")
+	addr := fs.String("addr", "127.0.0.1:8080", "address the server listens on (bind a reachable interface, e.g. :8080, for cross-machine clients)")
 	dbPath := fs.String("db", "claude-fleet.db", "path to the SQLite database file")
 	tokenFlag := fs.String("token", "", "shared auth token (else $FLEET_TOKEN, else auto-generated)")
 	retention := fs.Duration("session-retention", 24*time.Hour, "delete sessions not reported within this window (0 disables)")
