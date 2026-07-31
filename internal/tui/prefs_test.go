@@ -44,6 +44,39 @@ func TestLoadPrefsParsesFile(t *testing.T) {
 	}
 }
 
+func TestSortAndGroupPrefsRoundTrip(t *testing.T) {
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+
+	p := defaultPrefs()
+	p.sortKey = sortTokens
+	p.sortReversed = true
+	p.groupBy = groupProject
+	savePrefs(p)
+
+	got := loadPrefs()
+	if got.sortKey != sortTokens || !got.sortReversed || got.groupBy != groupProject {
+		t.Errorf("round-trip = {sort:%d rev:%t group:%d}, want {tokens true project}",
+			got.sortKey, got.sortReversed, got.groupBy)
+	}
+}
+
+func TestSortAndGroupPrefsDefaultOnUnknown(t *testing.T) {
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+	path, _ := prefsPath()
+	if err := os.MkdirAll(filepath.Dir(path), 0o750); err != nil {
+		t.Fatal(err)
+	}
+	// A file with no sort/group keys, plus a garbage sort name, must fall back to
+	// the defaults rather than a bogus key.
+	if err := os.WriteFile(path, []byte("sort_key = \"bogus\"\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	p := loadPrefs()
+	if p.sortKey != sortLastSeen || p.groupBy != groupNone {
+		t.Errorf("unknown/missing = {sort:%d group:%d}, want {last seen off}", p.sortKey, p.groupBy)
+	}
+}
+
 func TestCyclePreset(t *testing.T) {
 	if cyclePreset(0, 1) != 15*time.Minute {
 		t.Error("forward from off should be 15m")
