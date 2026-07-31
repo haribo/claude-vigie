@@ -116,6 +116,29 @@ more-informed source.
 
 ---
 
+## 5. Detection sources & reliability
+
+Not every status is equally trustworthy. What produces each one, and how much to
+trust it:
+
+| Status     | Source(s) | Reliability |
+| ---------- | --------- | ----------- |
+| `working`  | hook `UserPromptSubmit`; watcher (recent transcript writes / a live `tool_use` turn) | **Reliable.** A hook pins it instantly; the watcher covers hooks-free sessions. Held through a quiet turn by authority (§ 3). |
+| `waiting`  | hook `Notification` only | **Reliable when hooks are installed, else invisible.** Only a hook can see that the operator is the blocker; the watcher never infers it. |
+| `idle`     | hook `Stop`; watcher (alive + quiet) | **Reliable.** Distinguishing `idle` from `ended` rests on process presence (PID + `/proc`, [ADR-0006](../adr/0006-session-presence-via-proc.md)). |
+| `ended`    | hook `SessionEnd`; watcher (dead process, or no mapping + quiet); server (no report for ~60 s) | **Reliable** for a hooked end or a dead process; a **heuristic** for a hooks-free session that simply went quiet. |
+| `error`    | watcher (`isApiErrorMessage` in the transcript) | **Reliable signal, sampled.** The flag is unambiguous, but surfaced only at the next scan, not instantly (Claude Code has no error hook). |
+| `thinking` | watcher only (last content block is a `thinking` block) | **Best-effort heuristic.** No hook signals reasoning; it is inferred from the transcript, sampled every ~2 s, invisible in a hooks-only deployment, and can briefly mis-read when a `tool_use` block follows the thinking block. |
+
+**Decision on `thinking` (#207): kept, as an explicit best-effort refinement.**
+Dropping it would lose a genuine, if imperfect, signal; hardening it to real-time
+is impossible without a Claude Code "thinking" hook, which does not exist. It is
+therefore documented here as best-effort and only ever *refines* an active turn
+(`working`/`idle`) — never `waiting`, `error`, or `ended` — so a wrong guess is
+always a near-miss, not a misleading state.
+
+---
+
 ## Appendix — doc conventions (from tribnest)
 
 `docs/design/` = the *what* (user-observable); `docs/adr/` = decisions with
