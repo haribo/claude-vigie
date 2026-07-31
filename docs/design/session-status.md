@@ -73,15 +73,23 @@ The watcher can see `working`, `thinking`, `idle`, `ended`, and `error`. It
 
 ## 3. Reconciliation rules
 
-The two sources can disagree; two rules keep the result honest.
+The two sources can disagree; the server resolves it by **observer authority**,
+not a table of status pairs. Each session remembers *which* observer last set
+its status (its **source**: `hook` or `watch`).
 
-**`waiting` and `working` are sticky over the watcher's `idle`.** The watcher
-only ever sees a quiet-but-alive session as `idle`; it must not overwrite a
-hook-set active state. `waiting` means the operator is the blocker and would be
-erased a second after the hook set it. `working` means a turn is in progress —
-and Claude can reason for a long stretch without writing to the transcript, which
-the watcher alone would read as `idle`. Both persist until real activity resumes
-(`working`) or the session ends.
+**The watcher is authoritative for what it can positively observe** — `working`,
+`thinking`, `error`, `ended` — and any such report wins and becomes watch-owned.
+
+**A hook is authoritative for what only it can see** — that the operator is the
+blocker (`waiting`), or that a turn is open while Claude works silently. The
+watcher only ever sees a quiet-but-alive session as `idle`, so its `idle` must
+**not** retract a *hook-owned* `waiting`, `working`, or `thinking`. A hook `Stop`
+(→ `idle`) or new activity ends the turn.
+
+**The watcher must retract its own stale state.** The key consequence: a `working`
+that the *watcher itself* set (a hooks-free session) falls back to `idle` when the
+transcript goes quiet — because it is watch-owned, not hook-owned. Without the
+source, a blanket "keep working" latches a finished session on `working` forever.
 
 **A session that stops reporting becomes `ended`.** The watcher re-reports every
 scan, so a live session is refreshed constantly. If more than ~60 s pass with no
