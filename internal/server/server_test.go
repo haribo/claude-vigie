@@ -40,8 +40,10 @@ func do(t *testing.T, srv *Server, method, path string, body []byte, auth bool) 
 	return rec
 }
 
-func TestHealthNoAuth(t *testing.T) {
-	rec := do(t, newTestServer(t), http.MethodGet, "/healthz", nil, false)
+func TestHealthHandler(t *testing.T) {
+	// /healthz lives on the ops listener now, not the token-protected API mux.
+	rec := httptest.NewRecorder()
+	newTestServer(t).HealthHandler().ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/healthz", nil))
 	if rec.Code != http.StatusOK {
 		t.Fatalf("status = %d, want 200", rec.Code)
 	}

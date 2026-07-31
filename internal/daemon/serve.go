@@ -12,12 +12,14 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"runtime"
 	"syscall"
 	"time"
 
 	"github.com/haribo/claude-fleet/internal/clock"
 	"github.com/haribo/claude-fleet/internal/server"
 	"github.com/haribo/claude-fleet/internal/store"
+	"github.com/haribo/claude-fleet/internal/version"
 )
 
 func runServe(args []string) int {
@@ -26,6 +28,7 @@ func runServe(args []string) int {
 	dbPath := fs.String("db", "claude-fleet.db", "path to the SQLite database file")
 	tokenFlag := fs.String("token", "", "shared auth token (else $FLEET_TOKEN, else auto-generated)")
 	retention := fs.Duration("session-retention", 24*time.Hour, "delete sessions not reported within this window (0 disables)")
+	metricsAddr := fs.String("metrics-addr", "127.0.0.1:9090", "ops listener for /metrics and /healthz (empty disables)")
 	if err := fs.Parse(args); err != nil {
 		return 2
 	}
@@ -58,6 +61,14 @@ func runServe(args []string) int {
 	// over SSE (observe-only external signal). The goroutine stops on exit.
 	srvInst.StartPlatformPoller(context.Background(), server.DefaultPlatformStatusURL, server.PlatformPollInterval)
 
+	// Operational metrics on a separate listener (localhost by default): the API
+	// port stays the token-protected API only; /healthz and /metrics live here.
+	server.SetBuildInfo(version.Version, runtime.Version())
+	server.RegisterStateCollector(st, *dbPath)
+	if *metricsAddr != "" {
+		startOpsListener(*metricsAddr, srvInst, log)
+	}
+
 	srv := &http.Server{
 		Handler:           srvInst.Handler(),
 		ReadHeaderTimeout: 5 * time.Second,
@@ -89,6 +100,21 @@ func runServe(args []string) int {
 	return 0
 }
 
+// startOpsListener serves /healthz and /metrics on a separate address, so the
+// main API port carries only the token-protected API.
+func startOpsListener(addr string, srv *server.Server, log *slog.Logger) {
+	mux := http.NewServeMux()
+	mux.Handle("GET /healthz", srv.HealthHandler())
+	mux.Handle("GET /metrics", server.MetricsHandler())
+	ops := &http.Server{Addr: addr, Handler: mux, ReadHeaderTimeout: 5 * time.Second}
+	go func() {
+		log.Info("ops listener", "addr", addr)
+		if err := ops.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
+			log.Error("ops listener", "error", err)
+		}
+	}()
+}
+
 // pruneInterval is how often stale sessions are garbage-collected.
 const pruneInterval = time.Hour
 
@@ -118,6 +144,7 @@ func pruneLoop(st *store.Store, defaultRetention time.Duration, log *slog.Logger
 			log.Error("pruning sessions", "error", err)
 		} else if n > 0 {
 			log.Info("pruned old sessions", "count", n)
+			server.IncPruned(n)
 		}
 	}
 	prune()

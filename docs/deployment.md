@@ -15,9 +15,27 @@ boundary and the security implications; it changes no defaults.
 | `--db` | `claude-fleet.db` | SQLite file path |
 | `--token` | — | shared auth token (else `$FLEET_TOKEN`, else the stored one, else generated) |
 | `--session-retention` | `24h` | delete sessions not reported within this window (`0` disables) |
+| `--metrics-addr` | `127.0.0.1:9090` | ops listener for `/metrics` and `/healthz` (empty disables) |
 
 It is single-node by design (one SQLite writer, an in-memory SSE hub) — run **one
 instance**, not replicas.
+
+### Ops listener (metrics & health)
+
+`/metrics` (Prometheus) and `/healthz` (liveness) are served on a **separate
+listener** (`--metrics-addr`), never on the API port — so `:8080` stays purely
+the token-protected API. The ops listener is **unauthenticated**; its safety comes
+from the bind address (`127.0.0.1` by default). Expose it only to your scraper:
+
+- **Same host / in-pod probe:** the localhost default is enough.
+- **Remote Prometheus:** bind it to a reachable, scraper-only interface
+  (`--metrics-addr 10.0.0.5:9090`) behind your network controls — not the public
+  internet. It carries no session content: labels are bounded (`status`, `event`,
+  `model`, `route`), never a session id, machine, or project.
+
+Metrics are namespaced `fleet_*` (RED HTTP metrics, ingestion counters, a
+scrape-time `fleet_sessions` gauge by reconciled status, SSE and prune counters,
+DB size, watcher heartbeat) plus the default Go/process collectors.
 
 ## Local / trusted-LAN use
 
@@ -53,8 +71,9 @@ If `fleetd` is reachable from the internet, two rules:
 Every `/api/*` route is behind auth; a request with **no token or a wrong token**
 gets `401` and no data (enforced by `TestEveryAPIRouteRejectsUnauthenticated`).
 The token is 256-bit, compared in constant time — not guessable, no timing
-oracle. Only `/healthz` is unauthenticated, and it returns just `ok` (liveness,
-no data). So a public `fleetd` behind TLS leaks nothing to someone who does not
+oracle. The API port serves **only** authenticated `/api/*` routes; the
+unauthenticated `/healthz` and `/metrics` live on the separate ops listener (see
+above). So a public `fleetd` behind TLS leaks nothing to someone who does not
 hold the token.
 
 ## The token
