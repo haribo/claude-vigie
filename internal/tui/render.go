@@ -99,7 +99,7 @@ type column struct {
 // aligned), then activity, rc, and the colored `● status`. The short session id
 // lives in the detail panel only.
 var columns = []column{
-	{"NAME", 22, 0, false, sessionName, nil},
+	{"NAME", 22, 0, false, sessionName, func(s api.SessionView) lipgloss.Style { return statusStyle(s.Status) }},
 	{"USER", 10, 8, false, func(s api.SessionView) string { return orDash(s.User) }, func(api.SessionView) lipgloss.Style { return userStyle }},
 	{"MACHINE", 10, 4, false, func(s api.SessionView) string { return s.Machine }, nil},
 	{"DIR", 16, 0, false, func(s api.SessionView) string { return projectName(s.ProjectDir) }, nil},
