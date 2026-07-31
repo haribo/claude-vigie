@@ -7,20 +7,23 @@ package api
 // ReportRequest is the payload the reporter POSTs to /api/report for one hook
 // event. The server derives the session status from Event.
 type ReportRequest struct {
-	Event          string `json:"event"`
-	SessionID      string `json:"session_id"`
-	User           string `json:"user,omitempty"` // OS account that launched the session
-	Machine        string `json:"machine"`
-	ProjectDir     string `json:"project_dir"`
-	GitBranch      string `json:"git_branch,omitempty"`
-	Model          string `json:"model,omitempty"`
-	Title          string `json:"title,omitempty"` // conversation title (/rename or auto)
-	LastTool       string `json:"last_tool,omitempty"`
-	Status         string `json:"status,omitempty"`           // explicit status (watcher); empty = derive from event
-	RemoteControl  *bool  `json:"remote_control,omitempty"`   // detected /rc state (watcher); nil = no info
-	Usage          *Usage `json:"usage,omitempty"`            // present on Stop / SessionEnd
-	APIErrorStatus int    `json:"api_error_status,omitempty"` // HTTP code of a live API error (watcher); 0 = none
-	Timestamp      string `json:"timestamp"`                  // RFC3339, event time
+	Event      string `json:"event"`
+	SessionID  string `json:"session_id"`
+	User       string `json:"user,omitempty"` // OS account that launched the session
+	Machine    string `json:"machine"`
+	ProjectDir string `json:"project_dir"`
+	GitBranch  string `json:"git_branch,omitempty"`
+	Model      string `json:"model,omitempty"`
+	Title      string `json:"title,omitempty"` // conversation title (/rename or auto)
+	LastTool   string `json:"last_tool,omitempty"`
+	// NotificationType is the Claude Code Notification hook's notification_type
+	// (e.g. permission_prompt vs idle_prompt); it splits waiting from idle.
+	NotificationType string `json:"notification_type,omitempty"`
+	Status           string `json:"status,omitempty"`           // explicit status (watcher); empty = derive from event
+	RemoteControl    *bool  `json:"remote_control,omitempty"`   // detected /rc state (watcher); nil = no info
+	Usage            *Usage `json:"usage,omitempty"`            // present on Stop / SessionEnd
+	APIErrorStatus   int    `json:"api_error_status,omitempty"` // HTTP code of a live API error (watcher); 0 = none
+	Timestamp        string `json:"timestamp"`                  // RFC3339, event time
 }
 
 // Usage holds token counters.

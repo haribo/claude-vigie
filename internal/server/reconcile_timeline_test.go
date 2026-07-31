@@ -84,6 +84,13 @@ func TestStatusReconcileTimeline(t *testing.T) {
 	hook("wait", "UserPromptSubmit")
 	assert("wait", "working")
 
+	// #206 — a permission notification is waiting (operator is the blocker); an
+	// idle notification is just idle (finished, awaiting the next prompt).
+	report("perm", api.ReportRequest{Event: "Notification", NotificationType: "permission_prompt"})
+	assert("perm", "waiting")
+	report("done", api.ReportRequest{Event: "Notification", NotificationType: "idle_prompt"})
+	assert("done", "idle")
+
 	// error — a watcher observation wins and clears on recovery.
 	watch("err", "working")
 	watch("err", "error")

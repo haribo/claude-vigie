@@ -29,3 +29,20 @@ func TestReconcileWatch(t *testing.T) {
 		}
 	}
 }
+
+func TestDeriveStatusNotification(t *testing.T) {
+	cases := []struct{ event, notifType, want string }{
+		{"Notification", "permission_prompt", "waiting"}, // the operator is the blocker
+		{"Notification", "idle_prompt", "idle"},          // finished; waiting for the next prompt
+		{"Notification", "", "waiting"},                  // older Claude Code: keep waiting
+		{"Notification", "agent_needs_input", "waiting"},
+		{"UserPromptSubmit", "", "working"},
+		{"Stop", "", "idle"},
+		{"SessionEnd", "", "ended"},
+	}
+	for _, c := range cases {
+		if got := deriveStatus(c.event, c.notifType, ""); got != c.want {
+			t.Errorf("deriveStatus(%q, %q) = %q, want %q", c.event, c.notifType, got, c.want)
+		}
+	}
+}
