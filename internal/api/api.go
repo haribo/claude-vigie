@@ -19,11 +19,14 @@ type ReportRequest struct {
 	// NotificationType is the Claude Code Notification hook's notification_type
 	// (e.g. permission_prompt vs idle_prompt); it splits waiting from idle.
 	NotificationType string `json:"notification_type,omitempty"`
-	Status           string `json:"status,omitempty"`           // explicit status (watcher); empty = derive from event
-	RemoteControl    *bool  `json:"remote_control,omitempty"`   // detected /rc state (watcher); nil = no info
-	Usage            *Usage `json:"usage,omitempty"`            // present on Stop / SessionEnd
-	APIErrorStatus   int    `json:"api_error_status,omitempty"` // HTTP code of a live API error (watcher); 0 = none
-	Timestamp        string `json:"timestamp"`                  // RFC3339, event time
+	// Activity is a short human message describing what the session is doing
+	// (working) or waiting on (waiting) — a tool call or a notification message.
+	Activity       string `json:"activity,omitempty"`
+	Status         string `json:"status,omitempty"`           // explicit status (watcher); empty = derive from event
+	RemoteControl  *bool  `json:"remote_control,omitempty"`   // detected /rc state (watcher); nil = no info
+	Usage          *Usage `json:"usage,omitempty"`            // present on Stop / SessionEnd
+	APIErrorStatus int    `json:"api_error_status,omitempty"` // HTTP code of a live API error (watcher); 0 = none
+	Timestamp      string `json:"timestamp"`                  // RFC3339, event time
 }
 
 // Usage holds token counters.
@@ -51,6 +54,7 @@ type SessionView struct {
 	EndedAt        string  `json:"ended_at,omitempty"`
 	RemoteControl  bool    `json:"remote_control"`
 	APIErrorStatus int     `json:"api_error_status,omitempty"` // HTTP code when Status == "error", else 0
+	Activity       string  `json:"activity,omitempty"`         // short "doing"/"waiting on" message
 	Samples        []int64 `json:"samples,omitempty"`          // recent output-token samples, oldest first
 }
 

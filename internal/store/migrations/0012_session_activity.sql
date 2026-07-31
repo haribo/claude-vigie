@@ -1,0 +1,1 @@
+ALTER TABLE sessions ADD COLUMN activity TEXT NOT NULL DEFAULT '';

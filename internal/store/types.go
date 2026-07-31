@@ -27,6 +27,10 @@ type Session struct {
 	// lets reconciliation keep a hook state while letting the watcher retract its
 	// own — see docs/design/session-status.md.
 	StatusSource string
+	// Activity is a short message describing what the session is doing (working)
+	// or waiting on (waiting): a tool call or a notification. Cleared on a status
+	// change so it never goes stale.
+	Activity string
 }
 
 // Usage holds cumulative token counters for a session.
