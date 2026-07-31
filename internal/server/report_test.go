@@ -14,6 +14,12 @@ func TestReconcileWatch(t *testing.T) {
 		// #201: the watcher must retract its OWN stale working — no latch.
 		{"working", "watch", "idle", "idle", "watch"},
 		{"thinking", "watch", "idle", "idle", "watch"},
+		// #233 — a confirmation of the same status keeps the current owner; it must
+		// not transfer ownership (which would let a later idle retract a hook turn).
+		{"working", "hook", "working", "working", "hook"},
+		{"waiting", "hook", "waiting", "waiting", "hook"},
+		{"thinking", "hook", "thinking", "thinking", "hook"},
+		{"working", "watch", "working", "working", "watch"},
 		// Any positive watcher observation wins and becomes watch-owned.
 		{"waiting", "hook", "working", "working", "watch"}, // activity resumes
 		{"working", "hook", "error", "error", "watch"},
