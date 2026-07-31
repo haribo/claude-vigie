@@ -158,13 +158,27 @@ func (s *scanner) scan(root, machine string, maxAge time.Duration, now time.Time
 			continue
 		}
 
+		// Prefer the last dated transcript line over the file mtime for "when did
+		// this session last really do something". A live Claude appends
+		// untimestamped metadata (last-prompt, bridge-session) roughly hourly,
+		// bumping mtime without any activity; LastActivity ignores those lines, so
+		// SEEN and the age-based status stay truthful. The mtime still gates the
+		// scan window above (the hourly churn keeps a live session in range, so it
+		// stays visible as idle — never expired while its process lives). Fall back
+		// to mtime when no dated line exists yet (a brand-new transcript).
+		lastActivity := fi.ModTime()
+		if t, err := time.Parse(time.RFC3339, info.LastActivity); err == nil {
+			lastActivity = t
+		}
+		activityAge := now.Sub(lastActivity)
+
 		id := info.SessionID
 		if id == "" {
 			id = strings.TrimSuffix(filepath.Base(p), ".jsonl")
 		}
 		usage := info.Usage
 		rc := rcMap[id]
-		status := withThinking(sessionStatus(id, info.LastStopReason, info.LastAPIError, age), info.Thinking)
+		status := withThinking(sessionStatus(id, info.LastStopReason, info.LastAPIError, activityAge), info.Thinking)
 		apiErr := 0
 		if status == "error" {
 			apiErr = info.LastAPIError // carry the HTTP code only while the error is shown
@@ -183,7 +197,7 @@ func (s *scanner) scan(root, machine string, maxAge time.Duration, now time.Time
 			Usage:          &usage,
 			APIErrorStatus: apiErr,
 			Activity:       info.Activity,
-			Timestamp:      fi.ModTime().UTC().Format(time.RFC3339),
+			Timestamp:      lastActivity.UTC().Format(time.RFC3339),
 		})
 	}
 	s.cache = fresh // drop entries for files no longer scanned
