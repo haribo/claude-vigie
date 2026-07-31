@@ -72,6 +72,18 @@ func TestRenderTableWide(t *testing.T) {
 	}
 }
 
+func TestModelCellUnknownShowsDash(t *testing.T) {
+	// A session open before Claude's first reply has no model name anywhere; the
+	// MODEL cell must read as a dash, not an ambiguous blank (#242) — while a
+	// known model still renders its short form.
+	if got := orDash(shortModel("")); got != "-" {
+		t.Errorf("empty model cell = %q, want %q", got, "-")
+	}
+	if got := orDash(shortModel("claude-opus-4-8")); got != "opus-4-8" {
+		t.Errorf("known model cell = %q, want opus-4-8", got)
+	}
+}
+
 func TestRenderTableNarrowHidesColumns(t *testing.T) {
 	out := renderTable([]api.SessionView{{
 		ID: "5c483c16", Title: "my-session", Machine: "laptop",
