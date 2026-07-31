@@ -138,3 +138,10 @@ func migrateLegacy() (*Config, bool, error) {
 	}
 	return &cfg, true, nil
 }
+
+// OSUser returns the $USER environment value (the OS account name), or "".
+func OSUser() string { return os.Getenv("USER") }
+
+// EnvConfigPath returns the FLEET_CONFIG override ("" when unset), which selects
+// the dev vs production config leg.
+func EnvConfigPath() string { return os.Getenv("FLEET_CONFIG") }

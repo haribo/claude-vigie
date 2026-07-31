@@ -16,6 +16,7 @@ import (
 	"time"
 
 	"github.com/haribo/claude-fleet/internal/api"
+	"github.com/haribo/claude-fleet/internal/clock"
 	"github.com/haribo/claude-fleet/internal/config"
 	"github.com/haribo/claude-fleet/internal/presence"
 	"github.com/haribo/claude-fleet/internal/transcript"
@@ -42,7 +43,7 @@ const gcInterval = 5 * time.Minute
 // single-user machine, is the account that launched the sessions): the USER env
 // var if set, else the current user, else "".
 func systemUser() string {
-	if u := os.Getenv("USER"); u != "" {
+	if u := config.OSUser(); u != "" {
 		return u
 	}
 	if u, err := user.Current(); err == nil {
@@ -73,9 +74,9 @@ func Run(ctx context.Context, cfg *config.Config, opts Options) error {
 	defer ticker.Stop()
 
 	sc := newScanner()
-	lastGC := time.Now()
+	lastGC := clock.Now()
 	for {
-		reports, err := sc.scan(root, cfg.Machine, opts.MaxAge, time.Now())
+		reports, err := sc.scan(root, cfg.Machine, opts.MaxAge, clock.Now())
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "watch: %v\n", err)
 		}
@@ -86,7 +87,7 @@ func Run(ctx context.Context, cfg *config.Config, opts Options) error {
 		}
 		if time.Since(lastGC) > gcInterval {
 			collectDeadMappings(opts.MaxAge)
-			lastGC = time.Now()
+			lastGC = clock.Now()
 		}
 		select {
 		case <-ctx.Done():
@@ -99,7 +100,7 @@ func Run(ctx context.Context, cfg *config.Config, opts Options) error {
 // collectDeadMappings removes presence mappings for sessions whose process died
 // without a SessionEnd and whose transcript is past the watcher's window.
 func collectDeadMappings(maxAge time.Duration) {
-	n, err := presence.GC(maxAge, time.Now())
+	n, err := presence.GC(maxAge, clock.Now())
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "watch: presence gc: %v\n", err)
 	} else if n > 0 {
@@ -259,6 +260,10 @@ func activelyWorking(lastStopReason string, age time.Duration) bool {
 	return age < activeWindow || (lastStopReason == "tool_use" && age < toolWindow)
 }
 
+// httpClient carries a timeout (http.DefaultClient has none); each request also
+// sets a context deadline.
+var httpClient = &http.Client{Timeout: 10 * time.Second}
+
 func post(cfg *config.Config, req api.ReportRequest) error {
 	return postJSON(cfg, "/api/report", req, nil)
 }
@@ -281,7 +286,7 @@ func postJSON(cfg *config.Config, path string, body, out any) error {
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Authorization", "Bearer "+cfg.Token)
 
-	resp, err := http.DefaultClient.Do(req)
+	resp, err := httpClient.Do(req)
 	if err != nil {
 		return err
 	}
@@ -325,7 +330,7 @@ func usageCycle(ctx context.Context, cfg *config.Config, fetcher *usage.Fetcher)
 	if !lease.Acquired {
 		return // another machine holds the lease
 	}
-	rep, ok, err := fetcher.Fetch(ctx, time.Now())
+	rep, ok, err := fetcher.Fetch(ctx, clock.Now())
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "watch: usage fetch: %v\n", err)
 		return

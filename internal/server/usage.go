@@ -25,7 +25,7 @@ func (s *Server) handleUsageLease(w http.ResponseWriter, r *http.Request) {
 		s.writeError(w, http.StatusBadRequest, "holder is required")
 		return
 	}
-	acquired, expiry, err := s.store.AcquireLease(r.Context(), req.Holder, usageLeaseTTL, time.Now())
+	acquired, expiry, err := s.store.AcquireLease(r.Context(), req.Holder, usageLeaseTTL, s.now())
 	if err != nil {
 		s.log.Error("acquiring lease", "error", err)
 		s.writeError(w, http.StatusInternalServerError, "internal error")

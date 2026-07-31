@@ -4,9 +4,9 @@ import (
 	"sort"
 	"strconv"
 	"strings"
-	"time"
 
 	"github.com/haribo/claude-fleet/internal/api"
+	"github.com/haribo/claude-fleet/internal/clock"
 )
 
 // machineStat aggregates one machine's sessions for the Machines tab.
@@ -68,7 +68,7 @@ func renderMachines(sessions []api.SessionView, width int) string {
 	if len(sessions) == 0 {
 		return dimStyle.Render("no sessions yet")
 	}
-	now := time.Now()
+	now := clock.Now() // presentation: relative "SEEN" ages
 
 	var b strings.Builder
 	b.WriteString("  " + headerStyle.Render(

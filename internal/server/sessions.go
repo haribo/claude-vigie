@@ -25,7 +25,7 @@ func (s *Server) handleSessions(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	now := time.Now()
+	now := s.now()
 	since := now.Add(-activityWindow).UTC().Format(time.RFC3339)
 	views := make([]api.SessionView, 0, len(sessions))
 	for _, ss := range sessions {

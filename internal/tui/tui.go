@@ -6,6 +6,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 
 	"github.com/haribo/claude-fleet/internal/api"
+	"github.com/haribo/claude-fleet/internal/clock"
 	"github.com/haribo/claude-fleet/internal/config"
 )
 
@@ -26,6 +27,7 @@ func Run(cfg *config.Config) error {
 		prefs:         loadPrefs(),
 		fetchSeq:      1, // Init issues generation 1
 		events:        events,
+		clock:         clock.Now,
 	}
 	_, err := tea.NewProgram(m, tea.WithAltScreen()).Run()
 	return err

@@ -10,6 +10,7 @@ import (
 	"github.com/charmbracelet/lipgloss"
 
 	"github.com/haribo/claude-fleet/internal/api"
+	"github.com/haribo/claude-fleet/internal/clock"
 )
 
 // pollInterval is the fallback refresh. SSE pushes data changes instantly, so
@@ -107,6 +108,16 @@ type model struct {
 	prefs           prefs
 	settingsCursor  int
 	events          <-chan struct{}
+	clock           func() time.Time // injected wall clock; defaults to clock.Now
+}
+
+// now reads the injected clock, falling back to the system clock so a model
+// built as a struct literal (e.g. in tests) still works.
+func (m model) now() time.Time {
+	if m.clock == nil {
+		return clock.Now()
+	}
+	return m.clock()
 }
 
 // watcherStaleAfter is how long the server may go without a watch report before
@@ -290,7 +301,7 @@ func (m model) applySessions(msg sessionsMsg) model {
 	}
 	m.sessions = msg.sessions
 	m.err = nil
-	m.updatedAt = time.Now()
+	m.updatedAt = m.now()
 	m.history = append(m.history, countByStatus(m.sessions, "working"))
 	if len(m.history) > sparkWindow {
 		m.history = m.history[len(m.history)-sparkWindow:]
@@ -492,7 +503,7 @@ func (m model) handleFilterKey(msg tea.KeyMsg) model {
 // visibleSessions returns the sessions after filtering and sorting. Ended and
 // stale sessions are hidden unless showAll is set.
 func (m model) visibleSessions() []api.SessionView {
-	now := time.Now()
+	now := m.now()
 	out := make([]api.SessionView, 0, len(m.sessions))
 	for _, s := range m.sessions {
 		if !m.showAll && !m.prefs.visible(s, now) {
@@ -667,7 +678,7 @@ func (m model) hiddenCount() int {
 	if m.showAll {
 		return 0
 	}
-	now := time.Now()
+	now := m.now()
 	n := 0
 	for _, s := range m.sessions {
 		if !m.prefs.visible(s, now) {

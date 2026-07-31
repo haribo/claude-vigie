@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 
+	"github.com/haribo/claude-fleet/internal/config"
 	"github.com/haribo/claude-fleet/internal/install"
 )
 
@@ -28,7 +29,7 @@ func runHooks(args []string) int {
 	if err != nil {
 		binPath = "claude-fleet"
 	}
-	configPath := os.Getenv("FLEET_CONFIG")
+	configPath := config.EnvConfigPath()
 
 	switch sub {
 	case "install":
