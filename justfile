@@ -16,6 +16,7 @@ tool-install:
     @mkdir -p bin
     GOBIN=$(pwd)/bin go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.11.4
     GOBIN=$(pwd)/bin go install golang.org/x/tools/cmd/goimports@latest
+    GOBIN=$(pwd)/bin go install golang.org/x/vuln/cmd/govulncheck@latest
 
 # =============================================================================
 # DEV RUN — run the current source against a throwaway local server, isolated
@@ -135,10 +136,10 @@ code-check:
     ./bin/golangci-lint run ./...
     echo "==> build"
     go build ./...
-    echo "==> test"
-    go test ./...
     echo "==> test (race)"
     go test -race ./...
+    echo "==> govulncheck"
+    ./bin/govulncheck ./...
     echo "all checks passed"
 
 # Run linter
