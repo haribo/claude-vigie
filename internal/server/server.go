@@ -76,7 +76,22 @@ func (s *Server) Handler() http.Handler {
 	mux.Handle("POST /api/settings", s.auth(http.HandlerFunc(s.handleSetSettings)))
 	// RED metrics wrap the whole API; auth stays per-route. /healthz and /metrics
 	// live on the ops listener (daemon), never on the token-protected API port.
-	return withMetrics(mux)
+	// limitBody caps request bodies before any handler reads them.
+	return withMetrics(limitBody(mux))
+}
+
+// maxBodyBytes bounds a request body; real reports are a few KB, so 1 MiB is
+// generous while preventing an unbounded-body memory DoS.
+const maxBodyBytes = 1 << 20
+
+// limitBody caps every request body with http.MaxBytesReader. A handler reading
+// past the cap gets an *http.MaxBytesError from its decoder, which it can turn
+// into a 413 (see handleReport).
+func limitBody(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		r.Body = http.MaxBytesReader(w, r.Body, maxBodyBytes)
+		next.ServeHTTP(w, r)
+	})
 }
 
 // HealthHandler is the liveness probe, served on the ops listener by the daemon.

@@ -14,6 +14,12 @@ import (
 func (s *Server) handleReport(w http.ResponseWriter, r *http.Request) {
 	var req api.ReportRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		var maxErr *http.MaxBytesError
+		if errors.As(err, &maxErr) {
+			metricReportsRejected.WithLabelValues("too_large").Inc()
+			s.writeError(w, http.StatusRequestEntityTooLarge, "request body too large")
+			return
+		}
 		metricReportsRejected.WithLabelValues("bad_json").Inc()
 		s.writeError(w, http.StatusBadRequest, "invalid json body")
 		return
