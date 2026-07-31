@@ -174,21 +174,7 @@ func applyReport(sess store.Session, isNew bool, req api.ReportRequest) store.Se
 		sess.StartedAt = req.Timestamp
 	}
 	sess.LastSeenAt = req.Timestamp
-	prevStatus := sess.Status
-	if req.Status != "" {
-		sess.Status, sess.StatusSource = reconcileWatch(sess.Status, sess.StatusSource, req.Status)
-		sess.APIErrorStatus = req.APIErrorStatus // watcher-derived; hooks carry no status
-	} else {
-		sess.Status = deriveStatus(req.Event, req.NotificationType, sess.Status)
-		sess.StatusSource = "hook" // a hook event is the authoritative observer
-	}
-	// Activity: take a fresh message from the report; otherwise drop a stale one
-	// when the status changed, so a new episode never shows the old "doing".
-	if req.Activity != "" {
-		sess.Activity = req.Activity
-	} else if sess.Status != prevStatus {
-		sess.Activity = ""
-	}
+	sess = applyStatus(sess, req)
 	if req.Event == "SessionEnd" {
 		sess.EndedAt = req.Timestamp
 	}
@@ -207,6 +193,60 @@ func applyReport(sess store.Session, isNew bool, req api.ReportRequest) store.Se
 		}
 	}
 	return sess
+}
+
+// applyStatus folds the report's status into the session: the reconciled status
+// and its owner, when it last changed, and the transient activity message.
+func applyStatus(sess store.Session, req api.ReportRequest) store.Session {
+	prev := sess.Status
+	if req.Status != "" {
+		if !holdsWaiting(sess, req) {
+			sess.Status, sess.StatusSource = reconcileWatch(sess.Status, sess.StatusSource, req.Status)
+		}
+		sess.APIErrorStatus = req.APIErrorStatus // watcher-derived; hooks carry no status
+	} else {
+		sess.Status = deriveStatus(req.Event, req.NotificationType, sess.Status)
+		sess.StatusSource = "hook" // a hook event is the authoritative observer
+	}
+	if sess.Status != prev {
+		sess.StatusChangedAt = req.Timestamp
+	}
+	// Take a fresh activity from the report; otherwise drop a stale one when the
+	// status changed, so a new episode never shows the old "doing".
+	if req.Activity != "" {
+		sess.Activity = req.Activity
+	} else if sess.Status != prev {
+		sess.Activity = ""
+	}
+	return sess
+}
+
+// holdsWaiting reports whether a hook-set `waiting` must survive a watcher
+// report (#235). The watcher can't tell "a tool is running" from "a permission
+// prompt is blocking": both are a turn stopped on tool_use with a frozen
+// transcript. So its inferred working/thinking may only clear waiting once the
+// transcript has actually moved past when waiting was posted — i.e. the report's
+// timestamp (the transcript mtime) is newer than StatusChangedAt. error/ended
+// are positive observations and still win.
+func holdsWaiting(sess store.Session, req api.ReportRequest) bool {
+	if sess.Status != "waiting" || sess.StatusSource != "hook" || sess.StatusChangedAt == "" {
+		return false
+	}
+	if req.Status != "working" && req.Status != "thinking" {
+		return false
+	}
+	return !timeAfter(req.Timestamp, sess.StatusChangedAt)
+}
+
+// timeAfter reports whether RFC3339 time a is strictly after b (false on any
+// parse error, so a missing timestamp never holds anything).
+func timeAfter(a, b string) bool {
+	ta, err1 := time.Parse(time.RFC3339, a)
+	tb, err2 := time.Parse(time.RFC3339, b)
+	if err1 != nil || err2 != nil {
+		return false
+	}
+	return ta.After(tb)
 }
 
 // reconcileWatch folds a watcher-reported status into the session, resolving the

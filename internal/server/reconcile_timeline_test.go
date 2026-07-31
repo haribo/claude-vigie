@@ -24,7 +24,10 @@ func TestStatusReconcileTimeline(t *testing.T) {
 
 	report := func(id string, r api.ReportRequest) {
 		t.Helper()
-		r.SessionID, r.Machine, r.Timestamp = id, "m", rfc()
+		r.SessionID, r.Machine = id, "m"
+		if r.Timestamp == "" { // an explicit timestamp models a frozen transcript mtime
+			r.Timestamp = rfc()
+		}
 		body, _ := json.Marshal(r)
 		if rec := do(t, srv, http.MethodPost, "/api/report", body, true); rec.Code >= http.StatusMultipleChoices {
 			t.Fatalf("report %+v = %d", r, rec.Code)
@@ -100,6 +103,19 @@ func TestStatusReconcileTimeline(t *testing.T) {
 	assert("perm", "waiting")
 	report("done", api.ReportRequest{Event: "Notification", NotificationType: "idle_prompt"})
 	assert("done", "idle")
+
+	// #235 — a permission `waiting` survives the watcher's stale `working` (it
+	// sees the frozen tool_use that triggered the prompt), and is released only
+	// once the transcript moves past when waiting was posted.
+	advance(time.Hour)
+	report("block", api.ReportRequest{Event: "Notification"}) // waiting; StatusChangedAt = now
+	assert("block", "waiting")
+	stale := now.Add(-2 * time.Second).UTC().Format(time.RFC3339)
+	report("block", api.ReportRequest{Event: "watch", Status: "working", Timestamp: stale})
+	assert("block", "waiting") // frozen transcript → held
+	advance(5 * time.Second)
+	report("block", api.ReportRequest{Event: "watch", Status: "working"}) // transcript moved (approval)
+	assert("block", "working")
 
 	// error — a watcher observation wins and clears on recovery.
 	watch("err", "working")
