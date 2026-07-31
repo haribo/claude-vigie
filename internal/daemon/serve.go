@@ -28,7 +28,7 @@ func runServe(args []string) int {
 	dbPath := fs.String("db", "claude-fleet.db", "path to the SQLite database file")
 	tokenFlag := fs.String("token", "", "shared auth token (else $FLEET_TOKEN, else auto-generated)")
 	retention := fs.Duration("session-retention", 24*time.Hour, "delete sessions not reported within this window (0 disables)")
-	metricsAddr := fs.String("metrics-addr", "127.0.0.1:9090", "ops listener for /metrics and /healthz (empty disables)")
+	metricsAddr := fs.String("metrics-addr", "127.0.0.1:9464", "ops listener for /metrics and /healthz (empty disables)")
 	if err := fs.Parse(args); err != nil {
 		return 2
 	}
