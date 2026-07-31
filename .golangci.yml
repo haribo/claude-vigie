@@ -33,6 +33,9 @@ linters:
     - bodyclose
     - sqlclosecheck
 
+    # Architecture (ADR-0003: minimal client, never links server/store)
+    - depguard
+
     # Tests
     - thelper
     - tparallel
@@ -70,6 +73,25 @@ linters:
         text: "var-naming: avoid package names"
 
   settings:
+    # Import boundaries (docs/code.md, ADR-0003): the client packages ship in a
+    # minimal binary and MUST NOT link the server, the store, or the web
+    # dashboard. depguard makes that invariant a CI failure, not a review note.
+    depguard:
+      rules:
+        client-minimal:
+          list-mode: lax
+          files:
+            - "**/internal/client/**"
+            - "**/internal/report/**"
+            - "**/internal/tui/**"
+          deny:
+            - pkg: github.com/haribo/claude-fleet/internal/server
+              desc: client must not link the server (ADR-0003)
+            - pkg: github.com/haribo/claude-fleet/internal/store
+              desc: client must not link the store (ADR-0003)
+            - pkg: github.com/haribo/claude-fleet/web
+              desc: client must not link the web dashboard (ADR-0003)
+
     cyclop:
       max-complexity: 15
       package-average: 10.0
