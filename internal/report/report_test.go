@@ -86,3 +86,26 @@ func TestRunMissingSessionID(t *testing.T) {
 		t.Fatal("expected an error for missing session_id, got nil")
 	}
 }
+
+func TestHookActivity(t *testing.T) {
+	cases := []struct {
+		name  string
+		event string
+		p     hookPayload
+		want  string
+	}{
+		// #236 — an idle_prompt lands the session on idle, so it carries no "doing".
+		{"idle_prompt carries none", "Notification",
+			hookPayload{NotificationType: "idle_prompt", Message: "waiting for your input"}, ""},
+		{"permission_prompt keeps its message", "Notification",
+			hookPayload{NotificationType: "permission_prompt", Message: "allow Bash?"}, "allow Bash?"},
+		{"bare notification keeps its message", "Notification",
+			hookPayload{Message: "heads up"}, "heads up"},
+		{"other events carry none", "Stop", hookPayload{}, ""},
+	}
+	for _, c := range cases {
+		if got := hookActivity(c.event, c.p); got != c.want {
+			t.Errorf("%s: hookActivity(%q, %+v) = %q, want %q", c.name, c.event, c.p, got, c.want)
+		}
+	}
+}

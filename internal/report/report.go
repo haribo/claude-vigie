@@ -93,6 +93,11 @@ func hookActivity(event string, p hookPayload) string {
 	case "PostToolUse":
 		return transcript.ToolActivity(p.ToolName, p.ToolInput)
 	case "Notification":
+		// An idle_prompt notification lands the session on idle (#206); a waiting
+		// message there would contradict the status, so carry no activity.
+		if p.NotificationType == "idle_prompt" {
+			return ""
+		}
 		r := []rune(p.Message)
 		if len(r) > 80 {
 			return string(r[:79]) + "…"
