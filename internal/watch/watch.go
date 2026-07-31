@@ -16,6 +16,7 @@ import (
 	"time"
 
 	"github.com/haribo/claude-fleet/internal/api"
+	"github.com/haribo/claude-fleet/internal/clock"
 	"github.com/haribo/claude-fleet/internal/config"
 	"github.com/haribo/claude-fleet/internal/presence"
 	"github.com/haribo/claude-fleet/internal/transcript"
@@ -42,7 +43,7 @@ const gcInterval = 5 * time.Minute
 // single-user machine, is the account that launched the sessions): the USER env
 // var if set, else the current user, else "".
 func systemUser() string {
-	if u := os.Getenv("USER"); u != "" {
+	if u := config.OSUser(); u != "" {
 		return u
 	}
 	if u, err := user.Current(); err == nil {
@@ -73,9 +74,9 @@ func Run(ctx context.Context, cfg *config.Config, opts Options) error {
 	defer ticker.Stop()
 
 	sc := newScanner()
-	lastGC := time.Now()
+	lastGC := clock.Now()
 	for {
-		reports, err := sc.scan(root, cfg.Machine, opts.MaxAge, time.Now())
+		reports, err := sc.scan(root, cfg.Machine, opts.MaxAge, clock.Now())
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "watch: %v\n", err)
 		}
@@ -86,7 +87,7 @@ func Run(ctx context.Context, cfg *config.Config, opts Options) error {
 		}
 		if time.Since(lastGC) > gcInterval {
 			collectDeadMappings(opts.MaxAge)
-			lastGC = time.Now()
+			lastGC = clock.Now()
 		}
 		select {
 		case <-ctx.Done():
@@ -99,7 +100,7 @@ func Run(ctx context.Context, cfg *config.Config, opts Options) error {
 // collectDeadMappings removes presence mappings for sessions whose process died
 // without a SessionEnd and whose transcript is past the watcher's window.
 func collectDeadMappings(maxAge time.Duration) {
-	n, err := presence.GC(maxAge, time.Now())
+	n, err := presence.GC(maxAge, clock.Now())
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "watch: presence gc: %v\n", err)
 	} else if n > 0 {
@@ -163,19 +164,25 @@ func (s *scanner) scan(root, machine string, maxAge time.Duration, now time.Time
 		}
 		usage := info.Usage
 		rc := rcMap[id]
+		status := withThinking(sessionStatus(id, info.LastStopReason, info.LastAPIError, age), info.Thinking)
+		apiErr := 0
+		if status == "error" {
+			apiErr = info.LastAPIError // carry the HTTP code only while the error is shown
+		}
 		reports = append(reports, api.ReportRequest{
-			Event:         "watch",
-			SessionID:     id,
-			User:          osUser,
-			Machine:       machine,
-			ProjectDir:    info.Cwd,
-			GitBranch:     info.GitBranch,
-			Model:         info.Model,
-			Title:         info.Title,
-			Status:        statusFor(id, info.LastStopReason, age),
-			RemoteControl: &rc,
-			Usage:         &usage,
-			Timestamp:     fi.ModTime().UTC().Format(time.RFC3339),
+			Event:          "watch",
+			SessionID:      id,
+			User:           osUser,
+			Machine:        machine,
+			ProjectDir:     info.Cwd,
+			GitBranch:      info.GitBranch,
+			Model:          info.Model,
+			Title:          info.Title,
+			Status:         status,
+			RemoteControl:  &rc,
+			Usage:          &usage,
+			APIErrorStatus: apiErr,
+			Timestamp:      fi.ModTime().UTC().Format(time.RFC3339),
 		})
 	}
 	s.cache = fresh // drop entries for files no longer scanned
@@ -196,6 +203,32 @@ func (s *scanner) parse(p string, fi os.FileInfo, fresh map[string]cacheEntry) (
 	}
 	fresh[p] = cacheEntry{modTime: fi.ModTime(), size: fi.Size(), info: info}
 	return info, nil
+}
+
+// sessionStatus layers a transient "error" status on top of the base
+// derivation: when the last assistant line was an API error (500/529/429…), a
+// live session — one that would otherwise read working or idle — reports error
+// until a later non-error line clears it. A closed session (ended) is never
+// shown as error, so a stale transcript does not stay red forever.
+func sessionStatus(sessionID, lastStopReason string, lastAPIError int, age time.Duration) string {
+	st := statusFor(sessionID, lastStopReason, age)
+	if lastAPIError != 0 && (st == "working" || st == "idle") {
+		return "error"
+	}
+	return st
+}
+
+// withThinking refines an active status to "thinking" when the transcript's last
+// assistant block is a thinking block — Claude is reasoning inside the turn. It
+// only refines working/idle (a live turn); error, ended, and waiting are left as
+// is. Heuristic: at rest a completed turn's last block is text/tool, so this is
+// true only mid-turn (a turn aborted right after thinking may briefly mis-show it
+// until the next scan).
+func withThinking(status string, thinking bool) string {
+	if thinking && (status == "working" || status == "idle") {
+		return "thinking"
+	}
+	return status
 }
 
 // statusFor derives a session's status from process presence and transcript
@@ -227,6 +260,10 @@ func activelyWorking(lastStopReason string, age time.Duration) bool {
 	return age < activeWindow || (lastStopReason == "tool_use" && age < toolWindow)
 }
 
+// httpClient carries a timeout (http.DefaultClient has none); each request also
+// sets a context deadline.
+var httpClient = &http.Client{Timeout: 10 * time.Second}
+
 func post(cfg *config.Config, req api.ReportRequest) error {
 	return postJSON(cfg, "/api/report", req, nil)
 }
@@ -249,7 +286,7 @@ func postJSON(cfg *config.Config, path string, body, out any) error {
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Authorization", "Bearer "+cfg.Token)
 
-	resp, err := http.DefaultClient.Do(req)
+	resp, err := httpClient.Do(req)
 	if err != nil {
 		return err
 	}
@@ -293,7 +330,7 @@ func usageCycle(ctx context.Context, cfg *config.Config, fetcher *usage.Fetcher)
 	if !lease.Acquired {
 		return // another machine holds the lease
 	}
-	rep, ok, err := fetcher.Fetch(ctx, time.Now())
+	rep, ok, err := fetcher.Fetch(ctx, clock.Now())
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "watch: usage fetch: %v\n", err)
 		return

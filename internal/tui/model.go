@@ -10,6 +10,7 @@ import (
 	"github.com/charmbracelet/lipgloss"
 
 	"github.com/haribo/claude-fleet/internal/api"
+	"github.com/haribo/claude-fleet/internal/clock"
 )
 
 // pollInterval is the fallback refresh. SSE pushes data changes instantly, so
@@ -89,7 +90,6 @@ type model struct {
 	watcherSeen     string
 	gotWatcher      bool
 	err             error
-	updatedAt       time.Time
 	width           int
 	tab             tab
 	cursor          int
@@ -107,6 +107,18 @@ type model struct {
 	prefs           prefs
 	settingsCursor  int
 	events          <-chan struct{}
+	conn            <-chan bool      // server-connection state pushed by the SSE loop
+	sseLive         bool             // is the SSE stream currently connected
+	clock           func() time.Time // injected wall clock; defaults to clock.Now
+}
+
+// now reads the injected clock, falling back to the system clock so a model
+// built as a struct literal (e.g. in tests) still works.
+func (m model) now() time.Time {
+	if m.clock == nil {
+		return clock.Now()
+	}
+	return m.clock()
 }
 
 // watcherStaleAfter is how long the server may go without a watch report before
@@ -146,6 +158,8 @@ type platformMsg struct {
 
 type eventMsg struct{}
 
+type connMsg struct{ live bool }
+
 type watcherMsg struct {
 	seen string
 	err  error
@@ -165,7 +179,8 @@ type statsMsg struct {
 
 func (m model) Init() tea.Cmd {
 	return tea.Batch(m.fetchCmd(m.fetchSeq), m.fetchUsageCmd(), m.watcherCmd(),
-		m.settingsCmd(), m.statsCmd(), m.fetchPlatformCmd(), tickCmd(), m.waitForEventCmd())
+		m.settingsCmd(), m.statsCmd(), m.fetchPlatformCmd(), tickCmd(),
+		m.waitForEventCmd(), m.waitForConnCmd())
 }
 
 func (m model) statsCmd() tea.Cmd {
@@ -250,6 +265,13 @@ func (m model) waitForEventCmd() tea.Cmd {
 	}
 }
 
+func (m model) waitForConnCmd() tea.Cmd {
+	if m.conn == nil {
+		return nil
+	}
+	return func() tea.Msg { return connMsg{live: <-m.conn} }
+}
+
 func tickCmd() tea.Cmd {
 	return tea.Tick(pollInterval, func(time.Time) tea.Msg { return tickMsg{} })
 }
@@ -265,6 +287,9 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.err = msg.err
 		}
 		return m, m.settingsCmd() // confirm the saved value
+	case connMsg:
+		m.sseLive = msg.live
+		return m, m.waitForConnCmd()
 	case eventMsg:
 		sc := m.refreshSessions()
 		return m, tea.Batch(sc, m.fetchUsageCmd(), m.statsCmd(), m.fetchPlatformCmd(), m.waitForEventCmd())
@@ -290,7 +315,6 @@ func (m model) applySessions(msg sessionsMsg) model {
 	}
 	m.sessions = msg.sessions
 	m.err = nil
-	m.updatedAt = time.Now()
 	m.history = append(m.history, countByStatus(m.sessions, "working"))
 	if len(m.history) > sparkWindow {
 		m.history = m.history[len(m.history)-sparkWindow:]
@@ -492,7 +516,7 @@ func (m model) handleFilterKey(msg tea.KeyMsg) model {
 // visibleSessions returns the sessions after filtering and sorting. Ended and
 // stale sessions are hidden unless showAll is set.
 func (m model) visibleSessions() []api.SessionView {
-	now := time.Now()
+	now := m.now()
 	out := make([]api.SessionView, 0, len(m.sessions))
 	for _, s := range m.sessions {
 		if !m.showAll && !m.prefs.visible(s, now) {
@@ -638,10 +662,23 @@ func (m model) summaryRight() string {
 	} else if h := m.hiddenCount(); h > 0 {
 		parts = append(parts, labelStyle.Render("hidden ")+strconv.Itoa(h))
 	}
-	if !m.updatedAt.IsZero() {
-		parts = append(parts, labelStyle.Render("updated ")+humanizeDuration(time.Since(m.updatedAt))+" ago")
-	}
+	parts = append(parts, m.connGlyph())
 	return strings.Join(parts, dimStyle.Render(" · "))
+}
+
+// connGlyph is the permanent server-connection indicator, replacing the old
+// "updated Xs ago" (which SSE + the 5s poll pinned near zero): ● live when the
+// SSE stream is connected, ○ offline when it is down and the last poll also
+// failed, ◍ reconnecting otherwise (the poll is still reaching the server).
+func (m model) connGlyph() string {
+	switch {
+	case m.sseLive:
+		return lipgloss.NewStyle().Foreground(cGreen).Render("●")
+	case m.err != nil:
+		return lipgloss.NewStyle().Foreground(cRed).Render("○")
+	default:
+		return lipgloss.NewStyle().Foreground(cAmber).Render("◍")
+	}
 }
 
 // filterLine shows the active filter (with a caret while typing).
@@ -667,7 +704,7 @@ func (m model) hiddenCount() int {
 	if m.showAll {
 		return 0
 	}
-	now := time.Now()
+	now := m.now()
 	n := 0
 	for _, s := range m.sessions {
 		if !m.prefs.visible(s, now) {

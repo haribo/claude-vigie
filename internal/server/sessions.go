@@ -25,7 +25,7 @@ func (s *Server) handleSessions(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	now := time.Now()
+	now := s.now()
 	since := now.Add(-activityWindow).UTC().Format(time.RFC3339)
 	views := make([]api.SessionView, 0, len(sessions))
 	for _, ss := range sessions {
@@ -72,10 +72,11 @@ func toView(s store.Session, samples []int64, now time.Time) api.SessionView {
 			CacheCreationTokens: s.Usage.CacheCreationTokens,
 			CacheReadTokens:     s.Usage.CacheReadTokens,
 		},
-		StartedAt:     s.StartedAt,
-		LastSeenAt:    s.LastSeenAt,
-		EndedAt:       s.EndedAt,
-		RemoteControl: s.RemoteControl,
-		Samples:       samples,
+		StartedAt:      s.StartedAt,
+		LastSeenAt:     s.LastSeenAt,
+		EndedAt:        s.EndedAt,
+		RemoteControl:  s.RemoteControl,
+		APIErrorStatus: s.APIErrorStatus,
+		Samples:        samples,
 	}
 }

@@ -11,18 +11,42 @@ boundary and the security implications; it changes no defaults.
 
 | Flag | Default | Purpose |
 |------|---------|---------|
-| `--addr` | `:8080` | listen address |
+| `--addr` | `127.0.0.1:8080` | listen address (bind a reachable interface for cross-machine clients) |
 | `--db` | `claude-fleet.db` | SQLite file path |
 | `--token` | — | shared auth token (else `$FLEET_TOKEN`, else the stored one, else generated) |
 | `--session-retention` | `24h` | delete sessions not reported within this window (`0` disables) |
+| `--metrics-addr` | `127.0.0.1:9464` | ops listener for `/metrics` and `/healthz` (empty disables) |
 
 It is single-node by design (one SQLite writer, an in-memory SSE hub) — run **one
 instance**, not replicas.
 
+### Ops listener (metrics & health)
+
+`/metrics` (Prometheus) and `/healthz` (liveness) are served on a **separate
+listener** (`--metrics-addr`), never on the API port — so `:8080` stays purely
+the token-protected API. The ops listener is **unauthenticated**; its safety comes
+from the bind address (`127.0.0.1` by default). Expose it only to your scraper:
+
+- **Same host / in-pod probe:** the localhost default is enough.
+- **Remote Prometheus:** bind it to a reachable, scraper-only interface
+  (`--metrics-addr 10.0.0.5:9464`) behind your network controls — not the public
+  internet. It carries no session content: labels are bounded (`status`, `event`,
+  `model`, `route`), never a session id, machine, or project.
+
+Metrics are namespaced `fleet_*` (RED HTTP metrics, ingestion counters, a
+scrape-time `fleet_sessions` gauge by reconciled status, SSE and prune counters,
+DB size, watcher heartbeat) plus the default Go/process collectors.
+
+A ready-made Grafana dashboard ships in [`dashboards/claude-fleet.json`](../dashboards/claude-fleet.json)
+— import it and pick your Prometheus datasource (the dashboard uses a datasource
+variable, so it is not tied to any instance).
+
 ## Local / trusted-LAN use
 
-Plain HTTP is fine. Run it, point clients at `http://<host>:8080`, done. TLS only
-matters once traffic crosses an untrusted network.
+The daemon binds `127.0.0.1` by default. For cross-machine clients, bind a
+reachable interface explicitly (`--addr :8080`, or a specific LAN IP) and point
+clients at `http://<host>:8080`. Plain HTTP is fine on a trusted network; TLS
+only matters once traffic crosses an untrusted one.
 
 ## Public exposure
 
@@ -31,17 +55,13 @@ If `fleetd` is reachable from the internet, two rules:
 1. **Put a TLS front in front of it** (Caddy, nginx, Traefik). The front holds the
    certificate and forwards to `fleetd`. Clients talk `https://` to the front;
    `fleetd` stays plain HTTP on the host.
-2. **Bind `fleetd` to `127.0.0.1`** so only the front (same host) reaches it:
-
-   ```bash
-   claude-fleetd serve --addr 127.0.0.1:8080
-   ```
-
-   Otherwise the default `:8080` also listens on the public interface, and someone
-   can hit the raw HTTP port directly, **bypassing your TLS front**. They still
-   need the token (every `/api/*` route requires it), but a legitimate client that
-   ever reached that port in cleartext would leak the token. Close the door: bind
-   localhost, let only the front be public.
+2. **Keep `fleetd` on `127.0.0.1`** (the default) so only the front (same host)
+   reaches it — no extra flag needed. Expose the raw port widely only by an
+   explicit choice (`--addr :8080`); a public HTTP port would let someone hit it
+   directly, **bypassing your TLS front**. They still need the token (every
+   `/api/*` route requires it), but a legitimate client that ever reached that
+   port in cleartext would leak the token. Leave the door closed: let only the
+   front be public.
 
 > **The shared token is only meaningful over TLS on a public network.** It travels
 > in the `Authorization` header on every request; without TLS it is captured on
@@ -53,8 +73,9 @@ If `fleetd` is reachable from the internet, two rules:
 Every `/api/*` route is behind auth; a request with **no token or a wrong token**
 gets `401` and no data (enforced by `TestEveryAPIRouteRejectsUnauthenticated`).
 The token is 256-bit, compared in constant time — not guessable, no timing
-oracle. Only `/healthz` is unauthenticated, and it returns just `ok` (liveness,
-no data). So a public `fleetd` behind TLS leaks nothing to someone who does not
+oracle. The API port serves **only** authenticated `/api/*` routes; the
+unauthenticated `/healthz` and `/metrics` live on the separate ops listener (see
+above). So a public `fleetd` behind TLS leaks nothing to someone who does not
 hold the token.
 
 ## The token

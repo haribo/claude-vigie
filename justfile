@@ -16,6 +16,7 @@ tool-install:
     @mkdir -p bin
     GOBIN=$(pwd)/bin go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.11.4
     GOBIN=$(pwd)/bin go install golang.org/x/tools/cmd/goimports@latest
+    GOBIN=$(pwd)/bin go install golang.org/x/vuln/cmd/govulncheck@latest
 
 # =============================================================================
 # DEV RUN — run the current source against a throwaway local server, isolated
@@ -50,7 +51,7 @@ dev-server:
     go build -o "{{dev_bin}}/claude-fleetd" ./cmd/claude-fleetd
     pidf="{{dev_dir}}/server.pid"
     [ -f "$pidf" ] && kill "$(cat "$pidf")" 2>/dev/null || true
-    nohup "{{dev_bin}}/claude-fleetd" serve --addr {{dev_addr}} --token {{dev_token}} --db "{{dev_db}}" --session-retention 0 > "{{dev_dir}}/server.log" 2>&1 &
+    nohup "{{dev_bin}}/claude-fleetd" serve --addr {{dev_addr}} --token {{dev_token}} --db "{{dev_db}}" --session-retention 0 --metrics-addr 0.0.0.0:9464 > "{{dev_dir}}/server.log" 2>&1 &
     echo $! > "$pidf"
     echo "dev server → {{dev_url}} (pid $(cat "$pidf"), logs {{dev_dir}}/server.log)"
 
@@ -135,10 +136,10 @@ code-check:
     ./bin/golangci-lint run ./...
     echo "==> build"
     go build ./...
-    echo "==> test"
-    go test ./...
     echo "==> test (race)"
     go test -race ./...
+    echo "==> govulncheck"
+    ./bin/govulncheck ./...
     echo "all checks passed"
 
 # Run linter

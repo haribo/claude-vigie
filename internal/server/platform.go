@@ -5,7 +5,10 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+
 	"time"
+
+	"github.com/haribo/claude-fleet/internal/clock"
 
 	"github.com/haribo/claude-fleet/internal/api"
 )
@@ -25,6 +28,10 @@ const platformMetaKey = "platform_status"
 
 // platformFetchTimeout bounds a single poll.
 const platformFetchTimeout = 10 * time.Second
+
+// statusClient is a dedicated client with a timeout (http.DefaultClient has
+// none) for polling the public status endpoint.
+var statusClient = &http.Client{Timeout: platformFetchTimeout}
 
 func (s *Server) handleGetPlatform(w http.ResponseWriter, r *http.Request) {
 	v, ok, err := s.store.GetMeta(r.Context(), platformMetaKey)
@@ -97,7 +104,7 @@ func fetchPlatformStatus(ctx context.Context, url string) (api.PlatformStatus, e
 	}
 	req.Header.Set("User-Agent", "claude-fleet")
 
-	resp, err := http.DefaultClient.Do(req)
+	resp, err := statusClient.Do(req)
 	if err != nil {
 		return api.PlatformStatus{}, err
 	}
@@ -122,6 +129,6 @@ func fetchPlatformStatus(ctx context.Context, url string) (api.PlatformStatus, e
 		Indicator:   body.Status.Indicator,
 		Description: body.Status.Description,
 		URL:         body.Page.URL,
-		FetchedAt:   time.Now().UTC().Format(time.RFC3339),
+		FetchedAt:   clock.Now().UTC().Format(time.RFC3339),
 	}, nil
 }

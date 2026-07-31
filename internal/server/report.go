@@ -14,10 +14,18 @@ import (
 func (s *Server) handleReport(w http.ResponseWriter, r *http.Request) {
 	var req api.ReportRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		var maxErr *http.MaxBytesError
+		if errors.As(err, &maxErr) {
+			metricReportsRejected.WithLabelValues("too_large").Inc()
+			s.writeError(w, http.StatusRequestEntityTooLarge, "request body too large")
+			return
+		}
+		metricReportsRejected.WithLabelValues("bad_json").Inc()
 		s.writeError(w, http.StatusBadRequest, "invalid json body")
 		return
 	}
 	if req.SessionID == "" || req.Event == "" {
+		metricReportsRejected.WithLabelValues("missing_fields").Inc()
 		s.writeError(w, http.StatusBadRequest, "session_id and event are required")
 		return
 	}
@@ -32,7 +40,7 @@ func (s *Server) handleReport(w http.ResponseWriter, r *http.Request) {
 	}
 
 	sess := applyReport(existing, isNew, req)
-	sess.ReportedAt = time.Now().UTC().Format(time.RFC3339) // server-side heartbeat
+	sess.ReportedAt = s.now().UTC().Format(time.RFC3339) // server-side heartbeat
 	if err := s.store.UpsertSession(ctx, sess); err != nil {
 		s.log.Error("upserting session", "error", err)
 		s.writeError(w, http.StatusInternalServerError, "internal error")
@@ -45,7 +53,7 @@ func (s *Server) handleReport(w http.ResponseWriter, r *http.Request) {
 	// The watcher polls frequently; keep its scans out of the event log, but
 	// record a heartbeat so clients can detect an absent watcher.
 	if req.Event == "watch" {
-		if err := s.store.SetMeta(ctx, watchSeenKey, time.Now().UTC().Format(time.RFC3339)); err != nil {
+		if err := s.store.SetMeta(ctx, watchSeenKey, s.now().UTC().Format(time.RFC3339)); err != nil {
 			s.log.Error("recording watch heartbeat", "error", err)
 		}
 	} else {
@@ -63,6 +71,7 @@ func (s *Server) handleReport(w http.ResponseWriter, r *http.Request) {
 	s.maybeSample(ctx, sess.ID, req.Timestamp, sess.Usage.OutputTokens)
 	s.hub.publish()
 
+	metricReports.WithLabelValues(req.Event).Inc()
 	w.WriteHeader(http.StatusNoContent)
 }
 
@@ -73,7 +82,8 @@ func (s *Server) rollupTokens(ctx context.Context, old, sess store.Session, req 
 	if delta <= 0 {
 		return
 	}
-	if err := s.store.AddDailyTokens(ctx, dayOf(req.Timestamp), sess.Model, delta); err != nil {
+	metricOutputTokens.WithLabelValues(sess.Model).Add(float64(delta))
+	if err := s.store.AddDailyTokens(ctx, dayOf(req.Timestamp, s.now()), sess.Model, delta); err != nil {
 		s.log.Error("rolling up daily tokens", "error", err)
 	}
 }
@@ -91,17 +101,17 @@ func (s *Server) rollupStatusInterval(ctx context.Context, sess store.Session, r
 		return
 	}
 	// Attribute the whole interval to its start day (no midnight split in v1).
-	if err := s.store.AddDailyStatusSeconds(ctx, dayOf(last.CreatedAt), sess.Model, last.Status, secs); err != nil {
+	if err := s.store.AddDailyStatusSeconds(ctx, dayOf(last.CreatedAt, s.now()), sess.Model, last.Status, secs); err != nil {
 		s.log.Error("rolling up daily status", "error", err)
 	}
 }
 
 // dayOf returns the UTC calendar day (YYYY-MM-DD) of an RFC3339 timestamp,
 // falling back to the current day when it cannot be parsed.
-func dayOf(ts string) string {
+func dayOf(ts string, now time.Time) string {
 	t, err := time.Parse(time.RFC3339, ts)
 	if err != nil {
-		t = time.Now()
+		t = now
 	}
 	return t.UTC().Format("2006-01-02")
 }
@@ -165,9 +175,11 @@ func applyReport(sess store.Session, isNew bool, req api.ReportRequest) store.Se
 	}
 	sess.LastSeenAt = req.Timestamp
 	if req.Status != "" {
-		sess.Status = mergeStatus(sess.Status, req.Status)
+		sess.Status, sess.StatusSource = reconcileWatch(sess.Status, sess.StatusSource, req.Status)
+		sess.APIErrorStatus = req.APIErrorStatus // watcher-derived; hooks carry no status
 	} else {
-		sess.Status = deriveStatus(req.Event, sess.Status)
+		sess.Status = deriveStatus(req.Event, req.NotificationType, sess.Status)
+		sess.StatusSource = "hook" // a hook event is the authoritative observer
 	}
 	if req.Event == "SessionEnd" {
 		sess.EndedAt = req.Timestamp
@@ -189,21 +201,31 @@ func applyReport(sess store.Session, isNew bool, req api.ReportRequest) store.Se
 	return sess
 }
 
-// mergeStatus applies an explicit (watcher) status, but keeps a "waiting"
-// session waiting when the watcher only sees it as "idle" (alive but between
-// turns). "waiting" is a semantic state — Claude asked for input — that the
-// watcher cannot detect, so it persists until real activity resumes or the
-// session ends.
-func mergeStatus(current, incoming string) string {
-	if current == "waiting" && incoming == "idle" {
-		return "waiting"
+// reconcileWatch folds a watcher-reported status into the session, resolving the
+// overlap between the two observers by *authority* rather than a status table.
+//
+// The watcher polls the transcript and process; it is authoritative for coverage
+// and for anything it can positively observe (working, thinking, error, ended).
+// But it only ever sees a quiet-but-alive session as "idle", and it cannot see
+// two things a hook can: that the operator is the blocker (waiting), or that a
+// turn is open while Claude works silently. So the watcher's "idle" must not
+// retract a *hook-owned* active state — yet it must retract its *own* stale
+// state, which is the finished-session latch bug (#201): a watcher-set "working"
+// has to fall back to idle when the transcript goes quiet.
+//
+// It returns the new status and its owning source.
+func reconcileWatch(current, currentSource, incoming string) (status, source string) {
+	if incoming == "idle" && currentSource == "hook" &&
+		(current == "waiting" || current == "working" || current == "thinking") {
+		return current, "hook" // keep the hook's semantic/active state
 	}
-	return incoming
+	return incoming, "watch"
 }
 
 // deriveStatus maps a hook event to a session status, keeping the current
-// status for events that do not change it.
-func deriveStatus(event, current string) string {
+// status for events that do not change it. notifType is the Notification hook's
+// notification_type; it splits "waiting on a human" from "idle".
+func deriveStatus(event, notifType, current string) string {
 	switch event {
 	case "SessionStart":
 		if current == "" {
@@ -213,6 +235,12 @@ func deriveStatus(event, current string) string {
 	case "UserPromptSubmit":
 		return "working"
 	case "Notification":
+		// A Notification means Claude wants attention. Only idle_prompt (finished,
+		// awaiting the next prompt) is truly idle; permission_prompt and the rest
+		// mean the operator is the blocker. Empty (older Claude Code) stays waiting.
+		if notifType == "idle_prompt" {
+			return "idle"
+		}
 		return "waiting"
 	case "Stop":
 		return "idle"

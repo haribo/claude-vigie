@@ -1,6 +1,6 @@
 // Package server implements the claude-fleetd HTTP API: it accepts session
-// event reports, lists sessions, and (later) streams updates over SSE. Only
-// the daemon imports this package.
+// event reports, lists sessions, and streams updates over SSE. Only the daemon
+// imports this package.
 package server
 
 import (
@@ -12,6 +12,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/haribo/claude-fleet/internal/clock"
 	"github.com/haribo/claude-fleet/internal/store"
 )
 
@@ -39,6 +40,7 @@ type Server struct {
 	token string
 	log   *slog.Logger
 	hub   *hub
+	clock func() time.Time // injected wall clock; defaults to clock.Now
 }
 
 // New returns a Server backed by st, authenticating with token.
@@ -46,13 +48,21 @@ func New(st Store, token string, log *slog.Logger) *Server {
 	if log == nil {
 		log = slog.Default()
 	}
-	return &Server{store: st, token: token, log: log, hub: newHub()}
+	return &Server{store: st, token: token, log: log, hub: newHub(), clock: clock.Now}
+}
+
+// now reads the injected clock, falling back to the system clock so a Server
+// built as a struct literal (e.g. in tests) still works.
+func (s *Server) now() time.Time {
+	if s.clock == nil {
+		return clock.Now()
+	}
+	return s.clock()
 }
 
 // Handler returns the root HTTP handler with all routes registered.
 func (s *Server) Handler() http.Handler {
 	mux := http.NewServeMux()
-	mux.HandleFunc("GET /healthz", s.handleHealth)
 	mux.Handle("POST /api/report", s.auth(http.HandlerFunc(s.handleReport)))
 	mux.Handle("GET /api/sessions", s.auth(http.HandlerFunc(s.handleSessions)))
 	mux.Handle("POST /api/usage/lease", s.auth(http.HandlerFunc(s.handleUsageLease)))
@@ -64,12 +74,32 @@ func (s *Server) Handler() http.Handler {
 	mux.Handle("GET /api/stats", s.auth(http.HandlerFunc(s.handleStats)))
 	mux.Handle("GET /api/settings", s.auth(http.HandlerFunc(s.handleGetSettings)))
 	mux.Handle("POST /api/settings", s.auth(http.HandlerFunc(s.handleSetSettings)))
-	return mux
+	// RED metrics wrap the whole API; auth stays per-route. /healthz and /metrics
+	// live on the ops listener (daemon), never on the token-protected API port.
+	// limitBody caps request bodies before any handler reads them.
+	return withMetrics(limitBody(mux))
 }
 
-func (s *Server) handleHealth(w http.ResponseWriter, _ *http.Request) {
-	w.WriteHeader(http.StatusOK)
-	_, _ = w.Write([]byte("ok\n"))
+// maxBodyBytes bounds a request body; real reports are a few KB, so 1 MiB is
+// generous while preventing an unbounded-body memory DoS.
+const maxBodyBytes = 1 << 20
+
+// limitBody caps every request body with http.MaxBytesReader. A handler reading
+// past the cap gets an *http.MaxBytesError from its decoder, which it can turn
+// into a 413 (see handleReport).
+func limitBody(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		r.Body = http.MaxBytesReader(w, r.Body, maxBodyBytes)
+		next.ServeHTTP(w, r)
+	})
+}
+
+// HealthHandler is the liveness probe, served on the ops listener by the daemon.
+func (s *Server) HealthHandler() http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte("ok\n"))
+	})
 }
 
 // auth enforces a constant-time Bearer token check on protected routes.

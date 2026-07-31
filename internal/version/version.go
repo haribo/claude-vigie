@@ -11,6 +11,8 @@ var (
 )
 
 // String returns a human-readable version string.
-func String() string {
-	return fmt.Sprintf("claude-fleet %s (commit %s, built %s)", Version, Commit, BuildTime)
+// String renders the version line for the given binary name (each binary passes
+// its own, so `claude-fleetd version` does not print "claude-fleet").
+func String(name string) string {
+	return fmt.Sprintf("%s %s (commit %s, built %s)", name, Version, Commit, BuildTime)
 }

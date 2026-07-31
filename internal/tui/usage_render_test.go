@@ -20,10 +20,20 @@ func TestUsageStrip(t *testing.T) {
 		SevenDayPct: 30, SevenDayReset: time.Now().Add(4 * 24 * time.Hour).UTC().Format(time.RFC3339),
 		FetchedAt: time.Now().UTC().Format(time.RFC3339),
 	})
-	for _, want := range []string{"usage", "5h", "7d", "13%", "30%", "synced"} {
+	for _, want := range []string{"usage", "5h", "7d", "13%", "30%", "⟳"} {
 		if !strings.Contains(out, want) {
 			t.Errorf("usage strip missing %q:\n%s", want, out)
 		}
+	}
+}
+
+func TestSyncGlyphFreshness(t *testing.T) {
+	// A fresh snapshot renders a ⟳ glyph; an unparseable time still renders one.
+	if g := syncGlyph(time.Now().UTC().Format(time.RFC3339)); !strings.Contains(g, "⟳") {
+		t.Errorf("fresh syncGlyph = %q, want a ⟳", g)
+	}
+	if g := syncGlyph("not-a-time"); !strings.Contains(g, "⟳") {
+		t.Errorf("unparseable syncGlyph = %q, want a ⟳", g)
 	}
 }
 

@@ -11,13 +11,13 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"os"
 	"os/exec"
 	"os/user"
 	"strings"
 	"time"
 
 	"github.com/haribo/claude-fleet/internal/api"
+	"github.com/haribo/claude-fleet/internal/clock"
 	"github.com/haribo/claude-fleet/internal/config"
 	"github.com/haribo/claude-fleet/internal/presence"
 	"github.com/haribo/claude-fleet/internal/transcript"
@@ -30,6 +30,9 @@ type hookPayload struct {
 	Cwd            string `json:"cwd"`
 	HookEventName  string `json:"hook_event_name"`
 	ToolName       string `json:"tool_name"`
+	// NotificationType is set on Notification events (permission_prompt,
+	// idle_prompt, …); it lets the server tell "waiting on a human" from "idle".
+	NotificationType string `json:"notification_type"`
 }
 
 // Run reads a hook payload from stdin, builds a report for the given event
@@ -56,14 +59,15 @@ func Run(event string, stdin io.Reader) error {
 	}
 
 	req := api.ReportRequest{
-		Event:      event,
-		SessionID:  p.SessionID,
-		User:       systemUser(),
-		Machine:    cfg.Machine,
-		ProjectDir: p.Cwd,
-		GitBranch:  gitBranch(p.Cwd),
-		LastTool:   p.ToolName,
-		Timestamp:  time.Now().UTC().Format(time.RFC3339),
+		Event:            event,
+		SessionID:        p.SessionID,
+		User:             systemUser(),
+		Machine:          cfg.Machine,
+		ProjectDir:       p.Cwd,
+		GitBranch:        gitBranch(p.Cwd),
+		LastTool:         p.ToolName,
+		NotificationType: p.NotificationType,
+		Timestamp:        clock.Now().UTC().Format(time.RFC3339),
 	}
 	// The transcript is only worth reading at turn/session boundaries.
 	if event == "Stop" || event == "SessionEnd" {
@@ -94,6 +98,10 @@ func recordPresence(event, sessionID string) {
 	}
 }
 
+// httpClient carries a timeout (http.DefaultClient has none); the request also
+// sets a context deadline.
+var httpClient = &http.Client{Timeout: 10 * time.Second}
+
 func post(cfg *config.Config, req api.ReportRequest) error {
 	body, err := json.Marshal(req)
 	if err != nil {
@@ -110,7 +118,7 @@ func post(cfg *config.Config, req api.ReportRequest) error {
 	httpReq.Header.Set("Content-Type", "application/json")
 	httpReq.Header.Set("Authorization", "Bearer "+cfg.Token)
 
-	resp, err := http.DefaultClient.Do(httpReq)
+	resp, err := httpClient.Do(httpReq)
 	if err != nil {
 		return fmt.Errorf("posting report: %w", err)
 	}
@@ -124,7 +132,7 @@ func post(cfg *config.Config, req api.ReportRequest) error {
 // systemUser returns the OS account running the session: the USER env var if
 // set, else the current user, else "" (best-effort context, never an error).
 func systemUser() string {
-	if u := os.Getenv("USER"); u != "" {
+	if u := config.OSUser(); u != "" {
 		return u
 	}
 	if u, err := user.Current(); err == nil {

@@ -95,6 +95,36 @@ func TestUpsertAndGetSession(t *testing.T) {
 	}
 }
 
+func TestUpsertAPIErrorStatus(t *testing.T) {
+	st := openTestStore(t)
+	ctx := context.Background()
+
+	sess := sampleSession("e1")
+	sess.Status = "error"
+	sess.APIErrorStatus = 529
+	if err := st.UpsertSession(ctx, sess); err != nil {
+		t.Fatalf("upsert: %v", err)
+	}
+	got, err := st.GetSession(ctx, "e1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.APIErrorStatus != 529 {
+		t.Errorf("APIErrorStatus = %d, want 529", got.APIErrorStatus)
+	}
+
+	// Recovery clears the code on the next upsert.
+	upd := got
+	upd.Status = "working"
+	upd.APIErrorStatus = 0
+	if err := st.UpsertSession(ctx, upd); err != nil {
+		t.Fatal(err)
+	}
+	if got, _ := st.GetSession(ctx, "e1"); got.APIErrorStatus != 0 {
+		t.Errorf("APIErrorStatus = %d, want 0 after recovery", got.APIErrorStatus)
+	}
+}
+
 func TestGetSessionNotFound(t *testing.T) {
 	st := openTestStore(t)
 	if _, err := st.GetSession(context.Background(), "missing"); !errors.Is(err, ErrNotFound) {

@@ -22,6 +22,14 @@ type Info struct {
 	Usage          api.Usage
 	LastStopReason string // stop_reason of the last assistant message
 	LastActivity   string // RFC3339 timestamp of the last line
+	// LastAPIError is apiErrorStatus (HTTP code) of the last assistant line when
+	// it was an API error (Claude Code writes isApiErrorMessage into the
+	// transcript), else 0. A later non-error line clears it, so it is transient.
+	LastAPIError int
+	// Thinking is true when the last assistant line's final content block is a
+	// thinking block — Claude is reasoning inside a turn, before it produces text
+	// or a tool call. A later text/tool line clears it, so it is transient.
+	Thinking bool
 }
 
 type usage struct {
@@ -32,21 +40,24 @@ type usage struct {
 }
 
 type message struct {
-	ID         string `json:"id"`
-	Model      string `json:"model"`
-	StopReason string `json:"stop_reason"`
-	Usage      usage  `json:"usage"`
+	ID         string          `json:"id"`
+	Model      string          `json:"model"`
+	StopReason string          `json:"stop_reason"`
+	Usage      usage           `json:"usage"`
+	Content    json.RawMessage `json:"content"` // array of blocks (assistant); string (user) — parsed lazily
 }
 
 type line struct {
-	Type        string  `json:"type"`
-	SessionID   string  `json:"sessionId"`
-	Cwd         string  `json:"cwd"`
-	GitBranch   string  `json:"gitBranch"`
-	CustomTitle string  `json:"customTitle"`
-	AiTitle     string  `json:"aiTitle"`
-	Timestamp   string  `json:"timestamp"`
-	Message     message `json:"message"`
+	Type           string  `json:"type"`
+	SessionID      string  `json:"sessionId"`
+	Cwd            string  `json:"cwd"`
+	GitBranch      string  `json:"gitBranch"`
+	CustomTitle    string  `json:"customTitle"`
+	AiTitle        string  `json:"aiTitle"`
+	Timestamp      string  `json:"timestamp"`
+	IsAPIError     bool    `json:"isApiErrorMessage"`
+	APIErrorStatus int     `json:"apiErrorStatus"`
+	Message        message `json:"message"`
 }
 
 // maxLine bounds a single JSONL line; transcript messages can be large
@@ -77,7 +88,7 @@ func Parse(path string) (*Info, error) {
 		}
 		info.applyMeta(l, &titles)
 		if l.Type == "assistant" {
-			info.applyAssistant(l.Message, seen)
+			info.applyAssistant(l, seen)
 		}
 	}
 	if err := sc.Err(); err != nil {
@@ -104,8 +115,18 @@ func (info *Info) applyMeta(l line, titles *titleTracker) {
 	titles.observe(l.CustomTitle, l.AiTitle)
 }
 
-func (info *Info) applyAssistant(m message, seen map[string]bool) {
+func (info *Info) applyAssistant(l line, seen map[string]bool) {
+	m := l.Message
 	info.LastStopReason = m.StopReason
+	// Track the last assistant line's API-error state (set before the retry
+	// dedup below, which only guards token accumulation): a later non-error line
+	// clears it, so a recovered session stops reporting the error.
+	if l.IsAPIError {
+		info.LastAPIError = l.APIErrorStatus
+	} else {
+		info.LastAPIError = 0
+	}
+	info.Thinking = lastBlockIsThinking(m.Content)
 	if m.Model != "" {
 		info.Model = m.Model
 	}
@@ -119,6 +140,22 @@ func (info *Info) applyAssistant(m message, seen map[string]bool) {
 	info.Usage.OutputTokens += m.Usage.OutputTokens
 	info.Usage.CacheCreationTokens += m.Usage.CacheCreationInputTokens
 	info.Usage.CacheReadTokens += m.Usage.CacheReadInputTokens
+}
+
+// lastBlockIsThinking reports whether an assistant message's content ends with a
+// thinking block. Content is a raw array of {type,...} blocks; it is parsed
+// lazily here so a non-array content (e.g. a user string) never fails the line.
+func lastBlockIsThinking(raw json.RawMessage) bool {
+	if len(raw) == 0 {
+		return false
+	}
+	var blocks []struct {
+		Type string `json:"type"`
+	}
+	if err := json.Unmarshal(raw, &blocks); err != nil || len(blocks) == 0 {
+		return false
+	}
+	return blocks[len(blocks)-1].Type == "thinking"
 }
 
 // titleTracker keeps the latest custom (/rename) and auto titles seen.

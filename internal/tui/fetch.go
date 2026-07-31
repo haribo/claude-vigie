@@ -13,6 +13,10 @@ import (
 	"github.com/haribo/claude-fleet/internal/config"
 )
 
+// httpClient carries a timeout (http.DefaultClient has none); the per-request
+// context bounds each call further.
+var httpClient = &http.Client{Timeout: 10 * time.Second}
+
 // fetchSessions retrieves the current sessions from the server.
 func fetchSessions(cfg *config.Config) ([]api.SessionView, error) {
 	url := strings.TrimRight(cfg.ServerURL, "/") + "/api/sessions"
@@ -25,7 +29,7 @@ func fetchSessions(cfg *config.Config) ([]api.SessionView, error) {
 	}
 	req.Header.Set("Authorization", "Bearer "+cfg.Token)
 
-	resp, err := http.DefaultClient.Do(req)
+	resp, err := httpClient.Do(req)
 	if err != nil {
 		return nil, err
 	}
@@ -53,7 +57,7 @@ func fetchUsage(cfg *config.Config) (api.UsageReport, error) {
 	}
 	req.Header.Set("Authorization", "Bearer "+cfg.Token)
 
-	resp, err := http.DefaultClient.Do(req)
+	resp, err := httpClient.Do(req)
 	if err != nil {
 		return api.UsageReport{}, err
 	}
@@ -81,7 +85,7 @@ func fetchWatcher(cfg *config.Config) (api.WatcherStatus, error) {
 	}
 	req.Header.Set("Authorization", "Bearer "+cfg.Token)
 
-	resp, err := http.DefaultClient.Do(req)
+	resp, err := httpClient.Do(req)
 	if err != nil {
 		return api.WatcherStatus{}, err
 	}
@@ -109,7 +113,7 @@ func fetchPlatform(cfg *config.Config) (api.PlatformStatus, error) {
 	}
 	req.Header.Set("Authorization", "Bearer "+cfg.Token)
 
-	resp, err := http.DefaultClient.Do(req)
+	resp, err := httpClient.Do(req)
 	if err != nil {
 		return api.PlatformStatus{}, err
 	}
@@ -136,7 +140,7 @@ func fetchSettings(cfg *config.Config) (api.Settings, error) {
 	}
 	req.Header.Set("Authorization", "Bearer "+cfg.Token)
 
-	resp, err := http.DefaultClient.Do(req)
+	resp, err := httpClient.Do(req)
 	if err != nil {
 		return api.Settings{}, err
 	}
@@ -163,7 +167,7 @@ func fetchStats(cfg *config.Config) (api.StatsResponse, error) {
 	}
 	req.Header.Set("Authorization", "Bearer "+cfg.Token)
 
-	resp, err := http.DefaultClient.Do(req)
+	resp, err := httpClient.Do(req)
 	if err != nil {
 		return api.StatsResponse{}, err
 	}
@@ -195,7 +199,7 @@ func setSessionRetention(cfg *config.Config, v string) error {
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Authorization", "Bearer "+cfg.Token)
 
-	resp, err := http.DefaultClient.Do(req)
+	resp, err := httpClient.Do(req)
 	if err != nil {
 		return err
 	}

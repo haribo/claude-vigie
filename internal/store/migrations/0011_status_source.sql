@@ -1,0 +1,1 @@
+ALTER TABLE sessions ADD COLUMN status_source TEXT NOT NULL DEFAULT '';

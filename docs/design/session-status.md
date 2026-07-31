@@ -9,16 +9,18 @@ claude-fleet, status is **detected**, never operator-set
 
 ---
 
-## 1. The four statuses
+## 1. The six statuses
 
 Every session shows exactly one status. What each tells the operator:
 
-| Status    | Meaning                                                                 |
-| --------- | ---------------------------------------------------------------------- |
-| `working` | Claude is actively producing — a turn is running.                       |
-| `waiting` | Claude has stopped and is **waiting on the human** (a prompt or permission). |
-| `idle`    | The session is open and alive but between turns — nobody is acting.     |
-| `ended`   | The session is over (closed, or its process is gone).                   |
+| Status     | Meaning                                                                 |
+| ---------- | ---------------------------------------------------------------------- |
+| `working`  | Claude is actively producing — a turn is running.                       |
+| `thinking` | Claude is reasoning inside a turn — extended thinking, before it outputs text or a tool call. A sub-state of an active turn. |
+| `waiting`  | Claude has stopped and is **waiting on the human** (a prompt or permission). |
+| `idle`     | The session is open and alive but between turns — nobody is acting.     |
+| `error`    | The session hit a live Claude API error (500 / 529 / 429). Transient — clears when it recovers. |
+| `ended`    | The session is over (closed, or its process is gone).                   |
 
 `waiting` is the one status that carries intent: it means *the operator is the
 blocker*, not Claude. It is what the dashboard exists to surface — the session
@@ -38,7 +40,7 @@ a status the moment it changes:
 | ------------------ | --------------------------------------- |
 | `SessionStart`     | `idle` (only if the session was unknown) |
 | `UserPromptSubmit` | `working`                               |
-| `Notification`     | `waiting` — Claude is asking for input  |
+| `Notification`     | `waiting` on `permission_prompt` (a human must decide); `idle` on `idle_prompt` (finished, awaiting the next prompt) — split by the payload's `notification_type` |
 | `Stop`             | `idle`                                  |
 | `SessionEnd`       | `ended`                                 |
 
@@ -57,27 +59,48 @@ hooks aren't installed). It derives status from two signals — is the session's
 - process alive but quiet → `idle`, for any idle duration (a long idle session
   is not "gone");
 - no process mapping and quiet → `ended` (presumed closed — a live session would
-  have registered a mapping).
+  have registered a mapping);
+- last assistant line is an API error (`isApiErrorMessage` in the transcript) →
+  `error`, carrying the HTTP code; a later non-error line clears it;
+- last assistant block is a `thinking` block → `thinking` (reasoning before any
+  text/tool output); a later text/tool line clears it. A heuristic: at rest a
+  finished turn ends with text/tool, so this reads true only mid-turn.
 
-The watcher can see `working`, `idle`, and `ended`. It **cannot** see `waiting`.
+The watcher can see `working`, `thinking`, `idle`, `ended`, and `error`. It
+**cannot** see `waiting`.
 
 ---
 
 ## 3. Reconciliation rules
 
-The two sources can disagree; two rules keep the result honest.
+The two sources can disagree; the server resolves it by **observer authority**,
+not a table of status pairs. Each session remembers *which* observer last set
+its status (its **source**: `hook` or `watch`).
 
-**`waiting` is sticky over the watcher's `idle`.** When a hook has set `waiting`,
-the watcher — which only ever sees that same session as `idle` (alive, quiet) —
-must not overwrite it. `waiting` persists until real activity resumes (back to
-`working`) or the session ends. Without this, every watcher scan would erase the
-"needs a human" signal a second after the hook set it.
+**The watcher is authoritative for what it can positively observe** — `working`,
+`thinking`, `error`, `ended` — and any such report wins and becomes watch-owned.
+
+**A hook is authoritative for what only it can see** — that the operator is the
+blocker (`waiting`), or that a turn is open while Claude works silently. The
+watcher only ever sees a quiet-but-alive session as `idle`, so its `idle` must
+**not** retract a *hook-owned* `waiting`, `working`, or `thinking`. A hook `Stop`
+(→ `idle`) or new activity ends the turn.
+
+**The watcher must retract its own stale state.** The key consequence: a `working`
+that the *watcher itself* set (a hooks-free session) falls back to `idle` when the
+transcript goes quiet — because it is watch-owned, not hook-owned. Without the
+source, a blanket "keep working" latches a finished session on `working` forever.
 
 **A session that stops reporting becomes `ended`.** The watcher re-reports every
 scan, so a live session is refreshed constantly. If more than ~60 s pass with no
 report, the session is shown as `ended` — this catches the cases no explicit
 event covers: the watcher process died, the machine went offline, or a session
 dropped out of the scan window. A session already `ended` stays `ended`.
+
+**`error` overrides `working`/`idle`, never `ended`.** A live session that just
+hit an API error shows `error`; a closed session stays `ended`, so a stale
+transcript never lingers red. `error` is transient by construction — the next
+non-error line restores `working`/`idle`, so a recovered retry is not held red.
 
 ---
 
@@ -90,6 +113,29 @@ coarse: it sees activity and liveness, never intent. Together — hooks for
 backstop — they cover every session without either being a single point of
 failure. The reconciliation rules (§ 3) resolve the overlap in favor of the
 more-informed source.
+
+---
+
+## 5. Detection sources & reliability
+
+Not every status is equally trustworthy. What produces each one, and how much to
+trust it:
+
+| Status     | Source(s) | Reliability |
+| ---------- | --------- | ----------- |
+| `working`  | hook `UserPromptSubmit`; watcher (recent transcript writes / a live `tool_use` turn) | **Reliable.** A hook pins it instantly; the watcher covers hooks-free sessions. Held through a quiet turn by authority (§ 3). |
+| `waiting`  | hook `Notification` only | **Reliable when hooks are installed, else invisible.** Only a hook can see that the operator is the blocker; the watcher never infers it. |
+| `idle`     | hook `Stop`; watcher (alive + quiet) | **Reliable.** Distinguishing `idle` from `ended` rests on process presence (PID + `/proc`, [ADR-0006](../adr/0006-session-presence-via-proc.md)). |
+| `ended`    | hook `SessionEnd`; watcher (dead process, or no mapping + quiet); server (no report for ~60 s) | **Reliable** for a hooked end or a dead process; a **heuristic** for a hooks-free session that simply went quiet. |
+| `error`    | watcher (`isApiErrorMessage` in the transcript) | **Reliable signal, sampled.** The flag is unambiguous, but surfaced only at the next scan, not instantly (Claude Code has no error hook). |
+| `thinking` | watcher only (last content block is a `thinking` block) | **Best-effort heuristic.** No hook signals reasoning; it is inferred from the transcript, sampled every ~2 s, invisible in a hooks-only deployment, and can briefly mis-read when a `tool_use` block follows the thinking block. |
+
+**Decision on `thinking` (#207): kept, as an explicit best-effort refinement.**
+Dropping it would lose a genuine, if imperfect, signal; hardening it to real-time
+is impossible without a Claude Code "thinking" hook, which does not exist. It is
+therefore documented here as best-effort and only ever *refines* an active turn
+(`working`/`idle`) — never `waiting`, `error`, or `ended` — so a wrong guess is
+always a near-miss, not a misleading state.
 
 ---
 

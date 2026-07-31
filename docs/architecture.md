@@ -78,8 +78,8 @@ reconciled per [`design/session-status.md`](design/session-status.md).
 |------|---------|
 | `SessionStart` | session appears (machine, project, git branch, model); records process presence ([ADR-0006](adr/0006-session-presence-via-proc.md)) |
 | `UserPromptSubmit` | a turn started; backfills presence |
-| `PostToolUse` | last tool used + heartbeat |
-| `Notification` | Claude is waiting on the human |
+| `PostToolUse` | last tool used + heartbeat (opt-in, installed only with `init --detailed`) |
+| `Notification` | `waiting` on a permission prompt, `idle` on an idle prompt (split by `notification_type`) |
 | `Stop` | turn ended + token usage (read from the transcript) |
 | `SessionEnd` | session closed; clears presence |
 
@@ -89,7 +89,6 @@ All `/api/*` routes require the shared token in the `Authorization` header.
 
 | Method | Path | Purpose |
 |--------|------|---------|
-| GET | `/healthz` | Liveness probe (no auth) |
 | POST | `/api/report` | Receive a session event (from hooks and the watcher) |
 | GET | `/api/sessions` | Current state of all sessions |
 | GET | `/api/events` | SSE stream of state changes |
@@ -97,7 +96,13 @@ All `/api/*` routes require the shared token in the `Authorization` header.
 | GET · POST | `/api/usage` | Read · post subscription usage (percentages only) |
 | GET | `/api/watcher` | Last watcher heartbeat (drives the "no watcher" warning) |
 | GET | `/api/status` | Claude platform health (server-polled from status.claude.com) |
+| GET | `/api/stats` | Analytics rollups + top sessions |
 | GET · POST | `/api/settings` | Read · update server settings (session retention) |
+
+`/healthz` (liveness) and `/metrics` (Prometheus) are served on a **separate ops
+listener** (`--metrics-addr`, default `127.0.0.1:9464`), not on the API port —
+they carry no auth, so they stay off the token-protected surface. See
+[deployment.md](deployment.md).
 
 ## Usage & remote control
 

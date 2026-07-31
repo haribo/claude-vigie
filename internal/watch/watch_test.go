@@ -155,6 +155,52 @@ func TestStatusForPresence(t *testing.T) {
 	}
 }
 
+func TestSessionStatus(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
+
+	// No mapping + actively writing → working; an API error overrides to error.
+	if got := sessionStatus("u1", "end_turn", 0, 2*time.Second); got != "working" {
+		t.Errorf("active, no error = %q, want working", got)
+	}
+	if got := sessionStatus("u1", "end_turn", 500, 2*time.Second); got != "error" {
+		t.Errorf("active + api error = %q, want error", got)
+	}
+
+	// A live but idle session with a lingering API error still shows error.
+	if err := presence.Save("live-e", presence.Mapping{PID: os.Getpid(), StartTime: selfStartTime(t)}); err != nil {
+		t.Fatal(err)
+	}
+	if got := sessionStatus("live-e", "end_turn", 529, time.Hour); got != "error" {
+		t.Errorf("idle + api error = %q, want error", got)
+	}
+
+	// A closed/ended session is never shown as error, even if its last line errored.
+	if got := sessionStatus("u2", "end_turn", 500, time.Hour); got != "ended" {
+		t.Errorf("ended + api error = %q, want ended (not sticky-red on a closed session)", got)
+	}
+}
+
+func TestWithThinking(t *testing.T) {
+	cases := []struct {
+		status   string
+		thinking bool
+		want     string
+	}{
+		{"working", true, "thinking"},
+		{"idle", true, "thinking"},
+		{"working", false, "working"},
+		{"idle", false, "idle"},
+		{"error", true, "error"},     // never overrides an API error
+		{"ended", true, "ended"},     // never overrides a closed session
+		{"waiting", true, "waiting"}, // never overrides waiting-on-human
+	}
+	for _, c := range cases {
+		if got := withThinking(c.status, c.thinking); got != c.want {
+			t.Errorf("withThinking(%q, %v) = %q, want %q", c.status, c.thinking, got, c.want)
+		}
+	}
+}
+
 // selfStartTime reads field 22 of /proc/self/stat (the test process start time).
 func selfStartTime(t *testing.T) uint64 {
 	t.Helper()

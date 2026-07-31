@@ -71,8 +71,12 @@ jobs:
       - name: Test
         run: go test -race -coverprofile=coverage.out ./...
 
-      - name: Coverage summary
-        run: go tool cover -func=coverage.out | tail -1
+      - name: Coverage gate
+        run: |
+          total=$(go tool cover -func=coverage.out | tail -1 | awk '{print $3}' | tr -d '%')
+          floor=55.0
+          echo "total coverage: ${total}% (floor ${floor}%)"
+          awk -v t="$total" -v f="$floor" 'BEGIN { if (t+0 < f+0) { print "::error::coverage " t "% is below the " f "% floor — add tests or lower the floor deliberately"; exit 1 } }'
 
   vulncheck:
     name: Vulnerability check

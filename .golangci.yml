@@ -33,6 +33,12 @@ linters:
     - bodyclose
     - sqlclosecheck
 
+    # Architecture (ADR-0003: minimal client, never links server/store)
+    - depguard
+
+    # Dependency injection (docs/code.md: no hidden global state in business logic)
+    - forbidigo
+
     # Tests
     - thelper
     - tparallel
@@ -68,8 +74,58 @@ linters:
         linters:
           - revive
         text: "var-naming: avoid package names"
+      # forbidigo seams: the clock package defines the wall clock; config and the
+      # daemon (composition root) legitimately read env; tests use the real ones.
+      - path: internal/clock/
+        linters:
+          - forbidigo
+      - path: internal/config/
+        linters:
+          - forbidigo
+        text: os\.Getenv
+      - path: internal/daemon/
+        linters:
+          - forbidigo
+        text: os\.Getenv
+      - path: "_test\\.go$"
+        linters:
+          - forbidigo
 
   settings:
+    # Import boundaries (docs/code.md, ADR-0003): the client packages ship in a
+    # minimal binary and MUST NOT link the server, the store, or the web
+    # dashboard. depguard makes that invariant a CI failure, not a review note.
+    depguard:
+      rules:
+        client-minimal:
+          list-mode: lax
+          files:
+            - "**/internal/client/**"
+            - "**/internal/report/**"
+            - "**/internal/tui/**"
+          deny:
+            - pkg: github.com/haribo/claude-fleet/internal/server
+              desc: client must not link the server (ADR-0003)
+            - pkg: github.com/haribo/claude-fleet/internal/store
+              desc: client must not link the store (ADR-0003)
+            - pkg: github.com/haribo/claude-fleet/web
+              desc: client must not link the web dashboard (ADR-0003)
+            - pkg: github.com/prometheus/client_golang
+              desc: metrics live in the daemon only (ADR-0003); the client never links prometheus
+
+    # No hidden global state in business logic (docs/code.md): inject time, env,
+    # and HTTP clients instead of reaching for the process globals. The seams are
+    # excepted below (internal/clock defines the clock; config/daemon read env at
+    # the composition edge; tests use the real ones freely).
+    forbidigo:
+      forbid:
+        - pattern: ^time\.Now$
+          msg: inject a clock (func() time.Time, default clock.Now) — see docs/code.md
+        - pattern: ^os\.Getenv$
+          msg: read env through internal/config, not business logic — see docs/code.md
+        - pattern: ^http\.DefaultClient$
+          msg: use an injected *http.Client with a timeout — see docs/code.md
+
     cyclop:
       max-complexity: 15
       package-average: 10.0

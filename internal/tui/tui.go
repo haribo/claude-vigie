@@ -6,13 +6,15 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 
 	"github.com/haribo/claude-fleet/internal/api"
+	"github.com/haribo/claude-fleet/internal/clock"
 	"github.com/haribo/claude-fleet/internal/config"
 )
 
 // Run starts the terminal dashboard, polling the server described by cfg.
 func Run(cfg *config.Config) error {
 	events := make(chan struct{}, 1)
-	go subscribeEvents(cfg, events)
+	conn := make(chan bool, 1)
+	go subscribeEvents(cfg, events, conn)
 
 	m := model{
 		fetch:         func() ([]api.SessionView, error) { return fetchSessions(cfg) },
@@ -26,6 +28,8 @@ func Run(cfg *config.Config) error {
 		prefs:         loadPrefs(),
 		fetchSeq:      1, // Init issues generation 1
 		events:        events,
+		conn:          conn,
+		clock:         clock.Now,
 	}
 	_, err := tea.NewProgram(m, tea.WithAltScreen()).Run()
 	return err

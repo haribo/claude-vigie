@@ -4,11 +4,11 @@ import (
 	"fmt"
 	"path/filepath"
 	"strings"
-	"time"
 
 	"github.com/charmbracelet/lipgloss"
 
 	"github.com/haribo/claude-fleet/internal/api"
+	"github.com/haribo/claude-fleet/internal/clock"
 )
 
 var (
@@ -99,7 +99,7 @@ type column struct {
 // aligned), then activity, rc, and the colored `● status`. The short session id
 // lives in the detail panel only.
 var columns = []column{
-	{"NAME", 22, 0, false, sessionName, nil},
+	{"NAME", 22, 0, false, sessionName, func(s api.SessionView) lipgloss.Style { return statusStyle(s.Status) }},
 	{"USER", 10, 8, false, func(s api.SessionView) string { return orDash(s.User) }, func(api.SessionView) lipgloss.Style { return userStyle }},
 	{"MACHINE", 10, 4, false, func(s api.SessionView) string { return s.Machine }, nil},
 	{"DIR", 16, 0, false, func(s api.SessionView) string { return projectName(s.ProjectDir) }, nil},
@@ -107,10 +107,10 @@ var columns = []column{
 	{"MODEL", 12, 5, false, func(s api.SessionView) string { return shortModel(s.Model) }, func(api.SessionView) lipgloss.Style { return dimStyle }},
 	{"OUT", 8, 3, true, func(s api.SessionView) string { return humanizeTokens(s.Usage.OutputTokens) }, nil},
 	{"TOTAL", 9, 2, true, func(s api.SessionView) string { return humanizeTokens(totalTokens(s)) }, nil},
-	{"SEEN", 6, 6, true, func(s api.SessionView) string { return relativeAge(s.LastSeenAt, time.Now()) }, func(api.SessionView) lipgloss.Style { return dimStyle }},
+	{"SEEN", 6, 6, true, func(s api.SessionView) string { return relativeAge(s.LastSeenAt, clock.Now()) }, func(api.SessionView) lipgloss.Style { return dimStyle }},
 	{"ACT", 10, 9, false, func(s api.SessionView) string { return activitySpark(s.Samples) }, nil},
 	{"RC", 4, 1, false, rcCell, rcStyle},
-	{"STATUS", 12, 0, false, func(s api.SessionView) string { return "● " + s.Status }, func(s api.SessionView) lipgloss.Style { return statusStyle(s.Status) }},
+	{"STATUS", 12, 0, false, statusCell, func(s api.SessionView) lipgloss.Style { return statusStyle(s.Status) }},
 }
 
 var (
@@ -281,7 +281,7 @@ func renderDetail(s api.SessionView) string {
 		detailField("Directory", s.ProjectDir),
 		detailField("Branch", orDash(s.GitBranch)),
 		detailField("Model", orDash(s.Model)),
-		detailField("Status", s.Status),
+		detailField("Status", statusDetail(s)),
 		detailField("Remote control", rcLabel(s.RemoteControl)),
 		detailField("Last tool", orDash(s.LastTool)),
 		detailField("Started", orDash(s.StartedAt)),
@@ -341,10 +341,18 @@ func renderSummary(sessions []api.SessionView, history []int) string {
 
 	parts := []string{
 		statusStyle("working").Render(fmt.Sprintf("● working %d", counts["working"])),
+	}
+	if n := counts["thinking"]; n > 0 { // a sub-state of active work: shown only when present
+		parts = append(parts, statusStyle("thinking").Render(fmt.Sprintf("● thinking %d", n)))
+	}
+	parts = append(parts,
 		statusStyle("waiting").Render(fmt.Sprintf("● waiting %d", counts["waiting"])),
 		statusStyle("idle").Render(fmt.Sprintf("● idle %d", counts["idle"])),
-		dimStyle.Render(fmt.Sprintf("● ended %d", counts["ended"])),
+	)
+	if n := counts["error"]; n > 0 { // an alert: shown only when present
+		parts = append(parts, statusStyle("error").Render(fmt.Sprintf("● error %d", n)))
 	}
+	parts = append(parts, dimStyle.Render(fmt.Sprintf("● ended %d", counts["ended"])))
 	line := strings.Join(parts, "   ") + "    " + labelStyle.Render("out ") + humanizeTokens(totalOut) +
 		"    " + labelStyle.Render("rc ") + rcOnStyle.Render(fmt.Sprintf("◉ %d", rcActive))
 	if s := sparkline(history); s != "" {
@@ -479,8 +487,44 @@ func statusStyle(status string) lipgloss.Style {
 		return lipgloss.NewStyle().Foreground(cAmber)
 	case "idle":
 		return lipgloss.NewStyle().Foreground(cBlue)
+	case "thinking":
+		return lipgloss.NewStyle().Foreground(cAccent2) // violet — reasoning inside a turn
+	case "error":
+		return lipgloss.NewStyle().Foreground(cRed)
 	default:
 		return dimStyle // ended / unknown
+	}
+}
+
+// statusCell renders the ● status for the table, appending the HTTP code for a
+// live API error (e.g. "● error 529") so the list tells an outage from throttling.
+func statusCell(s api.SessionView) string {
+	if s.Status == "error" && s.APIErrorStatus != 0 {
+		return fmt.Sprintf("● error %d", s.APIErrorStatus)
+	}
+	return "● " + s.Status
+}
+
+// statusDetail renders the status for the detail panel, spelling out an API
+// error (e.g. "error — 529 Overloaded").
+func statusDetail(s api.SessionView) string {
+	if s.Status == "error" && s.APIErrorStatus != 0 {
+		return "error — " + apiErrorLabel(s.APIErrorStatus)
+	}
+	return s.Status
+}
+
+// apiErrorLabel names the common Claude API error codes.
+func apiErrorLabel(code int) string {
+	switch code {
+	case 429:
+		return "429 Rate limited"
+	case 500:
+		return "500 Internal server error"
+	case 529:
+		return "529 Overloaded"
+	default:
+		return fmt.Sprintf("%d", code)
 	}
 }
 
