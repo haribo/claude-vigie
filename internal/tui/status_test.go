@@ -50,6 +50,24 @@ func TestThinkingRendering(t *testing.T) {
 	}
 }
 
+func TestConnGlyph(t *testing.T) {
+	if g := (model{sseLive: true}).connGlyph(); !strings.Contains(g, "●") {
+		t.Errorf("live conn = %q, want ●", g)
+	}
+	if g := (model{sseLive: false, err: errTest}).connGlyph(); !strings.Contains(g, "○") {
+		t.Errorf("offline conn = %q, want ○", g)
+	}
+	if g := (model{}).connGlyph(); !strings.Contains(g, "◍") {
+		t.Errorf("reconnecting conn = %q, want ◍", g)
+	}
+}
+
+var errTest = fmtError("boom")
+
+type fmtError string
+
+func (e fmtError) Error() string { return string(e) }
+
 func TestRenderSummaryErrorCount(t *testing.T) {
 	out := renderSummary([]api.SessionView{
 		{Status: "working"}, {Status: "error", APIErrorStatus: 500}, {Status: "idle"},
