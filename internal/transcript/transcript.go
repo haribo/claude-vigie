@@ -26,6 +26,10 @@ type Info struct {
 	// it was an API error (Claude Code writes isApiErrorMessage into the
 	// transcript), else 0. A later non-error line clears it, so it is transient.
 	LastAPIError int
+	// Thinking is true when the last assistant line's final content block is a
+	// thinking block — Claude is reasoning inside a turn, before it produces text
+	// or a tool call. A later text/tool line clears it, so it is transient.
+	Thinking bool
 }
 
 type usage struct {
@@ -36,10 +40,11 @@ type usage struct {
 }
 
 type message struct {
-	ID         string `json:"id"`
-	Model      string `json:"model"`
-	StopReason string `json:"stop_reason"`
-	Usage      usage  `json:"usage"`
+	ID         string          `json:"id"`
+	Model      string          `json:"model"`
+	StopReason string          `json:"stop_reason"`
+	Usage      usage           `json:"usage"`
+	Content    json.RawMessage `json:"content"` // array of blocks (assistant); string (user) — parsed lazily
 }
 
 type line struct {
@@ -121,6 +126,7 @@ func (info *Info) applyAssistant(l line, seen map[string]bool) {
 	} else {
 		info.LastAPIError = 0
 	}
+	info.Thinking = lastBlockIsThinking(m.Content)
 	if m.Model != "" {
 		info.Model = m.Model
 	}
@@ -134,6 +140,22 @@ func (info *Info) applyAssistant(l line, seen map[string]bool) {
 	info.Usage.OutputTokens += m.Usage.OutputTokens
 	info.Usage.CacheCreationTokens += m.Usage.CacheCreationInputTokens
 	info.Usage.CacheReadTokens += m.Usage.CacheReadInputTokens
+}
+
+// lastBlockIsThinking reports whether an assistant message's content ends with a
+// thinking block. Content is a raw array of {type,...} blocks; it is parsed
+// lazily here so a non-array content (e.g. a user string) never fails the line.
+func lastBlockIsThinking(raw json.RawMessage) bool {
+	if len(raw) == 0 {
+		return false
+	}
+	var blocks []struct {
+		Type string `json:"type"`
+	}
+	if err := json.Unmarshal(raw, &blocks); err != nil || len(blocks) == 0 {
+		return false
+	}
+	return blocks[len(blocks)-1].Type == "thinking"
 }
 
 // titleTracker keeps the latest custom (/rename) and auto titles seen.

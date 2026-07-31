@@ -180,6 +180,27 @@ func TestSessionStatus(t *testing.T) {
 	}
 }
 
+func TestWithThinking(t *testing.T) {
+	cases := []struct {
+		status   string
+		thinking bool
+		want     string
+	}{
+		{"working", true, "thinking"},
+		{"idle", true, "thinking"},
+		{"working", false, "working"},
+		{"idle", false, "idle"},
+		{"error", true, "error"},     // never overrides an API error
+		{"ended", true, "ended"},     // never overrides a closed session
+		{"waiting", true, "waiting"}, // never overrides waiting-on-human
+	}
+	for _, c := range cases {
+		if got := withThinking(c.status, c.thinking); got != c.want {
+			t.Errorf("withThinking(%q, %v) = %q, want %q", c.status, c.thinking, got, c.want)
+		}
+	}
+}
+
 // selfStartTime reads field 22 of /proc/self/stat (the test process start time).
 func selfStartTime(t *testing.T) uint64 {
 	t.Helper()
