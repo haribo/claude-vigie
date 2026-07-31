@@ -75,6 +75,43 @@ func TestScanFiltersOldAndBuildsReports(t *testing.T) {
 	}
 }
 
+func TestScanTimestampFromLastActivityNotMtime(t *testing.T) {
+	t.Setenv("HOME", t.TempDir()) // no presence mapping → old activity reads ended
+	root := t.TempDir()
+	proj := filepath.Join(root, "proj")
+	if err := os.MkdirAll(proj, 0o750); err != nil {
+		t.Fatal(err)
+	}
+
+	now := time.Now()
+	lastActivity := now.Add(-3 * time.Hour) // last real line, hours ago
+	f := filepath.Join(proj, "s.jsonl")
+	writeLines(t, f, []string{
+		`{"sessionId":"s1","type":"assistant","timestamp":"` + lastActivity.UTC().Format(time.RFC3339) +
+			`","message":{"id":"m1","stop_reason":"end_turn","usage":{"output_tokens":5}}}`,
+	})
+	// Simulate the hourly metadata churn: the file mtime is now, though no dated
+	// line was appended.
+	if err := os.Chtimes(f, now, now); err != nil {
+		t.Fatal(err)
+	}
+
+	reports, err := Scan(root, "m", 24*time.Hour, now)
+	if err != nil || len(reports) != 1 {
+		t.Fatalf("Scan = %+v (err %v), want 1 report", reports, err)
+	}
+	r := reports[0]
+	// SEEN must reflect the last dated line, not the recent mtime.
+	if want := lastActivity.UTC().Format(time.RFC3339); r.Timestamp != want {
+		t.Errorf("Timestamp = %q, want %q (last activity, not mtime)", r.Timestamp, want)
+	}
+	// A recent mtime must not flash the session as working: the age used for the
+	// status derivation comes from the last activity, which is hours old.
+	if r.Status == "working" {
+		t.Errorf("Status = working; a stale session must not read as working on a mtime bump")
+	}
+}
+
 func TestScannerCachesParse(t *testing.T) {
 	root := t.TempDir()
 	proj := filepath.Join(root, "p")
