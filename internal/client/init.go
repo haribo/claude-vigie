@@ -13,15 +13,16 @@ import (
 	"github.com/haribo/claude-fleet/internal/install"
 )
 
-// defaultEvents are the low-frequency hooks installed by default.
-var defaultEvents = []string{"SessionStart", "UserPromptSubmit", "Notification", "Stop", "SessionEnd"}
+// defaultEvents are the hooks installed by default. PostToolUse is included so
+// the dashboard can show a live "doing" message and an activity heartbeat; it
+// fires per tool use, which is the intended trade-off.
+var defaultEvents = []string{"SessionStart", "UserPromptSubmit", "PostToolUse", "Notification", "Stop", "SessionEnd"}
 
 func runInit(args []string) int {
 	fs := flag.NewFlagSet("init", flag.ContinueOnError)
 	server := fs.String("server", "", "fleet server URL to report to")
 	token := fs.String("token", "", "shared auth token")
 	machine := fs.String("machine", "", "machine name (defaults to the hostname)")
-	detailed := fs.Bool("detailed", false, "also report on every tool use (PostToolUse)")
 	uninstall := fs.Bool("uninstall", false, "remove claude-fleet hooks and stop reporting")
 	if err := fs.Parse(args); err != nil {
 		return 2
@@ -66,11 +67,7 @@ func runInit(args []string) int {
 		binPath = "claude-fleet"
 	}
 
-	events := append([]string(nil), defaultEvents...)
-	if *detailed {
-		events = append(events, "PostToolUse")
-	}
-	settingsPath, err := install.Install(events, binPath, "", 5)
+	settingsPath, err := install.Install(defaultEvents, binPath, "", 5)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "init: %v\n", err)
 		return 1

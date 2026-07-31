@@ -182,6 +182,7 @@ func (s *scanner) scan(root, machine string, maxAge time.Duration, now time.Time
 			RemoteControl:  &rc,
 			Usage:          &usage,
 			APIErrorStatus: apiErr,
+			Activity:       info.Activity,
 			Timestamp:      fi.ModTime().UTC().Format(time.RFC3339),
 		})
 	}

@@ -174,12 +174,20 @@ func applyReport(sess store.Session, isNew bool, req api.ReportRequest) store.Se
 		sess.StartedAt = req.Timestamp
 	}
 	sess.LastSeenAt = req.Timestamp
+	prevStatus := sess.Status
 	if req.Status != "" {
 		sess.Status, sess.StatusSource = reconcileWatch(sess.Status, sess.StatusSource, req.Status)
 		sess.APIErrorStatus = req.APIErrorStatus // watcher-derived; hooks carry no status
 	} else {
 		sess.Status = deriveStatus(req.Event, req.NotificationType, sess.Status)
 		sess.StatusSource = "hook" // a hook event is the authoritative observer
+	}
+	// Activity: take a fresh message from the report; otherwise drop a stale one
+	// when the status changed, so a new episode never shows the old "doing".
+	if req.Activity != "" {
+		sess.Activity = req.Activity
+	} else if sess.Status != prevStatus {
+		sess.Activity = ""
 	}
 	if req.Event == "SessionEnd" {
 		sess.EndedAt = req.Timestamp

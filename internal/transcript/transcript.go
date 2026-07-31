@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"path/filepath"
 
 	"github.com/haribo/claude-fleet/internal/api"
 )
@@ -30,6 +31,10 @@ type Info struct {
 	// thinking block — Claude is reasoning inside a turn, before it produces text
 	// or a tool call. A later text/tool line clears it, so it is transient.
 	Thinking bool
+	// Activity is a short message for the last tool the session ran (its most
+	// recent tool_use block), else "" — the watcher's fallback for the "doing"
+	// column when the PostToolUse hook did not report it.
+	Activity string
 }
 
 type usage struct {
@@ -127,6 +132,7 @@ func (info *Info) applyAssistant(l line, seen map[string]bool) {
 		info.LastAPIError = 0
 	}
 	info.Thinking = lastBlockIsThinking(m.Content)
+	info.Activity = lastToolActivity(m.Content)
 	if m.Model != "" {
 		info.Model = m.Model
 	}
@@ -156,6 +162,76 @@ func lastBlockIsThinking(raw json.RawMessage) bool {
 		return false
 	}
 	return blocks[len(blocks)-1].Type == "thinking"
+}
+
+// lastToolActivity returns a short message for the most recent tool_use block in
+// an assistant message's content, else "" (e.g. a text-only reply).
+func lastToolActivity(raw json.RawMessage) string {
+	if len(raw) == 0 {
+		return ""
+	}
+	var blocks []struct {
+		Type  string          `json:"type"`
+		Name  string          `json:"name"`
+		Input json.RawMessage `json:"input"`
+	}
+	if err := json.Unmarshal(raw, &blocks); err != nil {
+		return ""
+	}
+	for i := len(blocks) - 1; i >= 0; i-- {
+		if blocks[i].Type == "tool_use" {
+			return ToolActivity(blocks[i].Name, blocks[i].Input)
+		}
+	}
+	return ""
+}
+
+// activityMax bounds an activity message at the source; the TUI column truncates
+// further to its width.
+const activityMax = 80
+
+// ToolActivity renders a short, human "doing" message for a tool call from its
+// name and input JSON, capped at activityMax. Shared by the reporter (hook
+// tool_input) and the watcher (transcript tool_use block).
+func ToolActivity(tool string, input json.RawMessage) string {
+	var in struct {
+		Description string `json:"description"`
+		FilePath    string `json:"file_path"`
+	}
+	_ = json.Unmarshal(input, &in)
+
+	var s string
+	switch tool {
+	case "Bash":
+		if in.Description != "" {
+			s = "Bash: " + in.Description
+		} else {
+			s = "Bash"
+		}
+	case "Edit", "Write", "Read", "NotebookEdit":
+		if in.FilePath != "" {
+			s = tool + " " + filepath.Base(in.FilePath)
+		} else {
+			s = tool
+		}
+	case "Task", "Agent":
+		if in.Description != "" {
+			s = in.Description
+		} else {
+			s = "Agent"
+		}
+	default:
+		s = tool
+	}
+	return capActivity(s)
+}
+
+func capActivity(s string) string {
+	r := []rune(s)
+	if len(r) > activityMax {
+		return string(r[:activityMax-1]) + "…"
+	}
+	return s
 }
 
 // titleTracker keeps the latest custom (/rename) and auto titles seen.

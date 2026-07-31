@@ -1,6 +1,7 @@
 package transcript
 
 import (
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"strings"
@@ -106,6 +107,42 @@ func TestParseThinking(t *testing.T) {
 		t.Fatal(err)
 	} else if info.Thinking {
 		t.Error("Thinking = true, want false (last block is text)")
+	}
+}
+
+func TestToolActivity(t *testing.T) {
+	cases := []struct{ tool, input, want string }{
+		{"Bash", `{"description":"run the tests","command":"go test"}`, "Bash: run the tests"},
+		{"Edit", `{"file_path":"/a/b/render.go"}`, "Edit render.go"},
+		{"Read", `{"file_path":"/x/y.md"}`, "Read y.md"},
+		{"Task", `{"description":"investigate the flake"}`, "investigate the flake"},
+		{"Grep", `{}`, "Grep"},
+	}
+	for _, c := range cases {
+		if got := ToolActivity(c.tool, json.RawMessage(c.input)); got != c.want {
+			t.Errorf("ToolActivity(%q, %s) = %q, want %q", c.tool, c.input, got, c.want)
+		}
+	}
+}
+
+func TestParseActivity(t *testing.T) {
+	dir := t.TempDir()
+	// The most recent tool_use block wins.
+	tool := filepath.Join(dir, "tool.jsonl")
+	writeJSONL(t, tool,
+		`{"type":"assistant","message":{"content":[{"type":"text","text":"ok"},{"type":"tool_use","name":"Edit","input":{"file_path":"/r/render.go"}}]}}`)
+	if info, err := Parse(tool); err != nil {
+		t.Fatal(err)
+	} else if info.Activity != "Edit render.go" {
+		t.Errorf("Activity = %q, want Edit render.go", info.Activity)
+	}
+	// A text-only reply has no activity.
+	text := filepath.Join(dir, "text.jsonl")
+	writeJSONL(t, text, `{"type":"assistant","message":{"content":[{"type":"text","text":"done"}]}}`)
+	if info, err := Parse(text); err != nil {
+		t.Fatal(err)
+	} else if info.Activity != "" {
+		t.Errorf("Activity = %q, want empty", info.Activity)
 	}
 }
 
