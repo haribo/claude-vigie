@@ -15,6 +15,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/haribo/claude-fleet/internal/clock"
 	"github.com/haribo/claude-fleet/internal/server"
 	"github.com/haribo/claude-fleet/internal/store"
 )
@@ -112,7 +113,7 @@ func pruneLoop(st *store.Store, defaultRetention time.Duration, log *slog.Logger
 		if retention <= 0 {
 			return
 		}
-		n, err := st.PruneSessions(ctx, retention, time.Now())
+		n, err := st.PruneSessions(ctx, retention, clock.Now())
 		if err != nil {
 			log.Error("pruning sessions", "error", err)
 		} else if n > 0 {

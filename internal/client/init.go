@@ -88,6 +88,10 @@ New Claude Code sessions on this machine will report to the fleet.
 }
 
 // testConnection verifies the server is reachable and the token is accepted.
+// httpClient carries a timeout (http.DefaultClient has none); the request also
+// sets a context deadline.
+var httpClient = &http.Client{Timeout: 10 * time.Second}
+
 func testConnection(cfg *config.Config) error {
 	url := strings.TrimRight(cfg.ServerURL, "/") + "/api/sessions"
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
@@ -99,7 +103,7 @@ func testConnection(cfg *config.Config) error {
 	}
 	req.Header.Set("Authorization", "Bearer "+cfg.Token)
 
-	resp, err := http.DefaultClient.Do(req)
+	resp, err := httpClient.Do(req)
 	if err != nil {
 		return err
 	}

@@ -93,6 +93,10 @@ func (f *Fetcher) Fetch(ctx context.Context, now time.Time) (*api.UsageReport, b
 	return rep, true, nil
 }
 
+// defaultHTTPClient is the fallback when no client is injected; it carries a
+// timeout (http.DefaultClient has none).
+var defaultHTTPClient = &http.Client{Timeout: 30 * time.Second}
+
 func (f *Fetcher) do(ctx context.Context, now time.Time) (*api.UsageReport, error) {
 	token, err := readToken()
 	if err != nil {
@@ -104,7 +108,7 @@ func (f *Fetcher) do(ctx context.Context, now time.Time) (*api.UsageReport, erro
 	}
 	client := f.Client
 	if client == nil {
-		client = http.DefaultClient
+		client = defaultHTTPClient
 	}
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, endpoint, nil)

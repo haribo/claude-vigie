@@ -32,7 +32,7 @@ func (s *Server) handleReport(w http.ResponseWriter, r *http.Request) {
 	}
 
 	sess := applyReport(existing, isNew, req)
-	sess.ReportedAt = time.Now().UTC().Format(time.RFC3339) // server-side heartbeat
+	sess.ReportedAt = s.now().UTC().Format(time.RFC3339) // server-side heartbeat
 	if err := s.store.UpsertSession(ctx, sess); err != nil {
 		s.log.Error("upserting session", "error", err)
 		s.writeError(w, http.StatusInternalServerError, "internal error")
@@ -45,7 +45,7 @@ func (s *Server) handleReport(w http.ResponseWriter, r *http.Request) {
 	// The watcher polls frequently; keep its scans out of the event log, but
 	// record a heartbeat so clients can detect an absent watcher.
 	if req.Event == "watch" {
-		if err := s.store.SetMeta(ctx, watchSeenKey, time.Now().UTC().Format(time.RFC3339)); err != nil {
+		if err := s.store.SetMeta(ctx, watchSeenKey, s.now().UTC().Format(time.RFC3339)); err != nil {
 			s.log.Error("recording watch heartbeat", "error", err)
 		}
 	} else {
@@ -73,7 +73,7 @@ func (s *Server) rollupTokens(ctx context.Context, old, sess store.Session, req 
 	if delta <= 0 {
 		return
 	}
-	if err := s.store.AddDailyTokens(ctx, dayOf(req.Timestamp), sess.Model, delta); err != nil {
+	if err := s.store.AddDailyTokens(ctx, dayOf(req.Timestamp, s.now()), sess.Model, delta); err != nil {
 		s.log.Error("rolling up daily tokens", "error", err)
 	}
 }
@@ -91,17 +91,17 @@ func (s *Server) rollupStatusInterval(ctx context.Context, sess store.Session, r
 		return
 	}
 	// Attribute the whole interval to its start day (no midnight split in v1).
-	if err := s.store.AddDailyStatusSeconds(ctx, dayOf(last.CreatedAt), sess.Model, last.Status, secs); err != nil {
+	if err := s.store.AddDailyStatusSeconds(ctx, dayOf(last.CreatedAt, s.now()), sess.Model, last.Status, secs); err != nil {
 		s.log.Error("rolling up daily status", "error", err)
 	}
 }
 
 // dayOf returns the UTC calendar day (YYYY-MM-DD) of an RFC3339 timestamp,
 // falling back to the current day when it cannot be parsed.
-func dayOf(ts string) string {
+func dayOf(ts string, now time.Time) string {
 	t, err := time.Parse(time.RFC3339, ts)
 	if err != nil {
-		t = time.Now()
+		t = now
 	}
 	return t.UTC().Format("2006-01-02")
 }

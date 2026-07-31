@@ -12,6 +12,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/haribo/claude-fleet/internal/clock"
 	"github.com/haribo/claude-fleet/internal/store"
 )
 
@@ -39,6 +40,7 @@ type Server struct {
 	token string
 	log   *slog.Logger
 	hub   *hub
+	clock func() time.Time // injected wall clock; defaults to clock.Now
 }
 
 // New returns a Server backed by st, authenticating with token.
@@ -46,7 +48,16 @@ func New(st Store, token string, log *slog.Logger) *Server {
 	if log == nil {
 		log = slog.Default()
 	}
-	return &Server{store: st, token: token, log: log, hub: newHub()}
+	return &Server{store: st, token: token, log: log, hub: newHub(), clock: clock.Now}
+}
+
+// now reads the injected clock, falling back to the system clock so a Server
+// built as a struct literal (e.g. in tests) still works.
+func (s *Server) now() time.Time {
+	if s.clock == nil {
+		return clock.Now()
+	}
+	return s.clock()
 }
 
 // Handler returns the root HTTP handler with all routes registered.
