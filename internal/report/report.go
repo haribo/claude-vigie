@@ -33,6 +33,10 @@ type hookPayload struct {
 	// NotificationType is set on Notification events (permission_prompt,
 	// idle_prompt, …); it lets the server tell "waiting on a human" from "idle".
 	NotificationType string `json:"notification_type"`
+	// ToolInput is the tool's input JSON on PostToolUse; Message is the
+	// human-readable text on Notification — both feed the "doing" activity.
+	ToolInput json.RawMessage `json:"tool_input"`
+	Message   string          `json:"message"`
 }
 
 // Run reads a hook payload from stdin, builds a report for the given event
@@ -67,6 +71,7 @@ func Run(event string, stdin io.Reader) error {
 		GitBranch:        gitBranch(p.Cwd),
 		LastTool:         p.ToolName,
 		NotificationType: p.NotificationType,
+		Activity:         hookActivity(event, p),
 		Timestamp:        clock.Now().UTC().Format(time.RFC3339),
 	}
 	// The transcript is only worth reading at turn/session boundaries.
@@ -79,6 +84,22 @@ func Run(event string, stdin io.Reader) error {
 	}
 
 	return post(cfg, req)
+}
+
+// hookActivity extracts the short "doing" message: the tool call on
+// PostToolUse, the notification text on Notification, else "".
+func hookActivity(event string, p hookPayload) string {
+	switch event {
+	case "PostToolUse":
+		return transcript.ToolActivity(p.ToolName, p.ToolInput)
+	case "Notification":
+		r := []rune(p.Message)
+		if len(r) > 80 {
+			return string(r[:79]) + "…"
+		}
+		return p.Message
+	}
+	return ""
 }
 
 // recordPresence captures the backing claude process at SessionStart and clears

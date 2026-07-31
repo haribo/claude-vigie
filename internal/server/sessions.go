@@ -77,6 +77,7 @@ func toView(s store.Session, samples []int64, now time.Time) api.SessionView {
 		EndedAt:        s.EndedAt,
 		RemoteControl:  s.RemoteControl,
 		APIErrorStatus: s.APIErrorStatus,
+		Activity:       s.Activity,
 		Samples:        samples,
 	}
 }

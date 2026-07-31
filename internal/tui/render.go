@@ -111,6 +111,24 @@ var columns = []column{
 	{"ACT", 10, 9, false, func(s api.SessionView) string { return activitySpark(s.Samples) }, nil},
 	{"RC", 4, 1, false, rcCell, rcStyle},
 	{"STATUS", 12, 0, false, statusCell, func(s api.SessionView) lipgloss.Style { return statusStyle(s.Status) }},
+	{"DOING", 36, 10, false, activityCell, activityStyle},
+}
+
+// activityCell renders the short "doing"/"waiting on" message, or a dash.
+func activityCell(s api.SessionView) string {
+	if s.Activity == "" {
+		return "-"
+	}
+	return s.Activity
+}
+
+// activityStyle colors the DOING cell: amber for waiting (a call to action),
+// dim for a working turn's tool call.
+func activityStyle(s api.SessionView) lipgloss.Style {
+	if s.Status == "waiting" {
+		return statusStyle("waiting")
+	}
+	return dimStyle
 }
 
 var (
@@ -282,6 +300,7 @@ func renderDetail(s api.SessionView) string {
 		detailField("Branch", orDash(s.GitBranch)),
 		detailField("Model", orDash(s.Model)),
 		detailField("Status", statusDetail(s)),
+		detailField("Doing", orDash(s.Activity)),
 		detailField("Remote control", rcLabel(s.RemoteControl)),
 		detailField("Last tool", orDash(s.LastTool)),
 		detailField("Started", orDash(s.StartedAt)),

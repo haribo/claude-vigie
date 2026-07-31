@@ -78,7 +78,7 @@ reconciled per [`design/session-status.md`](design/session-status.md).
 |------|---------|
 | `SessionStart` | session appears (machine, project, git branch, model); records process presence ([ADR-0006](adr/0006-session-presence-via-proc.md)) |
 | `UserPromptSubmit` | a turn started; backfills presence |
-| `PostToolUse` | last tool used + heartbeat (opt-in, installed only with `init --detailed`) |
+| `PostToolUse` | last tool used + heartbeat + the "doing" activity message (installed by default) |
 | `Notification` | `waiting` on a permission prompt, `idle` on an idle prompt (split by `notification_type`) |
 | `Stop` | turn ended + token usage (read from the transcript) |
 | `SessionEnd` | session closed; clears presence |

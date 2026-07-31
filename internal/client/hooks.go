@@ -20,7 +20,6 @@ func runHooks(args []string) int {
 	sub, rest := args[0], args[1:]
 
 	fs := flag.NewFlagSet("hooks", flag.ContinueOnError)
-	detailed := fs.Bool("detailed", false, "also report on every tool use (PostToolUse)")
 	if err := fs.Parse(rest); err != nil {
 		return 2
 	}
@@ -33,11 +32,7 @@ func runHooks(args []string) int {
 
 	switch sub {
 	case "install":
-		events := append([]string(nil), defaultEvents...)
-		if *detailed {
-			events = append(events, "PostToolUse")
-		}
-		path, err := install.Install(events, binPath, configPath, 5)
+		path, err := install.Install(defaultEvents, binPath, configPath, 5)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "hooks: %v\n", err)
 			return 1
