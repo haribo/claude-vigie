@@ -15,12 +15,15 @@ import (
 type prefs struct {
 	hideEnded     bool          // hide ended (closed) sessions
 	idleHideAfter time.Duration // hide sessions inactive longer than this; 0 = never
+	sortKey       sortKey       // sessions table order
+	sortReversed  bool          // reverse the sort direction
+	groupBy       groupBy       // grouping of the sessions table
 }
 
 // defaultPrefs are used when no preferences file exists: hide only ended
-// sessions, keep idle ones visible regardless of age.
+// sessions, keep idle ones visible regardless of age, sort by last seen.
 func defaultPrefs() prefs {
-	return prefs{hideEnded: true, idleHideAfter: 0}
+	return prefs{hideEnded: true, idleHideAfter: 0, sortKey: sortLastSeen, groupBy: groupNone}
 }
 
 // visible reports whether a session should be shown given these preferences.
@@ -40,6 +43,9 @@ func (p prefs) visible(s api.SessionView, now time.Time) bool {
 type prefsFile struct {
 	HideEnded     bool   `toml:"hide_ended"`
 	IdleHideAfter string `toml:"idle_hide_after"` // Go duration; "" = never
+	SortKey       string `toml:"sort_key"`        // stable name (see sortNames); "" = default
+	SortReversed  bool   `toml:"sort_reversed"`
+	GroupBy       string `toml:"group_by"` // stable name (see groupNames); "" = off
 }
 
 func prefsPath() (string, error) {
@@ -65,7 +71,16 @@ hide_ended = %t
 # Hide sessions inactive for longer than this (Go duration, e.g. "30m", "2h").
 # Empty = never hide by inactivity.
 idle_hide_after = %q
-`, p.hideEnded, idle)
+
+# Sessions table order: last seen, tokens, status, name, rc.
+sort_key = %q
+
+# Reverse the sort direction.
+sort_reversed = %t
+
+# Group the sessions table: off, machine, project.
+group_by = %q
+`, p.hideEnded, idle, sortNames[p.sortKey], p.sortReversed, groupNames[p.groupBy])
 }
 
 // savePrefs writes the preferences file (best-effort; the UI must not block).
@@ -135,5 +150,8 @@ func loadPrefs() prefs {
 	if d, err := time.ParseDuration(f.IdleHideAfter); err == nil {
 		p.idleHideAfter = d
 	}
+	p.sortKey = sortKeyByName(f.SortKey)
+	p.sortReversed = f.SortReversed
+	p.groupBy = groupByName(f.GroupBy)
 	return p
 }

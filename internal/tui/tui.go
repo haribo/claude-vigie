@@ -16,6 +16,7 @@ func Run(cfg *config.Config) error {
 	conn := make(chan bool, 1)
 	go subscribeEvents(cfg, events, conn)
 
+	p := loadPrefs()
 	m := model{
 		fetch:         func() ([]api.SessionView, error) { return fetchSessions(cfg) },
 		fetchUsage:    func() (api.UsageReport, error) { return fetchUsage(cfg) },
@@ -25,7 +26,10 @@ func Run(cfg *config.Config) error {
 		fetchPlatform: func() (api.PlatformStatus, error) { return fetchPlatform(cfg) },
 		setRetention:  func(v string) error { return setSessionRetention(cfg, v) },
 		serverURL:     cfg.ServerURL,
-		prefs:         loadPrefs(),
+		prefs:         p,
+		sortKey:       p.sortKey, // restore the persisted table order (#237)
+		sortReversed:  p.sortReversed,
+		groupBy:       p.groupBy,
 		fetchSeq:      1, // Init issues generation 1
 		events:        events,
 		conn:          conn,
