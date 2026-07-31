@@ -36,7 +36,7 @@ func TestStatusReconcileTimeline(t *testing.T) {
 	hook := func(id, event string) { report(id, api.ReportRequest{Event: event}) }
 	watch := func(id, status string) { report(id, api.ReportRequest{Event: "watch", Status: status}) }
 
-	statusOf := func(id string) string {
+	viewOf := func(id string) api.SessionView {
 		t.Helper()
 		rec := do(t, srv, http.MethodGet, "/api/sessions", nil, true)
 		var views []api.SessionView
@@ -45,16 +45,22 @@ func TestStatusReconcileTimeline(t *testing.T) {
 		}
 		for _, v := range views {
 			if v.ID == id {
-				return v.Status
+				return v
 			}
 		}
 		t.Fatalf("session %q not found", id)
-		return ""
+		return api.SessionView{}
 	}
 	assert := func(id, want string) {
 		t.Helper()
-		if got := statusOf(id); got != want {
+		if got := viewOf(id).Status; got != want {
 			t.Errorf("[%s] status = %q, want %q", id, got, want)
+		}
+	}
+	assertActivity := func(id, want string) {
+		t.Helper()
+		if got := viewOf(id).Activity; got != want {
+			t.Errorf("[%s] activity = %q, want %q", id, got, want)
 		}
 	}
 
@@ -123,4 +129,15 @@ func TestStatusReconcileTimeline(t *testing.T) {
 	assert("err", "error")
 	watch("err", "idle")
 	assert("err", "idle")
+
+	// #236 — a resting session never carries a "doing". A PostToolUse leaves an
+	// activity behind; once the session goes idle the message is gone, and an
+	// idle_prompt (idle, no status change) leaves no residual message either.
+	report("act", api.ReportRequest{Event: "PostToolUse", Activity: "Bash: run tests"})
+	assertActivity("act", "Bash: run tests")
+	hook("act", "Stop")
+	assertActivity("act", "")
+	report("act", api.ReportRequest{Event: "Notification", NotificationType: "idle_prompt"})
+	assert("act", "idle")
+	assertActivity("act", "")
 }

@@ -211,11 +211,16 @@ func applyStatus(sess store.Session, req api.ReportRequest) store.Session {
 	if sess.Status != prev {
 		sess.StatusChangedAt = req.Timestamp
 	}
-	// Take a fresh activity from the report; otherwise drop a stale one when the
-	// status changed, so a new episode never shows the old "doing".
-	if req.Activity != "" {
+	// Activity describes an active turn; a resting status carries none (#236). So
+	// clear it on idle/ended, take a fresh message when the report has one, else
+	// drop a stale one on any status change so a new episode never shows the old
+	// "doing".
+	switch {
+	case sess.Status == "idle" || sess.Status == "ended":
+		sess.Activity = ""
+	case req.Activity != "":
 		sess.Activity = req.Activity
-	} else if sess.Status != prev {
+	case sess.Status != prev:
 		sess.Activity = ""
 	}
 	return sess
