@@ -74,6 +74,16 @@ func TestStatusReconcileTimeline(t *testing.T) {
 	hook("turn", "Stop")
 	assert("turn", "idle")
 
+	// #233 — a watcher *confirmation* of the hook's working must not transfer
+	// ownership, or a later idle (Claude reasoning, transcript quiet) steals the
+	// turn. Confirm working, then go quiet: it must stay working.
+	hook("think", "UserPromptSubmit")
+	assert("think", "working")
+	watch("think", "working") // watcher confirms (the prompt was just written)
+	advance(11 * time.Second)
+	watch("think", "idle") // quiet while Claude reasons
+	assert("think", "working")
+
 	// waiting — hook-only; the watcher's blind idle must not clear it, but real
 	// activity resumes it.
 	hook("wait", "Notification")

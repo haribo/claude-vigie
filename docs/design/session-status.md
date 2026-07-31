@@ -78,7 +78,9 @@ not a table of status pairs. Each session remembers *which* observer last set
 its status (its **source**: `hook` or `watch`).
 
 **The watcher is authoritative for what it can positively observe** — `working`,
-`thinking`, `error`, `ended` — and any such report wins and becomes watch-owned.
+`thinking`, `error`, `ended` — and any such *change* wins and becomes watch-owned.
+A report that merely **confirms** the current status keeps the current owner: a
+confirmation is not a change, so it never transfers ownership away from a hook.
 
 **A hook is authoritative for what only it can see** — that the operator is the
 blocker (`waiting`), or that a turn is open while Claude works silently. The

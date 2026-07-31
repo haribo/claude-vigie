@@ -227,7 +227,10 @@ func reconcileWatch(current, currentSource, incoming string) (status, source str
 		(current == "waiting" || current == "working" || current == "thinking") {
 		return current, "hook" // keep the hook's semantic/active state
 	}
-	return incoming, "watch"
+	if incoming == current {
+		return current, currentSource // a confirmation doesn't transfer ownership
+	}
+	return incoming, "watch" // a positive change is the watcher's
 }
 
 // deriveStatus maps a hook event to a session status, keeping the current
