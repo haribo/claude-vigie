@@ -59,7 +59,7 @@ the client never imports the server/store packages, so it never links them.
 | `internal/config` | both | Load/save the shared per-machine client config (XDG) |
 | `internal/api` | both | Shared request/response types (client ↔ server) |
 | `internal/version` | both | Build metadata injected via ldflags |
-| `web/` | daemon | Static dashboard assets, embedded via `embed.FS` |
+| `web/` | daemon | Static dashboard assets, embedded via `embed.FS` — **planned**, not yet present (the depguard rule reserves the boundary) |
 
 ### Boundaries
 

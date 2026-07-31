@@ -1,6 +1,6 @@
 // Package server implements the claude-fleetd HTTP API: it accepts session
-// event reports, lists sessions, and (later) streams updates over SSE. Only
-// the daemon imports this package.
+// event reports, lists sessions, and streams updates over SSE. Only the daemon
+// imports this package.
 package server
 
 import (
