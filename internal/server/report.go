@@ -165,10 +165,11 @@ func applyReport(sess store.Session, isNew bool, req api.ReportRequest) store.Se
 	}
 	sess.LastSeenAt = req.Timestamp
 	if req.Status != "" {
-		sess.Status = mergeStatus(sess.Status, req.Status)
+		sess.Status, sess.StatusSource = reconcileWatch(sess.Status, sess.StatusSource, req.Status)
 		sess.APIErrorStatus = req.APIErrorStatus // watcher-derived; hooks carry no status
 	} else {
 		sess.Status = deriveStatus(req.Event, sess.Status)
+		sess.StatusSource = "hook" // a hook event is the authoritative observer
 	}
 	if req.Event == "SessionEnd" {
 		sess.EndedAt = req.Timestamp
@@ -190,19 +191,25 @@ func applyReport(sess store.Session, isNew bool, req api.ReportRequest) store.Se
 	return sess
 }
 
-// mergeStatus applies an explicit (watcher) status, but keeps a "waiting"
-// session waiting when the watcher only sees it as "idle" (alive but between
-// turns). "waiting" is a semantic state — Claude asked for input — that the
-// watcher cannot detect, so it persists until real activity resumes or the
-// session ends.
-func mergeStatus(current, incoming string) string {
-	// The watcher only ever sees a quiet-but-alive session as idle; it must not
-	// clobber a hook-set active state — waiting on the human, or a turn in
-	// progress (working / thinking, both quiet between transcript writes).
-	if incoming == "idle" && (current == "waiting" || current == "working" || current == "thinking") {
-		return current
+// reconcileWatch folds a watcher-reported status into the session, resolving the
+// overlap between the two observers by *authority* rather than a status table.
+//
+// The watcher polls the transcript and process; it is authoritative for coverage
+// and for anything it can positively observe (working, thinking, error, ended).
+// But it only ever sees a quiet-but-alive session as "idle", and it cannot see
+// two things a hook can: that the operator is the blocker (waiting), or that a
+// turn is open while Claude works silently. So the watcher's "idle" must not
+// retract a *hook-owned* active state — yet it must retract its *own* stale
+// state, which is the finished-session latch bug (#201): a watcher-set "working"
+// has to fall back to idle when the transcript goes quiet.
+//
+// It returns the new status and its owning source.
+func reconcileWatch(current, currentSource, incoming string) (status, source string) {
+	if incoming == "idle" && currentSource == "hook" &&
+		(current == "waiting" || current == "working" || current == "thinking") {
+		return current, "hook" // keep the hook's semantic/active state
 	}
-	return incoming
+	return incoming, "watch"
 }
 
 // deriveStatus maps a hook event to a session status, keeping the current
