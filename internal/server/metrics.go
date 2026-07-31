@@ -6,6 +6,7 @@ import (
 	"os"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/prometheus/client_golang/prometheus"
@@ -85,6 +86,7 @@ func init() {
 		metricHTTPRequests, metricHTTPDuration, metricHTTPInFlight,
 		metricReports, metricReportsRejected, metricOutputTokens,
 		metricSSESubscribers, metricSSEPublished, metricPruned, metricBuildInfo,
+		&stateCollector{},
 	)
 }
 
@@ -156,17 +158,25 @@ func (r *statusRecorder) Flush() {
 	}
 }
 
-// RegisterStateCollector adds the scrape-time gauges (current sessions by
-// reconciled status, DB size, watcher heartbeat) to the registry. Computed on
-// scrape via ListSessions — no counter on the hot path.
+// RegisterStateCollector wires the scrape-time gauges (current sessions by
+// reconciled status, DB size, watcher heartbeat) to a store. The collector
+// itself is registered once at init; this just supplies the data source, so it
+// is safe to call more than once (the daemon calls it exactly once).
 func RegisterStateCollector(st Store, dbPath string) {
-	reg.MustRegister(&stateCollector{store: st, dbPath: dbPath})
+	stateMu.Lock()
+	stateStore, stateDBPath = st, dbPath
+	stateMu.Unlock()
 }
 
-type stateCollector struct {
-	store  Store
-	dbPath string
-}
+var (
+	stateMu     sync.RWMutex
+	stateStore  Store
+	stateDBPath string
+)
+
+// stateCollector emits the scrape-time gauges from the store supplied via
+// RegisterStateCollector. It is inert until wired.
+type stateCollector struct{}
 
 var (
 	descSessions = prometheus.NewDesc(metricsNamespace+"_sessions",
@@ -188,11 +198,18 @@ func (c *stateCollector) Describe(ch chan<- *prometheus.Desc) {
 }
 
 func (c *stateCollector) Collect(ch chan<- prometheus.Metric) {
+	stateMu.RLock()
+	store, dbPath := stateStore, stateDBPath
+	stateMu.RUnlock()
+	if store == nil {
+		return // not wired yet
+	}
+
 	ctx := context.Background()
 	now := clock.Now()
 
 	counts := map[string]int{}
-	if sessions, err := c.store.ListSessions(ctx); err == nil {
+	if sessions, err := store.ListSessions(ctx); err == nil {
 		for _, s := range sessions {
 			counts[toView(s, nil, now).Status]++ // reconciled status, matching the API/TUI
 		}
@@ -201,10 +218,10 @@ func (c *stateCollector) Collect(ch chan<- prometheus.Metric) {
 		ch <- prometheus.MustNewConstMetric(descSessions, prometheus.GaugeValue, float64(counts[status]), status)
 	}
 
-	if fi, err := os.Stat(c.dbPath); err == nil {
+	if fi, err := os.Stat(dbPath); err == nil {
 		ch <- prometheus.MustNewConstMetric(descDBSize, prometheus.GaugeValue, float64(fi.Size()))
 	}
-	if v, ok, err := c.store.GetMeta(ctx, watchSeenKey); err == nil && ok {
+	if v, ok, err := store.GetMeta(ctx, watchSeenKey); err == nil && ok {
 		if t, err := time.Parse(time.RFC3339, v); err == nil {
 			ch <- prometheus.MustNewConstMetric(descWatcher, prometheus.GaugeValue, float64(t.Unix()))
 		}
