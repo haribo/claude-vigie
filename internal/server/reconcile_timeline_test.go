@@ -24,7 +24,10 @@ func TestStatusReconcileTimeline(t *testing.T) {
 
 	report := func(id string, r api.ReportRequest) {
 		t.Helper()
-		r.SessionID, r.Machine, r.Timestamp = id, "m", rfc()
+		r.SessionID, r.Machine = id, "m"
+		if r.Timestamp == "" { // an explicit timestamp models a frozen transcript mtime
+			r.Timestamp = rfc()
+		}
 		body, _ := json.Marshal(r)
 		if rec := do(t, srv, http.MethodPost, "/api/report", body, true); rec.Code >= http.StatusMultipleChoices {
 			t.Fatalf("report %+v = %d", r, rec.Code)
@@ -33,7 +36,7 @@ func TestStatusReconcileTimeline(t *testing.T) {
 	hook := func(id, event string) { report(id, api.ReportRequest{Event: event}) }
 	watch := func(id, status string) { report(id, api.ReportRequest{Event: "watch", Status: status}) }
 
-	statusOf := func(id string) string {
+	viewOf := func(id string) api.SessionView {
 		t.Helper()
 		rec := do(t, srv, http.MethodGet, "/api/sessions", nil, true)
 		var views []api.SessionView
@@ -42,16 +45,22 @@ func TestStatusReconcileTimeline(t *testing.T) {
 		}
 		for _, v := range views {
 			if v.ID == id {
-				return v.Status
+				return v
 			}
 		}
 		t.Fatalf("session %q not found", id)
-		return ""
+		return api.SessionView{}
 	}
 	assert := func(id, want string) {
 		t.Helper()
-		if got := statusOf(id); got != want {
+		if got := viewOf(id).Status; got != want {
 			t.Errorf("[%s] status = %q, want %q", id, got, want)
+		}
+	}
+	assertActivity := func(id, want string) {
+		t.Helper()
+		if got := viewOf(id).Activity; got != want {
+			t.Errorf("[%s] activity = %q, want %q", id, got, want)
 		}
 	}
 
@@ -74,6 +83,16 @@ func TestStatusReconcileTimeline(t *testing.T) {
 	hook("turn", "Stop")
 	assert("turn", "idle")
 
+	// #233 — a watcher *confirmation* of the hook's working must not transfer
+	// ownership, or a later idle (Claude reasoning, transcript quiet) steals the
+	// turn. Confirm working, then go quiet: it must stay working.
+	hook("think", "UserPromptSubmit")
+	assert("think", "working")
+	watch("think", "working") // watcher confirms (the prompt was just written)
+	advance(11 * time.Second)
+	watch("think", "idle") // quiet while Claude reasons
+	assert("think", "working")
+
 	// waiting — hook-only; the watcher's blind idle must not clear it, but real
 	// activity resumes it.
 	hook("wait", "Notification")
@@ -91,10 +110,34 @@ func TestStatusReconcileTimeline(t *testing.T) {
 	report("done", api.ReportRequest{Event: "Notification", NotificationType: "idle_prompt"})
 	assert("done", "idle")
 
+	// #235 — a permission `waiting` survives the watcher's stale `working` (it
+	// sees the frozen tool_use that triggered the prompt), and is released only
+	// once the transcript moves past when waiting was posted.
+	advance(time.Hour)
+	report("block", api.ReportRequest{Event: "Notification"}) // waiting; StatusChangedAt = now
+	assert("block", "waiting")
+	stale := now.Add(-2 * time.Second).UTC().Format(time.RFC3339)
+	report("block", api.ReportRequest{Event: "watch", Status: "working", Timestamp: stale})
+	assert("block", "waiting") // frozen transcript → held
+	advance(5 * time.Second)
+	report("block", api.ReportRequest{Event: "watch", Status: "working"}) // transcript moved (approval)
+	assert("block", "working")
+
 	// error — a watcher observation wins and clears on recovery.
 	watch("err", "working")
 	watch("err", "error")
 	assert("err", "error")
 	watch("err", "idle")
 	assert("err", "idle")
+
+	// #236 — a resting session never carries a "doing". A PostToolUse leaves an
+	// activity behind; once the session goes idle the message is gone, and an
+	// idle_prompt (idle, no status change) leaves no residual message either.
+	report("act", api.ReportRequest{Event: "PostToolUse", Activity: "Bash: run tests"})
+	assertActivity("act", "Bash: run tests")
+	hook("act", "Stop")
+	assertActivity("act", "")
+	report("act", api.ReportRequest{Event: "Notification", NotificationType: "idle_prompt"})
+	assert("act", "idle")
+	assertActivity("act", "")
 }

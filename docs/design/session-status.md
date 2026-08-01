@@ -78,13 +78,22 @@ not a table of status pairs. Each session remembers *which* observer last set
 its status (its **source**: `hook` or `watch`).
 
 **The watcher is authoritative for what it can positively observe** — `working`,
-`thinking`, `error`, `ended` — and any such report wins and becomes watch-owned.
+`thinking`, `error`, `ended` — and any such *change* wins and becomes watch-owned.
+A report that merely **confirms** the current status keeps the current owner: a
+confirmation is not a change, so it never transfers ownership away from a hook.
 
 **A hook is authoritative for what only it can see** — that the operator is the
 blocker (`waiting`), or that a turn is open while Claude works silently. The
 watcher only ever sees a quiet-but-alive session as `idle`, so its `idle` must
 **not** retract a *hook-owned* `waiting`, `working`, or `thinking`. A hook `Stop`
 (→ `idle`) or new activity ends the turn.
+
+**A `waiting` is only cleared once the transcript moves.** To the watcher, "a
+tool is running" and "a permission prompt is blocking" look identical — a turn
+stopped on a tool call with a frozen transcript. So its inferred `working` may
+not clear a hook `waiting` until the transcript has actually changed past when
+waiting was posted (the report's timestamp is the transcript mtime). `error` and
+`ended` are positive observations and still win.
 
 **The watcher must retract its own stale state.** The key consequence: a `working`
 that the *watcher itself* set (a hooks-free session) falls back to `idle` when the

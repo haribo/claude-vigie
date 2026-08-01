@@ -13,7 +13,9 @@ builds:
     # cross-compile cleanly and link statically (see ADR-0002).
     env:
       - CGO_ENABLED=0
-    goos: [linux, darwin, windows]
+    # Linux-only releases for now: presence detection reads /proc (ADR-0006), so
+    # darwin/windows binaries are not shipped or supported yet.
+    goos: [linux]
     goarch: [amd64, arm64]
     ldflags:
       - -s -w
@@ -27,7 +29,7 @@ builds:
     binary: claude-fleetd
     env:
       - CGO_ENABLED=0
-    goos: [linux, darwin, windows]
+    goos: [linux]
     goarch: [amd64, arm64]
     ldflags:
       - -s -w
@@ -40,16 +42,10 @@ archives:
   - id: client
     ids: [claude-fleet]
     formats: [tar.gz]
-    format_overrides:
-      - goos: windows
-        formats: [zip]
     name_template: "claude-fleet_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
   - id: daemon
     ids: [claude-fleetd]
     formats: [tar.gz]
-    format_overrides:
-      - goos: windows
-        formats: [zip]
     name_template: "claude-fleetd_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
 
 checksum:

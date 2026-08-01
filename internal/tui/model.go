@@ -72,6 +72,29 @@ var groupNames = map[groupBy]string{
 	groupProject: "project",
 }
 
+// sortKeyByName resolves a persisted sort name back to its key, falling back to
+// the default (sortLastSeen) for an unknown value — so the stored preference
+// survives an enum reorder and a stale/garbage name degrades safely.
+func sortKeyByName(name string) sortKey {
+	for k, n := range sortNames {
+		if n == name {
+			return k
+		}
+	}
+	return sortLastSeen
+}
+
+// groupByName resolves a persisted group name back to its key, defaulting to
+// groupNone for an unknown value.
+func groupByName(name string) groupBy {
+	for g, n := range groupNames {
+		if n == name {
+			return g
+		}
+	}
+	return groupNone
+}
+
 type model struct {
 	fetch           func() ([]api.SessionView, error)
 	fetchUsage      func() (api.UsageReport, error)
@@ -403,16 +426,29 @@ func (m model) handleSessionsKey(msg tea.KeyMsg) model {
 		m.filtering = true
 	case "s":
 		m.sortKey = (m.sortKey + 1) % sortKeyCount
+		return m.saveViewPrefs()
 	case "S":
 		m.sortReversed = !m.sortReversed
+		return m.saveViewPrefs()
 	case "g":
 		m.groupBy = (m.groupBy + 1) % groupByCount
+		return m.saveViewPrefs()
 	case "a":
 		m.showAll = !m.showAll
 		m.cursor = 0
 	default:
 		return m.handleNavKey(msg)
 	}
+	return m
+}
+
+// saveViewPrefs mirrors the live sort/group choices into prefs and persists them
+// so they survive a restart (#237). Best-effort: savePrefs never blocks the UI.
+func (m model) saveViewPrefs() model {
+	m.prefs.sortKey = m.sortKey
+	m.prefs.sortReversed = m.sortReversed
+	m.prefs.groupBy = m.groupBy
+	savePrefs(m.prefs)
 	return m
 }
 

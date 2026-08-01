@@ -31,6 +31,10 @@ type Session struct {
 	// or waiting on (waiting): a tool call or a notification. Cleared on a status
 	// change so it never goes stale.
 	Activity string
+	// StatusChangedAt is when Status last changed (RFC3339, the reporting event's
+	// timestamp). It lets a hook `waiting` outlive a stale watcher `working`: the
+	// watcher only clears it once the transcript moves past this time.
+	StatusChangedAt string
 }
 
 // Usage holds cumulative token counters for a session.
