@@ -1,18 +1,18 @@
 # Deployment
 
-claude-fleet ships **binaries**. Running `claude-fleetd`, terminating TLS, and
+vigie ships **binaries**. Running `vigied`, terminating TLS, and
 exposing it are the **deployer's** responsibility — the project does not embed a
 web server front, certificates, or an orchestrator. This guide states the
 boundary and the security implications; it changes no defaults.
 
 ## The daemon
 
-`claude-fleetd serve` is a single static binary + a SQLite file. Flags:
+`vigied serve` is a single static binary + a SQLite file. Flags:
 
 | Flag | Default | Purpose |
 |------|---------|---------|
 | `--addr` | `127.0.0.1:8080` | listen address (bind a reachable interface for cross-machine clients) |
-| `--db` | `claude-fleet.db` | SQLite file path |
+| `--db` | `vigie.db` | SQLite file path |
 | `--token` | — | shared auth token (else `$FLEET_TOKEN`, else the stored one, else generated) |
 | `--session-retention` | `24h` | delete sessions not reported within this window (`0` disables) |
 | `--metrics-addr` | `127.0.0.1:9464` | ops listener for `/metrics` and `/healthz` (empty disables) |
@@ -37,7 +37,7 @@ Metrics are namespaced `fleet_*` (RED HTTP metrics, ingestion counters, a
 scrape-time `fleet_sessions` gauge by reconciled status, SSE and prune counters,
 DB size, watcher heartbeat) plus the default Go/process collectors.
 
-A ready-made Grafana dashboard ships in [`dashboards/claude-fleet.json`](../dashboards/claude-fleet.json)
+A ready-made Grafana dashboard ships in [`dashboards/vigie.json`](../dashboards/vigie.json)
 — import it and pick your Prometheus datasource (the dashboard uses a datasource
 variable, so it is not tied to any instance).
 
@@ -83,7 +83,7 @@ hold the token.
 - Supply it as a secret via `FLEET_TOKEN` (or `--token`). If none is provided and
   none is stored, `fleetd` generates one and logs it once — fine for a first run,
   but prefer providing it explicitly in production.
-- The client stores it in `~/.config/claude-fleet/config.toml` (written `0600`).
+- The client stores it in `~/.config/vigie/config.toml` (written `0600`).
 - It is a **single shared, static** credential with no per-machine revocation. If
   one machine leaks it, rotate everywhere.
 
@@ -96,7 +96,7 @@ against the OS trust store — no client-side TLS code, no flags.
 - **Private / internal CA:** trust it at the OS level (or export `SSL_CERT_FILE` /
   `SSL_CERT_DIR`); Go respects it. There is deliberately **no** `--insecure`
   option — skipping verification would defeat the TLS entirely.
-- `claude-fleet init --server https://fleet.example.com --token <token>` writes the
+- `vigie init --server https://fleet.example.com --token <token>` writes the
   client config; the watcher and TUI read it.
 
 ## Recommended for dynamic client IPs

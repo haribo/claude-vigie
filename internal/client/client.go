@@ -1,9 +1,9 @@
-// Package client implements the claude-fleet client command-line dispatch.
+// Package client implements the vigie client command-line dispatch.
 //
 // The client is installed on every machine running Claude Code sessions. It
 // configures reporting (`init`), reports session events invoked by hooks
 // (`report`), and shows the live dashboard in the terminal (`tui`). The server
-// runs separately as the `claude-fleetd` daemon.
+// runs separately as the `vigied` daemon.
 package client
 
 import (
@@ -11,7 +11,7 @@ import (
 	"io"
 	"os"
 
-	"github.com/haribo/claude-fleet/internal/version"
+	"github.com/haribo/claude-vigie/internal/version"
 )
 
 // Run dispatches to the requested client subcommand and returns an exit code.
@@ -34,7 +34,7 @@ func Run(args []string) int {
 	case "tui":
 		return runTUI(rest)
 	case "version", "--version", "-v":
-		fmt.Println(version.String("claude-fleet"))
+		fmt.Println(version.String("vigie"))
 		return 0
 	case "help", "--help", "-h":
 		usage(os.Stdout)
@@ -47,10 +47,10 @@ func Run(args []string) int {
 }
 
 func usage(w io.Writer) {
-	fmt.Fprint(w, `claude-fleet — client for the Claude Fleet monitor
+	fmt.Fprint(w, `vigie — client for the Claude Vigie monitor
 
 Usage:
-  claude-fleet <command> [flags]
+  vigie <command> [flags]
 
 Commands:
   init       Install hooks and write the client config
@@ -61,7 +61,7 @@ Commands:
   version    Print version information
   help       Print this help
 
-Run "claude-fleet <command> -h" for command-specific flags.
-The server runs separately as "claude-fleetd".
+Run "vigie <command> -h" for command-specific flags.
+The server runs separately as "vigied".
 `)
 }

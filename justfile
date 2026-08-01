@@ -48,10 +48,10 @@ dev-server:
     #!/usr/bin/env bash
     set -euo pipefail
     mkdir -p "{{dev_bin}}"
-    go build -o "{{dev_bin}}/claude-fleetd" ./cmd/claude-fleetd
+    go build -o "{{dev_bin}}/vigied" ./cmd/vigied
     pidf="{{dev_dir}}/server.pid"
     [ -f "$pidf" ] && kill "$(cat "$pidf")" 2>/dev/null || true
-    nohup "{{dev_bin}}/claude-fleetd" serve --addr {{dev_addr}} --token {{dev_token}} --db "{{dev_db}}" --session-retention 0 --metrics-addr 0.0.0.0:9464 > "{{dev_dir}}/server.log" 2>&1 &
+    nohup "{{dev_bin}}/vigied" serve --addr {{dev_addr}} --token {{dev_token}} --db "{{dev_db}}" --session-retention 0 --metrics-addr 0.0.0.0:9464 > "{{dev_dir}}/server.log" 2>&1 &
     echo $! > "$pidf"
     echo "dev server → {{dev_url}} (pid $(cat "$pidf"), logs {{dev_dir}}/server.log)"
 
@@ -60,16 +60,16 @@ dev-watcher: dev-config
     #!/usr/bin/env bash
     set -euo pipefail
     mkdir -p "{{dev_bin}}"
-    go build -o "{{dev_bin}}/claude-fleet" ./cmd/claude-fleet
+    go build -o "{{dev_bin}}/vigie" ./cmd/vigie
     pidf="{{dev_dir}}/watcher.pid"
     [ -f "$pidf" ] && kill "$(cat "$pidf")" 2>/dev/null || true
-    FLEET_CONFIG="{{dev_config}}" nohup "{{dev_bin}}/claude-fleet" watch > "{{dev_dir}}/watcher.log" 2>&1 &
+    FLEET_CONFIG="{{dev_config}}" nohup "{{dev_bin}}/vigie" watch > "{{dev_dir}}/watcher.log" 2>&1 &
     echo $! > "$pidf"
     echo "dev watcher → {{dev_url}} (pid $(cat "$pidf"), logs {{dev_dir}}/watcher.log)"
 
 # Run the current-source TUI in the foreground, pointed at the dev server.
 dev-tui: dev-config
-    FLEET_CONFIG="{{dev_config}}" go run ./cmd/claude-fleet tui
+    FLEET_CONFIG="{{dev_config}}" go run ./cmd/vigie tui
 
 # Stop the background dev server and watcher.
 dev-down:
@@ -88,16 +88,16 @@ dev-hooks-install: dev-config
     #!/usr/bin/env bash
     set -euo pipefail
     mkdir -p "{{dev_bin}}"
-    go build -o "{{dev_bin}}/claude-fleet" ./cmd/claude-fleet
-    FLEET_CONFIG="{{dev_config}}" "{{dev_bin}}/claude-fleet" hooks install
+    go build -o "{{dev_bin}}/vigie" ./cmd/vigie
+    FLEET_CONFIG="{{dev_config}}" "{{dev_bin}}/vigie" hooks install
 
 # Remove the dev hook leg (production hooks are never touched).
 dev-hooks-uninstall:
     #!/usr/bin/env bash
     set -euo pipefail
     mkdir -p "{{dev_bin}}"
-    [ -x "{{dev_bin}}/claude-fleet" ] || go build -o "{{dev_bin}}/claude-fleet" ./cmd/claude-fleet
-    FLEET_CONFIG="{{dev_config}}" "{{dev_bin}}/claude-fleet" hooks uninstall
+    [ -x "{{dev_bin}}/vigie" ] || go build -o "{{dev_bin}}/vigie" ./cmd/vigie
+    FLEET_CONFIG="{{dev_config}}" "{{dev_bin}}/vigie" hooks uninstall
 
 # =============================================================================
 # CODE

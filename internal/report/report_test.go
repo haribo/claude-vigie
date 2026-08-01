@@ -9,8 +9,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/haribo/claude-fleet/internal/api"
-	"github.com/haribo/claude-fleet/internal/config"
+	"github.com/haribo/claude-vigie/internal/api"
+	"github.com/haribo/claude-vigie/internal/config"
 )
 
 func writeConfig(t *testing.T, serverURL string) {

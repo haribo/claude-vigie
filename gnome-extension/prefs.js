@@ -1,4 +1,4 @@
-// Preferences for the Claude Fleet indicator: server URL, token, poll interval.
+// Preferences for the Claude Vigie indicator: server URL, token, poll interval.
 
 import Adw from 'gi://Adw';
 import Gio from 'gi://Gio';
@@ -13,7 +13,7 @@ export default class ClaudeFleetPreferences extends ExtensionPreferences {
         const page = new Adw.PreferencesPage();
         const group = new Adw.PreferencesGroup({
             title: 'Fleet server',
-            description: 'The claude-fleetd server this indicator reads from (read-only).',
+            description: 'The vigied server this indicator reads from (read-only).',
         });
         page.add(group);
 

@@ -9,8 +9,8 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/haribo/claude-fleet/internal/config"
-	"github.com/haribo/claude-fleet/internal/watch"
+	"github.com/haribo/claude-vigie/internal/config"
+	"github.com/haribo/claude-vigie/internal/watch"
 )
 
 func runWatch(args []string) int {
@@ -24,7 +24,7 @@ func runWatch(args []string) int {
 
 	cfg, err := config.Load()
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "watch: %v\nrun 'claude-fleet init' first\n", err)
+		fmt.Fprintf(os.Stderr, "watch: %v\nrun 'vigie init' first\n", err)
 		return 1
 	}
 

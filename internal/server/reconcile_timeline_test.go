@@ -6,7 +6,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/haribo/claude-fleet/internal/api"
+	"github.com/haribo/claude-vigie/internal/api"
 )
 
 // TestStatusReconcileTimeline replays both observers — hook events and watcher

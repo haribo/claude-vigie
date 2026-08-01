@@ -12,7 +12,7 @@ var (
 
 // String returns a human-readable version string.
 // String renders the version line for the given binary name (each binary passes
-// its own, so `claude-fleetd version` does not print "claude-fleet").
+// its own, so `vigied version` does not print "vigie").
 func String(name string) string {
 	return fmt.Sprintf("%s %s (commit %s, built %s)", name, Version, Commit, BuildTime)
 }

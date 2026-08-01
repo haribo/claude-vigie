@@ -8,7 +8,7 @@ daemon); the Go / pure-SQLite / GoReleaser decisions still hold.
 
 ## Context
 
-Claude Fleet needs a server, a reporter invoked by Claude Code hooks, and two
+Claude Vigie needs a server, a reporter invoked by Claude Code hooks, and two
 clients (web + terminal). The reporter is called by hooks — potentially on
 every tool use — so its startup cost matters. The project is open source and
 self-hosted, so installation must be simple across machines.

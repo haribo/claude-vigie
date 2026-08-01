@@ -21,7 +21,7 @@ func TestServesAppShell(t *testing.T) {
 	if rec.Code != http.StatusOK {
 		t.Fatalf("GET / = %d, want 200", rec.Code)
 	}
-	if !strings.Contains(rec.Body.String(), "<title>claude-fleet</title>") {
+	if !strings.Contains(rec.Body.String(), "<title>claude-vigie</title>") {
 		t.Errorf("GET / did not serve the app shell:\n%s", rec.Body.String()[:min(200, rec.Body.Len())])
 	}
 	if ct := rec.Header().Get("Content-Type"); !strings.HasPrefix(ct, "text/html") {
@@ -48,7 +48,7 @@ func TestSecurityHeaders(t *testing.T) {
 
 func TestServesStaticAssets(t *testing.T) {
 	for _, tc := range []struct{ path, ctPrefix, needle string }{
-		{"/static/app.js", "text/javascript", "claude-fleet"},
+		{"/static/app.js", "text/javascript", "claude-vigie"},
 		{"/static/app.css", "text/css", "--accent"},
 	} {
 		rec := get(t, Handler(), tc.path)

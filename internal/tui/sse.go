@@ -6,7 +6,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/haribo/claude-fleet/internal/config"
+	"github.com/haribo/claude-vigie/internal/config"
 )
 
 // subscribeEvents streams SSE notifications from the server, sending on out for

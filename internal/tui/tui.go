@@ -5,9 +5,9 @@ package tui
 import (
 	tea "github.com/charmbracelet/bubbletea"
 
-	"github.com/haribo/claude-fleet/internal/api"
-	"github.com/haribo/claude-fleet/internal/clock"
-	"github.com/haribo/claude-fleet/internal/config"
+	"github.com/haribo/claude-vigie/internal/api"
+	"github.com/haribo/claude-vigie/internal/clock"
+	"github.com/haribo/claude-vigie/internal/config"
 )
 
 // Run starts the terminal dashboard, polling the server described by cfg.

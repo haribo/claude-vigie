@@ -6,11 +6,11 @@ Accepted.
 
 ## Context
 
-claude-fleet reports the state of Claude Code sessions across machines. A
+vigie reports the state of Claude Code sessions across machines. A
 natural temptation is to also *act* on sessions — e.g. remote control (`/rc`)
 asks not only "is this session remotely piloted?" but "turn that on from the
 dashboard". Turning it on means executing a command **inside** a running
-session: a downstream control channel from claude-fleet into Claude Code.
+session: a downstream control channel from vigie into Claude Code.
 
 An early implementation already crossed this line: rc was a hand-set boolean
 flag with a `c` toggle and a `POST` endpoint, pretending to control something it
@@ -25,7 +25,7 @@ them, with a different security posture.
 
 ## Decision
 
-**claude-fleet is observe-only.** It reads and reports session state; it never
+**vigie is observe-only.** It reads and reports session state; it never
 writes into a session or drives one.
 
 - Session facts are **detected**, never operator-set. Remote control is read
@@ -33,7 +33,7 @@ writes into a session or drives one.
   [`docs/design/remote-control.md`](../design/remote-control.md)) — a read-only
   signal.
 - Piloting a session stays with the native tools: `/rc` in the terminal, the web
-  app, the mobile app. claude-fleet shows *that* it is on; it does not toggle it.
+  app, the mobile app. vigie shows *that* it is on; it does not toggle it.
 - No PTY injection, no reverse-engineered control socket, no write path into a
   session.
 

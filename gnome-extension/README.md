@@ -1,10 +1,10 @@
-# Claude Fleet — GNOME Shell extension
+# Claude Vigie — GNOME Shell extension
 
-A top-bar indicator for [claude-fleet](../README.md): it shows, at a glance, how
+A top-bar indicator for [vigie](../README.md): it shows, at a glance, how
 many Claude Code sessions across your fleet are **waiting for input**, and lists
 sessions grouped by status in a dropdown.
 
-It is a **read-only** client of a `claude-fleetd` server — it polls
+It is a **read-only** client of a `vigied` server — it polls
 `GET /api/sessions` and never writes into or drives a session (observe-only, see
 [ADR-0005](../docs/adr/0005-observe-only.md)).
 
@@ -14,7 +14,7 @@ It is a **read-only** client of a `claude-fleetd` server — it polls
 ## Requirements
 
 - GNOME Shell 45–50 (ESM extensions).
-- A reachable `claude-fleetd` server and its token.
+- A reachable `vigied` server and its token.
 
 ## Install (from source)
 
@@ -22,20 +22,20 @@ It is a **read-only** client of a `claude-fleetd` server — it polls
 cd gnome-extension
 gnome-extensions pack --force \
   --extra-source=icons \
-  --schema=schemas/org.gnome.shell.extensions.claude-fleet.gschema.xml
-gnome-extensions install --force claude-fleet@haribo.github.io.shell-extension.zip
+  --schema=schemas/org.gnome.shell.extensions.claude-vigie.gschema.xml
+gnome-extensions install --force claude-vigie@haribo.github.io.shell-extension.zip
 ```
 
 Then log out/in (Wayland) or restart the Shell (`Alt+F2`, `r`, X11), and enable it:
 
 ```bash
-gnome-extensions enable claude-fleet@haribo.github.io
+gnome-extensions enable claude-vigie@haribo.github.io
 ```
 
 ## Configure
 
 Open the extension preferences (via *Extensions* app, or
-`gnome-extensions prefs claude-fleet@haribo.github.io`) and set:
+`gnome-extensions prefs claude-vigie@haribo.github.io`) and set:
 
 - **Server URL** — e.g. `https://fleet.example.com` (or `http://localhost:8080`).
 - **Token** — the shared fleet token.
@@ -57,5 +57,5 @@ with the commands above, then restart the Shell. Logs:
 
 ```bash
 journalctl --user -f -o cat /usr/bin/gnome-shell   # runtime (extension.js)
-journalctl --user -f -o cat | grep -i claude-fleet  # our console.debug lines
+journalctl --user -f -o cat | grep -i vigie  # our console.debug lines
 ```

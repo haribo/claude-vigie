@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/haribo/claude-fleet/internal/config"
+	"github.com/haribo/claude-vigie/internal/config"
 )
 
 func TestConnectionStatuses(t *testing.T) {
@@ -17,7 +17,7 @@ func TestConnectionStatuses(t *testing.T) {
 	}{
 		{http.StatusOK, false, ""},
 		{http.StatusUnauthorized, true, "invalid token"},
-		{http.StatusNotFound, true, "not a claude-fleet server"},
+		{http.StatusNotFound, true, "not a vigie server"},
 		{http.StatusInternalServerError, true, "unexpected status"},
 	}
 	for _, c := range cases {

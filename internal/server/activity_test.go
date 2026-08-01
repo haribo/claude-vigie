@@ -3,8 +3,8 @@ package server
 import (
 	"testing"
 
-	"github.com/haribo/claude-fleet/internal/api"
-	"github.com/haribo/claude-fleet/internal/store"
+	"github.com/haribo/claude-vigie/internal/api"
+	"github.com/haribo/claude-vigie/internal/store"
 )
 
 func TestActivityClearedOnStatusChange(t *testing.T) {

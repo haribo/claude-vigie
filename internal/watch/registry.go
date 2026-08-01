@@ -7,7 +7,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/haribo/claude-fleet/internal/presence"
+	"github.com/haribo/claude-vigie/internal/presence"
 )
 
 // sessionRecord is one entry of Claude Code's native session registry

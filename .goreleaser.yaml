@@ -5,10 +5,10 @@ before:
     - go mod tidy
 
 builds:
-  # claude-fleet — the client (init, report, tui), installed on every machine.
-  - id: claude-fleet
-    main: ./cmd/claude-fleet
-    binary: claude-fleet
+  # vigie — the client (init, report, tui), installed on every machine.
+  - id: vigie
+    main: ./cmd/vigie
+    binary: vigie
     # CGO disabled: the whole toolchain stays pure Go so binaries
     # cross-compile cleanly and link statically (see ADR-0002).
     env:
@@ -19,34 +19,34 @@ builds:
     goarch: [amd64, arm64]
     ldflags:
       - -s -w
-      - -X github.com/haribo/claude-fleet/internal/version.Version={{ .Version }}
-      - -X github.com/haribo/claude-fleet/internal/version.Commit={{ .ShortCommit }}
-      - -X github.com/haribo/claude-fleet/internal/version.BuildTime={{ .Date }}
+      - -X github.com/haribo/claude-vigie/internal/version.Version={{ .Version }}
+      - -X github.com/haribo/claude-vigie/internal/version.Commit={{ .ShortCommit }}
+      - -X github.com/haribo/claude-vigie/internal/version.BuildTime={{ .Date }}
 
-  # claude-fleetd — the server daemon (serve), runs on the host machine.
-  - id: claude-fleetd
-    main: ./cmd/claude-fleetd
-    binary: claude-fleetd
+  # vigied — the server daemon (serve), runs on the host machine.
+  - id: vigied
+    main: ./cmd/vigied
+    binary: vigied
     env:
       - CGO_ENABLED=0
     goos: [linux]
     goarch: [amd64, arm64]
     ldflags:
       - -s -w
-      - -X github.com/haribo/claude-fleet/internal/version.Version={{ .Version }}
-      - -X github.com/haribo/claude-fleet/internal/version.Commit={{ .ShortCommit }}
-      - -X github.com/haribo/claude-fleet/internal/version.BuildTime={{ .Date }}
+      - -X github.com/haribo/claude-vigie/internal/version.Version={{ .Version }}
+      - -X github.com/haribo/claude-vigie/internal/version.Commit={{ .ShortCommit }}
+      - -X github.com/haribo/claude-vigie/internal/version.BuildTime={{ .Date }}
 
 archives:
-  # Separate archives so client machines download only claude-fleet.
+  # Separate archives so client machines download only vigie.
   - id: client
-    ids: [claude-fleet]
+    ids: [vigie]
     formats: [tar.gz]
-    name_template: "claude-fleet_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
+    name_template: "vigie_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
   - id: daemon
-    ids: [claude-fleetd]
+    ids: [vigied]
     formats: [tar.gz]
-    name_template: "claude-fleetd_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
+    name_template: "vigied_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
 
 checksum:
   name_template: checksums.txt

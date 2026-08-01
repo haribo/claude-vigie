@@ -67,7 +67,7 @@ func TestFleetConfigOverride(t *testing.T) {
 func TestMigratesLegacyJSON(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("XDG_CONFIG_HOME", home)
-	dir := filepath.Join(home, "claude-fleet")
+	dir := filepath.Join(home, "vigie")
 	if err := os.MkdirAll(dir, 0o750); err != nil {
 		t.Fatal(err)
 	}
@@ -97,5 +97,27 @@ func TestMigratesLegacyJSON(t *testing.T) {
 	// A second load reads the TOML with no legacy file left.
 	if _, err := Load(); err != nil {
 		t.Fatalf("second Load after migration: %v", err)
+	}
+}
+
+func TestLoadFallsBackToLegacyDir(t *testing.T) {
+	cfgHome := t.TempDir()
+	t.Setenv("XDG_CONFIG_HOME", cfgHome)
+	// A config.toml written under the pre-rename ~/.config/claude-fleet directory.
+	oldDir := filepath.Join(cfgHome, "claude-fleet")
+	if err := os.MkdirAll(oldDir, 0o750); err != nil {
+		t.Fatal(err)
+	}
+	body := "server_url = \"http://old:8080\"\ntoken = \"tok\"\nmachine = \"m\"\n"
+	if err := os.WriteFile(filepath.Join(oldDir, "config.toml"), []byte(body), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	got, err := Load() // no vigie/config.toml exists → must read the legacy one
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if got.ServerURL != "http://old:8080" || got.Token != "tok" {
+		t.Errorf("legacy fallback not read: %+v", got)
 	}
 }

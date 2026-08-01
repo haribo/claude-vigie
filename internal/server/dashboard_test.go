@@ -12,17 +12,17 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/haribo/claude-fleet/internal/api"
+	"github.com/haribo/claude-vigie/internal/api"
 )
 
-var metricRe = regexp.MustCompile(`fleet_[a-zA-Z0-9_]+`)
+var metricRe = regexp.MustCompile(`vigie_[a-zA-Z0-9_]+`)
 
 // TestDashboardMetricsExist keeps the committed Grafana dashboard in sync with
-// the code: every fleet_* metric the dashboard queries must be exposed by
+// the code: every vigie_* metric the dashboard queries must be exposed by
 // /metrics. Without this, a renamed metric silently breaks the dashboard.
 func TestDashboardMetricsExist(t *testing.T) {
 	// Wire the scrape-time collector and make its gauges emit, so state metrics
-	// (fleet_sessions, fleet_db_size_bytes, fleet_watcher_last_seen…) appear.
+	// (vigie_sessions, vigie_db_size_bytes, vigie_watcher_last_seen…) appear.
 	srv := newTestServer(t)
 	db := filepath.Join(t.TempDir(), "db")
 	if err := os.WriteFile(db, []byte("x"), 0o600); err != nil {
@@ -44,7 +44,7 @@ func TestDashboardMetricsExist(t *testing.T) {
 	do(t, srv, http.MethodPost, "/api/report", good, true)
 	do(t, srv, http.MethodPost, "/api/report", []byte("{"), true) // bad json → rejected
 
-	raw, err := os.ReadFile("../../dashboards/claude-fleet.json")
+	raw, err := os.ReadFile("../../dashboards/vigie.json")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -68,7 +68,7 @@ func TestDashboardMetricsExist(t *testing.T) {
 		}
 	}
 	if len(wanted) == 0 {
-		t.Fatal("no fleet_* metrics referenced by the dashboard — parse error?")
+		t.Fatal("no vigie_* metrics referenced by the dashboard — parse error?")
 	}
 
 	rec := httptest.NewRecorder()
@@ -87,8 +87,8 @@ func TestDashboardMetricsExist(t *testing.T) {
 	}
 }
 
-// baseMetric strips a histogram suffix so a query on fleet_x_bucket maps to the
-// registered fleet_x (whose HELP/TYPE lines always appear in the exposition).
+// baseMetric strips a histogram suffix so a query on vigie_x_bucket maps to the
+// registered vigie_x (whose HELP/TYPE lines always appear in the exposition).
 func baseMetric(name string) string {
 	for _, suf := range []string{"_bucket", "_sum", "_count"} {
 		name = strings.TrimSuffix(name, suf)

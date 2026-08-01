@@ -29,13 +29,23 @@ type Config struct {
 	Machine string `toml:"machine" json:"machine"`
 }
 
-// dir returns the claude-fleet config directory, honoring XDG_CONFIG_HOME on Linux.
+// dir returns the vigie config directory, honoring XDG_CONFIG_HOME on Linux.
 func dir() (string, error) {
 	d, err := os.UserConfigDir()
 	if err != nil {
 		return "", fmt.Errorf("resolving user config dir: %w", err)
 	}
-	return filepath.Join(d, "claude-fleet"), nil
+	return filepath.Join(d, "vigie"), nil
+}
+
+// legacyDirPath returns a path under the pre-rename ~/.config/claude-fleet
+// directory, so a config written before the vigie rename is still read.
+func legacyDirPath(name string) (string, error) {
+	d, err := os.UserConfigDir()
+	if err != nil {
+		return "", fmt.Errorf("resolving user config dir: %w", err)
+	}
+	return filepath.Join(d, "claude-fleet", name), nil
 }
 
 // Path returns the config file path. FLEET_CONFIG, when set, overrides it with
@@ -69,6 +79,15 @@ func Load() (*Config, error) {
 		return nil, err
 	}
 	data, err := os.ReadFile(path)
+	if errors.Is(err, os.ErrNotExist) && os.Getenv("FLEET_CONFIG") == "" {
+		// Read-fallback: a config.toml written under the pre-rename
+		// ~/.config/claude-fleet directory is still honored (soft migration).
+		if old, oErr := legacyDirPath("config.toml"); oErr == nil {
+			if d2, e2 := os.ReadFile(old); e2 == nil {
+				data, err = d2, nil
+			}
+		}
+	}
 	if errors.Is(err, os.ErrNotExist) {
 		// Legacy config.json migration applies only to the default path, not to
 		// an explicit FLEET_CONFIG override.

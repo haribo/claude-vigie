@@ -6,14 +6,14 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/haribo/claude-fleet/internal/store"
+	"github.com/haribo/claude-vigie/internal/store"
 )
 
 // runToken prints the fleet auth token stored in the database, generating and
 // persisting one if none exists yet. Used by tooling to connect clients.
 func runToken(args []string) int {
 	fs := flag.NewFlagSet("token", flag.ContinueOnError)
-	dbPath := fs.String("db", "claude-fleet.db", "path to the SQLite database file")
+	dbPath := fs.String("db", "vigie.db", "path to the SQLite database file")
 	if err := fs.Parse(args); err != nil {
 		return 2
 	}

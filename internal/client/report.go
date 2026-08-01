@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/haribo/claude-fleet/internal/report"
+	"github.com/haribo/claude-vigie/internal/report"
 )
 
 func runReport(args []string) int {
@@ -18,7 +18,7 @@ func runReport(args []string) int {
 	// Fire-and-forget: a monitoring hook must never fail a Claude session.
 	// Log any problem to stderr (captured in the hook debug log) and exit 0.
 	if err := report.Run(*event, os.Stdin); err != nil {
-		fmt.Fprintf(os.Stderr, "claude-fleet report: %v\n", err)
+		fmt.Fprintf(os.Stderr, "vigie report: %v\n", err)
 	}
 	return 0
 }

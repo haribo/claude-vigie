@@ -30,7 +30,17 @@ func dir() (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("resolving home dir: %w", err)
 	}
-	return filepath.Join(home, ".local", "state", "claude-fleet", "sessions"), nil
+	return filepath.Join(home, ".local", "state", "vigie", "sessions"), nil
+}
+
+// legacyPathFor returns a session mapping's path under the pre-rename
+// ~/.local/state/claude-fleet directory, for read-fallback (soft migration).
+func legacyPathFor(sessionID string) (string, error) {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return "", fmt.Errorf("resolving home dir: %w", err)
+	}
+	return filepath.Join(home, ".local", "state", "claude-fleet", "sessions", sessionID+".json"), nil
 }
 
 func pathFor(sessionID string) (string, error) {
@@ -70,6 +80,14 @@ func Load(sessionID string) (m Mapping, ok bool, err error) {
 		return Mapping{}, false, err
 	}
 	data, err := os.ReadFile(p) //nolint:gosec // path is validated and confined to our sessions dir
+	if os.IsNotExist(err) {
+		// Read-fallback: a mapping recorded before the vigie rename.
+		if old, oErr := legacyPathFor(sessionID); oErr == nil {
+			if d2, e2 := os.ReadFile(old); e2 == nil { //nolint:gosec // same validated id
+				data, err = d2, nil
+			}
+		}
+	}
 	if os.IsNotExist(err) {
 		return Mapping{}, false, nil
 	}

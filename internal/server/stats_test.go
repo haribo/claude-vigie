@@ -5,7 +5,7 @@ import (
 	"net/http"
 	"testing"
 
-	"github.com/haribo/claude-fleet/internal/api"
+	"github.com/haribo/claude-vigie/internal/api"
 )
 
 func postReport(t *testing.T, srv *Server, body string) {

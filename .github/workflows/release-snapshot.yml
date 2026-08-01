@@ -48,9 +48,9 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p dist
-          ldflags="-s -w -X github.com/haribo/claude-fleet/internal/version.Version=${STAMP}"
+          ldflags="-s -w -X github.com/haribo/claude-vigie/internal/version.Version=${STAMP}"
           for arch in amd64 arm64; do
-            for bin in claude-fleet claude-fleetd; do
+            for bin in vigie vigied; do
               GOOS=linux GOARCH="$arch" CGO_ENABLED=0 \
                 go build -ldflags "$ldflags" -o "dist/${bin}-linux-${arch}-${STAMP}" "./cmd/${bin}"
             done
