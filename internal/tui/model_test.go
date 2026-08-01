@@ -7,7 +7,7 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 
-	"github.com/haribo/claude-fleet/internal/api"
+	"github.com/haribo/claude-vigie/internal/api"
 )
 
 func TestRenderTabBar(t *testing.T) {

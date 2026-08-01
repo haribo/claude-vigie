@@ -5,7 +5,7 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/haribo/claude-fleet/internal/api"
+	"github.com/haribo/claude-vigie/internal/api"
 )
 
 // usageLeaseTTL is longer than the fetch cadence so a missed cycle doesn't hand

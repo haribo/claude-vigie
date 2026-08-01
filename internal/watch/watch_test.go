@@ -8,7 +8,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/haribo/claude-fleet/internal/presence"
+	"github.com/haribo/claude-vigie/internal/presence"
 )
 
 func TestActivelyWorking(t *testing.T) {

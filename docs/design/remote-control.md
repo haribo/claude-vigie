@@ -3,7 +3,7 @@
 **Status:** Accepted. rc is detected and read-only; activation is out of scope
 per [ADR-0005](../adr/0005-observe-only.md).
 
-Source of truth for what "remote control" (rc) means in claude-fleet and how the
+Source of truth for what "remote control" (rc) means in vigie and how the
 operator interacts with it — the user-observable behavior, not the code.
 
 ---
@@ -12,7 +12,7 @@ operator interacts with it — the user-observable behavior, not the code.
 
 Remote control is Claude Code's **`/rc` slash command**: running it in a session
 lets that session be driven from the web (claude.ai) or the Claude Android app.
-claude-fleet **does not pilot anything** — it only reflects, and (if decided,
+vigie **does not pilot anything** — it only reflects, and (if decided,
 § 4) triggers, `/rc` on the session itself.
 
 ---
@@ -25,7 +25,7 @@ A session is remotely controlled **iff its Claude session file has a non-empty
 - Source: `~/.claude/sessions/<pid>.json`, written by Claude Code, e.g.
   `{"sessionId": "...", "name": "tribnest", "status": "idle", "bridgeSessionId": "session_014wi…"}`.
 - `bridgeSessionId` present → `/rc` active; absent/empty → not.
-- Verified: tribnest, plain-note, claude-fleet carry a bridge (rc on); shellf,
+- Verified: tribnest, plain-note, vigie carry a bridge (rc on); shellf,
   melonia, sirius do not (rc off) — matching what the operator sees in each
   session's terminal footer.
 
@@ -49,11 +49,11 @@ scan, and the `c` toggle and its write endpoint are gone.
 
 ## 4. Activation is out of scope
 
-claude-fleet does **not** turn `/rc` on or off. Activation means executing a
+vigie does **not** turn `/rc` on or off. Activation means executing a
 command inside a running session — a downstream control channel that
-[ADR-0005](../adr/0005-observe-only.md) rules out (claude-fleet is observe-only).
+[ADR-0005](../adr/0005-observe-only.md) rules out (vigie is observe-only).
 The operator activates rc with the native tools: `/rc` in the session terminal,
-or the web / mobile app. claude-fleet shows *that* it is on; it never toggles it.
+or the web / mobile app. vigie shows *that* it is on; it never toggles it.
 
 ---
 

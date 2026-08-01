@@ -7,8 +7,8 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/haribo/claude-fleet/internal/api"
-	"github.com/haribo/claude-fleet/internal/store"
+	"github.com/haribo/claude-vigie/internal/api"
+	"github.com/haribo/claude-vigie/internal/store"
 )
 
 func (s *Server) handleReport(w http.ResponseWriter, r *http.Request) {

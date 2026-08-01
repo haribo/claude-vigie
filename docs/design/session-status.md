@@ -2,9 +2,9 @@
 
 **Status:** Accepted.
 
-Source of truth for what a session's **status** means in claude-fleet and what
+Source of truth for what a session's **status** means in vigie and what
 makes it change — the user-observable behavior, not the code. Like everything in
-claude-fleet, status is **detected**, never operator-set
+vigie, status is **detected**, never operator-set
 ([ADR-0005](../adr/0005-observe-only.md)).
 
 ---

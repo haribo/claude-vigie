@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/haribo/claude-fleet/internal/api"
+	"github.com/haribo/claude-vigie/internal/api"
 )
 
 func TestHumanizeTokens(t *testing.T) {

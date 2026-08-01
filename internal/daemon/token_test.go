@@ -5,7 +5,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/haribo/claude-fleet/internal/store"
+	"github.com/haribo/claude-vigie/internal/store"
 )
 
 func tempStore(t *testing.T) *store.Store {

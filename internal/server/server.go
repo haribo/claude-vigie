@@ -12,9 +12,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/haribo/claude-fleet/internal/clock"
-	"github.com/haribo/claude-fleet/internal/store"
-	"github.com/haribo/claude-fleet/internal/web"
+	"github.com/haribo/claude-vigie/internal/clock"
+	"github.com/haribo/claude-vigie/internal/store"
+	"github.com/haribo/claude-vigie/internal/web"
 )
 
 // Store is the persistence surface the server depends on (accept interfaces).

@@ -8,9 +8,9 @@ import (
 
 	"time"
 
-	"github.com/haribo/claude-fleet/internal/clock"
+	"github.com/haribo/claude-vigie/internal/clock"
 
-	"github.com/haribo/claude-fleet/internal/api"
+	"github.com/haribo/claude-vigie/internal/api"
 )
 
 // DefaultPlatformStatusURL is the Statuspage status endpoint for the Claude
@@ -102,7 +102,7 @@ func fetchPlatformStatus(ctx context.Context, url string) (api.PlatformStatus, e
 	if err != nil {
 		return api.PlatformStatus{}, err
 	}
-	req.Header.Set("User-Agent", "claude-fleet")
+	req.Header.Set("User-Agent", "vigie")
 
 	resp, err := statusClient.Do(req)
 	if err != nil {

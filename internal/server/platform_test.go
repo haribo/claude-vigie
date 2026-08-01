@@ -7,7 +7,7 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	"github.com/haribo/claude-fleet/internal/api"
+	"github.com/haribo/claude-vigie/internal/api"
 )
 
 func TestFetchPlatformStatus(t *testing.T) {

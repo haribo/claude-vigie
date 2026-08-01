@@ -16,11 +16,11 @@ import (
 	"strings"
 	"time"
 
-	"github.com/haribo/claude-fleet/internal/api"
-	"github.com/haribo/claude-fleet/internal/clock"
-	"github.com/haribo/claude-fleet/internal/config"
-	"github.com/haribo/claude-fleet/internal/presence"
-	"github.com/haribo/claude-fleet/internal/transcript"
+	"github.com/haribo/claude-vigie/internal/api"
+	"github.com/haribo/claude-vigie/internal/clock"
+	"github.com/haribo/claude-vigie/internal/config"
+	"github.com/haribo/claude-vigie/internal/presence"
+	"github.com/haribo/claude-vigie/internal/transcript"
 )
 
 // hookPayload is the JSON Claude Code passes to a command hook on stdin.

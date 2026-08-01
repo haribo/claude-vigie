@@ -4,8 +4,8 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/haribo/claude-fleet/internal/api"
-	"github.com/haribo/claude-fleet/internal/store"
+	"github.com/haribo/claude-vigie/internal/api"
+	"github.com/haribo/claude-vigie/internal/store"
 )
 
 // staleReportAfter is how long a session may go without a report before it is

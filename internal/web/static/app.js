@@ -1,5 +1,5 @@
 "use strict";
-// claude-fleet — read-only web dashboard, a browser mirror of the terminal UI.
+// claude-vigie — read-only web dashboard, a browser mirror of the terminal UI.
 // It only reads the API (observe-only). The operator's token lives in localStorage
 // and is sent as a bearer token; all data is HTML-escaped before it reaches the
 // DOM, since a session's title/branch/activity are transcript-derived and the
@@ -245,7 +245,7 @@ function renderSettings() {
   const [pcls, ptxt] = platformClass(platform);
   $("tab-settings").innerHTML = `
     <div class="settings">
-      <div class="set-note"><span>ℹ</span><span>Settings are <b>read-only</b> from the web client — claude-fleet is observe-only. Change them on the daemon.</span></div>
+      <div class="set-note"><span>ℹ</span><span>Settings are <b>read-only</b> from the web client — claude-vigie is observe-only. Change them on the daemon.</span></div>
       <div class="set-row"><span class="k">Server<small>the daemon this dashboard is served by</small></span><span class="v">${esc(location.origin)}</span></div>
       <div class="set-row"><span class="k">Session retention<small>how long closed sessions are kept</small></span><span class="v">${esc(retention)}</span></div>
       <div class="set-row"><span class="k">Platform status<small>polled from status.claude.com</small></span><span class="v ${pcls === "ok" ? "ok" : ""}">● ${esc(ptxt)}</span></div>

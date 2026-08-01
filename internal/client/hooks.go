@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/haribo/claude-fleet/internal/config"
-	"github.com/haribo/claude-fleet/internal/install"
+	"github.com/haribo/claude-vigie/internal/config"
+	"github.com/haribo/claude-vigie/internal/install"
 )
 
 // runHooks installs or removes one reporting leg. The leg is selected by
@@ -26,7 +26,7 @@ func runHooks(args []string) int {
 
 	binPath, err := os.Executable()
 	if err != nil {
-		binPath = "claude-fleet"
+		binPath = "vigie"
 	}
 	configPath := config.EnvConfigPath()
 
@@ -62,11 +62,11 @@ func legName(configPath string) string {
 }
 
 func hooksUsage() {
-	fmt.Fprint(os.Stderr, `claude-fleet hooks — manage Claude Code reporting hooks (one leg per config)
+	fmt.Fprint(os.Stderr, `vigie hooks — manage Claude Code reporting hooks (one leg per config)
 
 Usage:
-  claude-fleet hooks install [--detailed]   install the reporting hooks for this leg
-  claude-fleet hooks uninstall              remove the reporting hooks for this leg
+  vigie hooks install [--detailed]   install the reporting hooks for this leg
+  vigie hooks uninstall              remove the reporting hooks for this leg
 
 The leg is selected by FLEET_CONFIG: unset installs the production leg; set to a
 config file installs a dev leg that reports to that server too. Legs are

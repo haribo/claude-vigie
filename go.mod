@@ -1,4 +1,4 @@
-module github.com/haribo/claude-fleet
+module github.com/haribo/claude-vigie
 
 go 1.26
 

@@ -5,8 +5,8 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/haribo/claude-fleet/internal/api"
-	"github.com/haribo/claude-fleet/internal/clock"
+	"github.com/haribo/claude-vigie/internal/api"
+	"github.com/haribo/claude-vigie/internal/clock"
 )
 
 // machineStat aggregates one machine's sessions for the Machines tab.

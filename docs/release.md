@@ -22,27 +22,27 @@ version. Each run **overwrites** the previous one.
 
 **Produce one:** GitHub → Actions → **Snapshot** → *Run workflow*. It builds from
 `develop`, gates on `go vet` + `go test`, and publishes a GitHub **pre-release**
-under the rolling `snapshot` tag, with the Linux binaries `claude-fleet` and
-`claude-fleetd` (amd64, arm64).
+under the rolling `snapshot` tag, with the Linux binaries `vigie` and
+`vigied` (amd64, arm64).
 
 **Build stamp.** Every snapshot binary is stamped `develop-<date>-<sha7>`,
 injected into `internal/version` and visible via:
 
 ```bash
-claude-fleet version      # claude-fleet develop-20260728-ab74e54 (...)
+vigie version      # vigie develop-20260728-ab74e54 (...)
 ```
 
 **Install:**
 
 ```bash
 # from the "snapshot" pre-release on the Releases page
-curl -sSL -o claude-fleetd \
-  https://github.com/haribo/claude-fleet/releases/download/snapshot/claude-fleetd-linux-amd64-<stamp>
-chmod +x claude-fleetd
+curl -sSL -o vigied \
+  https://github.com/haribo/claude-vigie/releases/download/snapshot/vigied-linux-amd64-<stamp>
+chmod +x vigied
 ```
 
-Deployment is out of scope: claude-fleet ships **binaries**. How you run
-`claude-fleetd` (container, systemd, …), terminate TLS (a reverse proxy such as
+Deployment is out of scope: vigie ships **binaries**. How you run
+`vigied` (container, systemd, …), terminate TLS (a reverse proxy such as
 Caddy), and expose it is the deployer's call. The clients speak whatever scheme
 is in their `server_url`, so point them at your `https://` endpoint; the shared
 token is only safe over TLS.

@@ -1,11 +1,11 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <schemalist>
-  <schema id="org.gnome.shell.extensions.claude-fleet"
-          path="/org/gnome/shell/extensions/claude-fleet/">
+  <schema id="org.gnome.shell.extensions.claude-vigie"
+          path="/org.gnome.shell.extensions.claude-vigie/">
     <key name="server-url" type="s">
       <default>"http://localhost:8080"</default>
       <summary>Fleet server URL</summary>
-      <description>Base URL of the claude-fleetd server, e.g. https://fleet.example.com</description>
+      <description>Base URL of the vigied server, e.g. https://fleet.example.com</description>
     </key>
     <key name="token" type="s">
       <default>""</default>

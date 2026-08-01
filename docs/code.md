@@ -45,8 +45,8 @@ the client never imports the server/store packages, so it never links them.
 
 | Binary | Command dir | Entry package |
 |--------|-------------|---------------|
-| `claude-fleet` (client) | `cmd/claude-fleet` | `internal/client` |
-| `claude-fleetd` (daemon) | `cmd/claude-fleetd` | `internal/daemon` |
+| `vigie` (client) | `cmd/vigie` | `internal/client` |
+| `vigied` (daemon) | `cmd/vigied` | `internal/daemon` |
 
 | Package | Used by | Role |
 |---------|---------|------|

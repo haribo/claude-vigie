@@ -9,8 +9,8 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 
-	"github.com/haribo/claude-fleet/internal/api"
-	"github.com/haribo/claude-fleet/internal/clock"
+	"github.com/haribo/claude-vigie/internal/api"
+	"github.com/haribo/claude-vigie/internal/clock"
 )
 
 // pollInterval is the fallback refresh. SSE pushes data changes instantly, so
@@ -103,7 +103,7 @@ type model struct {
 	fetchStats      func() (api.StatsResponse, error)
 	fetchPlatform   func() (api.PlatformStatus, error)
 	setRetention    func(v string) error
-	serverURL       string // read-only; set via `claude-fleet init`
+	serverURL       string // read-only; set via `vigie init`
 	serverRetention time.Duration
 	stats           api.StatsResponse
 	statsPeriod     period
@@ -602,13 +602,13 @@ func (m model) View() string {
 func (m model) renderSettings() string {
 	var b strings.Builder
 
-	// Connection is read-only here: it is set per machine by `claude-fleet init`
+	// Connection is read-only here: it is set per machine by `vigie init`
 	// and shared with the watcher/reporter. Editing it from the TUI would only
 	// change this process and leave the watcher on the old server. The token is
 	// never shown.
 	b.WriteString(dimStyle.Render("Connection") + "\n\n")
 	b.WriteString("  " + labelStyle.Render(pad("Server", 24)) + m.serverURL +
-		dimStyle.Render("   (read-only — set via `claude-fleet init`)") + "\n\n")
+		dimStyle.Render("   (read-only — set via `vigie init`)") + "\n\n")
 
 	b.WriteString(dimStyle.Render("Preferences") + "\n\n")
 	rows := []struct {

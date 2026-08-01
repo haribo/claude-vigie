@@ -3,7 +3,7 @@ package server
 import (
 	"net/http"
 
-	"github.com/haribo/claude-fleet/internal/api"
+	"github.com/haribo/claude-vigie/internal/api"
 )
 
 // watchSeenKey is the meta key holding the RFC3339 time of the last watch report.

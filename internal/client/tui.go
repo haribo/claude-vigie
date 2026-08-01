@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/haribo/claude-fleet/internal/config"
-	"github.com/haribo/claude-fleet/internal/tui"
+	"github.com/haribo/claude-vigie/internal/config"
+	"github.com/haribo/claude-vigie/internal/tui"
 )
 
 func runTUI(args []string) int {
@@ -18,7 +18,7 @@ func runTUI(args []string) int {
 
 	cfg, err := config.Load()
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "tui: %v\nrun 'claude-fleet init' first, or pass --server\n", err)
+		fmt.Fprintf(os.Stderr, "tui: %v\nrun 'vigie init' first, or pass --server\n", err)
 		return 1
 	}
 	if *server != "" {

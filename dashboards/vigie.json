@@ -1,7 +1,7 @@
 {
-  "title": "Claude Fleet — daemon",
-  "uid": "claude-fleet",
-  "tags": ["claude-fleet"],
+  "title": "Claude Vigie — daemon",
+  "uid": "vigie",
+  "tags": ["vigie"],
   "schemaVersion": 39,
   "version": 1,
   "editable": true,
@@ -23,7 +23,7 @@
   "panels": [
     {
       "type": "row",
-      "title": "Fleet",
+      "title": "Vigie",
       "gridPos": { "h": 1, "w": 24, "x": 0, "y": 0 }
     },
     {
@@ -33,7 +33,7 @@
       "gridPos": { "h": 8, "w": 12, "x": 0, "y": 1 },
       "fieldConfig": { "defaults": { "custom": { "drawStyle": "line", "stacking": { "mode": "none" }, "fillOpacity": 8 } } },
       "targets": [
-        { "refId": "A", "expr": "fleet_sessions", "legendFormat": "{{status}}" }
+        { "refId": "A", "expr": "vigie_sessions", "legendFormat": "{{status}}" }
       ]
     },
     {
@@ -43,7 +43,7 @@
       "gridPos": { "h": 8, "w": 6, "x": 12, "y": 1 },
       "fieldConfig": { "defaults": { "unit": "s", "thresholds": { "steps": [ { "color": "green", "value": null }, { "color": "red", "value": 60 } ] } } },
       "targets": [
-        { "refId": "A", "expr": "time() - fleet_watcher_last_seen_timestamp_seconds", "legendFormat": "age" }
+        { "refId": "A", "expr": "time() - vigie_watcher_last_seen_timestamp_seconds", "legendFormat": "age" }
       ]
     },
     {
@@ -52,7 +52,7 @@
       "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
       "gridPos": { "h": 8, "w": 6, "x": 18, "y": 1 },
       "targets": [
-        { "refId": "A", "expr": "fleet_build_info", "legendFormat": "{{version}} ({{go_version}})", "instant": true }
+        { "refId": "A", "expr": "vigie_build_info", "legendFormat": "{{version}} ({{go_version}})", "instant": true }
       ]
     },
     {
@@ -67,7 +67,7 @@
       "gridPos": { "h": 8, "w": 8, "x": 0, "y": 10 },
       "fieldConfig": { "defaults": { "unit": "reqps" } },
       "targets": [
-        { "refId": "A", "expr": "sum by (route) (rate(fleet_http_requests_total[$__rate_interval]))", "legendFormat": "{{route}}" }
+        { "refId": "A", "expr": "sum by (route) (rate(vigie_http_requests_total[$__rate_interval]))", "legendFormat": "{{route}}" }
       ]
     },
     {
@@ -77,7 +77,7 @@
       "gridPos": { "h": 8, "w": 8, "x": 8, "y": 10 },
       "fieldConfig": { "defaults": { "unit": "reqps" } },
       "targets": [
-        { "refId": "A", "expr": "sum by (route) (rate(fleet_http_requests_total{code=~\"5..\"}[$__rate_interval]))", "legendFormat": "{{route}}" }
+        { "refId": "A", "expr": "sum by (route) (rate(vigie_http_requests_total{code=~\"5..\"}[$__rate_interval]))", "legendFormat": "{{route}}" }
       ]
     },
     {
@@ -87,8 +87,8 @@
       "gridPos": { "h": 8, "w": 8, "x": 16, "y": 10 },
       "fieldConfig": { "defaults": { "unit": "s" } },
       "targets": [
-        { "refId": "A", "expr": "histogram_quantile(0.95, sum by (le) (rate(fleet_http_request_duration_seconds_bucket[$__rate_interval])))", "legendFormat": "p95" },
-        { "refId": "B", "expr": "histogram_quantile(0.50, sum by (le) (rate(fleet_http_request_duration_seconds_bucket[$__rate_interval])))", "legendFormat": "p50" }
+        { "refId": "A", "expr": "histogram_quantile(0.95, sum by (le) (rate(vigie_http_request_duration_seconds_bucket[$__rate_interval])))", "legendFormat": "p95" },
+        { "refId": "B", "expr": "histogram_quantile(0.50, sum by (le) (rate(vigie_http_request_duration_seconds_bucket[$__rate_interval])))", "legendFormat": "p50" }
       ]
     },
     {
@@ -96,14 +96,14 @@
       "title": "In-flight requests",
       "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
       "gridPos": { "h": 4, "w": 6, "x": 0, "y": 18 },
-      "targets": [ { "refId": "A", "expr": "fleet_http_requests_in_flight", "legendFormat": "in-flight" } ]
+      "targets": [ { "refId": "A", "expr": "vigie_http_requests_in_flight", "legendFormat": "in-flight" } ]
     },
     {
       "type": "stat",
       "title": "SSE subscribers",
       "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
       "gridPos": { "h": 4, "w": 6, "x": 6, "y": 18 },
-      "targets": [ { "refId": "A", "expr": "fleet_sse_subscribers", "legendFormat": "subscribers" } ]
+      "targets": [ { "refId": "A", "expr": "vigie_sse_subscribers", "legendFormat": "subscribers" } ]
     },
     {
       "type": "stat",
@@ -111,14 +111,14 @@
       "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
       "gridPos": { "h": 4, "w": 6, "x": 12, "y": 18 },
       "fieldConfig": { "defaults": { "unit": "bytes" } },
-      "targets": [ { "refId": "A", "expr": "fleet_db_size_bytes", "legendFormat": "db" } ]
+      "targets": [ { "refId": "A", "expr": "vigie_db_size_bytes", "legendFormat": "db" } ]
     },
     {
       "type": "stat",
       "title": "Sessions pruned (total)",
       "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
       "gridPos": { "h": 4, "w": 6, "x": 18, "y": 18 },
-      "targets": [ { "refId": "A", "expr": "fleet_sessions_pruned_total", "legendFormat": "pruned" } ]
+      "targets": [ { "refId": "A", "expr": "vigie_sessions_pruned_total", "legendFormat": "pruned" } ]
     },
     {
       "type": "row",
@@ -132,7 +132,7 @@
       "gridPos": { "h": 8, "w": 8, "x": 0, "y": 23 },
       "fieldConfig": { "defaults": { "unit": "reqps" } },
       "targets": [
-        { "refId": "A", "expr": "sum by (event) (rate(fleet_reports_total[$__rate_interval]))", "legendFormat": "{{event}}" }
+        { "refId": "A", "expr": "sum by (event) (rate(vigie_reports_total[$__rate_interval]))", "legendFormat": "{{event}}" }
       ]
     },
     {
@@ -141,7 +141,7 @@
       "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
       "gridPos": { "h": 8, "w": 8, "x": 8, "y": 23 },
       "targets": [
-        { "refId": "A", "expr": "sum by (model) (rate(fleet_output_tokens_total[$__rate_interval]))", "legendFormat": "{{model}}" }
+        { "refId": "A", "expr": "sum by (model) (rate(vigie_output_tokens_total[$__rate_interval]))", "legendFormat": "{{model}}" }
       ]
     },
     {
@@ -150,8 +150,8 @@
       "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
       "gridPos": { "h": 8, "w": 8, "x": 16, "y": 23 },
       "targets": [
-        { "refId": "A", "expr": "sum by (reason) (rate(fleet_reports_rejected_total[$__rate_interval]))", "legendFormat": "rejected {{reason}}" },
-        { "refId": "B", "expr": "rate(fleet_sse_events_published_total[$__rate_interval])", "legendFormat": "sse published" }
+        { "refId": "A", "expr": "sum by (reason) (rate(vigie_reports_rejected_total[$__rate_interval]))", "legendFormat": "rejected {{reason}}" },
+        { "refId": "B", "expr": "rate(vigie_sse_events_published_total[$__rate_interval])", "legendFormat": "sse published" }
       ]
     }
   ]

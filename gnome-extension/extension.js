@@ -1,6 +1,6 @@
-// Claude Fleet — GNOME Shell top-bar indicator.
+// Claude Vigie — GNOME Shell top-bar indicator.
 //
-// A read-only client of a claude-fleetd server: it polls GET /api/sessions and
+// A read-only client of a vigied server: it polls GET /api/sessions and
 // surfaces how many sessions are waiting for input. It never writes into or
 // drives a session (observe-only, see docs/adr/0005-observe-only.md).
 
@@ -35,7 +35,7 @@ function basename(path) {
 const FleetIndicator = GObject.registerClass(
 class FleetIndicator extends PanelMenu.Button {
     _init(extension) {
-        super._init(0.0, 'Claude Fleet');
+        super._init(0.0, 'Claude Vigie');
 
         this._extension = extension;
         this._settings = extension.getSettings();
@@ -45,7 +45,7 @@ class FleetIndicator extends PanelMenu.Button {
 
         const box = new St.BoxLayout({style_class: 'panel-status-menu-box'});
         this._icon = new St.Icon({
-            gicon: Gio.icon_new_for_string(`${extension.path}/icons/claude-fleet-symbolic.svg`),
+            gicon: Gio.icon_new_for_string(`${extension.path}/icons/vigie-symbolic.svg`),
             style_class: 'system-status-icon',
         });
         this._badge = new St.Label({
@@ -91,7 +91,7 @@ class FleetIndicator extends PanelMenu.Button {
                 bytes = session.send_and_read_finish(res);
             } catch (e) {
                 this._showError('Server unreachable');
-                console.debug(`claude-fleet: ${e}`);
+                console.debug(`vigie: ${e}`);
                 return;
             }
             const status = msg.get_status();
@@ -104,7 +104,7 @@ class FleetIndicator extends PanelMenu.Button {
                 this._update(JSON.parse(text));
             } catch (e) {
                 this._showError('Bad response');
-                console.debug(`claude-fleet: ${e}`);
+                console.debug(`vigie: ${e}`);
             }
         });
     }

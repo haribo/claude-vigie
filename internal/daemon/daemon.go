@@ -1,8 +1,8 @@
-// Package daemon implements the claude-fleetd server command-line dispatch.
+// Package daemon implements the vigied server command-line dispatch.
 //
 // The daemon runs on the host machine: it exposes the HTTP API, stores state
 // in SQLite, streams updates over SSE, and serves the embedded web dashboard.
-// Clients configure and report through the separate `claude-fleet` binary.
+// Clients configure and report through the separate `vigie` binary.
 package daemon
 
 import (
@@ -10,7 +10,7 @@ import (
 	"io"
 	"os"
 
-	"github.com/haribo/claude-fleet/internal/version"
+	"github.com/haribo/claude-vigie/internal/version"
 )
 
 // Run dispatches to the requested daemon subcommand and returns an exit code.
@@ -27,7 +27,7 @@ func Run(args []string) int {
 	case "token":
 		return runToken(rest)
 	case "version", "--version", "-v":
-		fmt.Println(version.String("claude-fleetd"))
+		fmt.Println(version.String("vigied"))
 		return 0
 	case "help", "--help", "-h":
 		usage(os.Stdout)
@@ -40,10 +40,10 @@ func Run(args []string) int {
 }
 
 func usage(w io.Writer) {
-	fmt.Fprint(w, `claude-fleetd — Claude Fleet server
+	fmt.Fprint(w, `vigied — Claude Vigie server
 
 Usage:
-  claude-fleetd <command> [flags]
+  vigied <command> [flags]
 
 Commands:
   serve      Run the fleet server and web dashboard
@@ -51,7 +51,7 @@ Commands:
   version    Print version information
   help       Print this help
 
-Run "claude-fleetd serve -h" for command-specific flags.
-Clients configure and report via the separate "claude-fleet" binary.
+Run "vigied serve -h" for command-specific flags.
+Clients configure and report via the separate "vigie" binary.
 `)
 }
