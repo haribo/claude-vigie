@@ -141,7 +141,7 @@ func (s *scanner) scan(root, machine string, maxAge time.Duration, now time.Time
 	}
 
 	osUser := systemUser()
-	rcMap := remoteControlled()
+	reg := readRegistry() // Claude Code's authoritative status source (#254)
 	var reports []api.ReportRequest
 	fresh := make(map[string]cacheEntry, len(s.cache))
 	for _, p := range paths {
@@ -177,8 +177,8 @@ func (s *scanner) scan(root, machine string, maxAge time.Duration, now time.Time
 			id = strings.TrimSuffix(filepath.Base(p), ".jsonl")
 		}
 		usage := info.Usage
-		rc := rcMap[id]
-		status := withThinking(sessionStatus(id, info.LastStopReason, info.LastAPIError, activityAge), info.Thinking)
+		status, activity, reportAt := resolveStatus(reg, id, info, activityAge, lastActivity)
+		rc := reg[id].Bridge
 		apiErr := 0
 		if status == "error" {
 			apiErr = info.LastAPIError // carry the HTTP code only while the error is shown
@@ -196,12 +196,37 @@ func (s *scanner) scan(root, machine string, maxAge time.Duration, now time.Time
 			RemoteControl:  &rc,
 			Usage:          &usage,
 			APIErrorStatus: apiErr,
-			Activity:       info.Activity,
-			Timestamp:      lastActivity.UTC().Format(time.RFC3339),
+			Activity:       activity,
+			Timestamp:      reportAt.UTC().Format(time.RFC3339),
 		})
 	}
 	s.cache = fresh // drop entries for files no longer scanned
 	return reports, nil
+}
+
+// resolveStatus derives a session's status, activity, and report time. When
+// Claude Code's session registry (#254) covers the session, its own status is
+// authoritative — busy→working, idle/shell→idle, waiting→waiting — and a
+// confidently-dead process reads ended. This is exactly what a hooks-free machine
+// needs: without it, a quiet-but-alive session with no hook mapping is wrongly
+// derived as ended. The SEEN timestamp deliberately stays on the fresh transcript
+// activity, not the registry (whose status time lags a running turn). error and
+// thinking still refine the base. Sessions the registry does not cover (older
+// clients) fall back to the transcript heuristic.
+func resolveStatus(reg map[string]sessionRecord, id string, info *transcript.Info, activityAge time.Duration, lastActivity time.Time) (status, activity string, reportAt time.Time) {
+	activity, reportAt = info.Activity, lastActivity
+	rec, known := reg[id]
+	switch {
+	case !known:
+		return withThinking(sessionStatus(id, info.LastStopReason, info.LastAPIError, activityAge), info.Thinking), activity, reportAt
+	case registryDead(rec):
+		return "ended", activity, reportAt // the backing process is gone
+	}
+	base := withError(mapRegistryStatus(rec.Status), info.LastAPIError)
+	if base == "waiting" && activity == "" && rec.WaitingFor != "" {
+		activity = capText(rec.WaitingFor, 80) // surface the ask in DOING
+	}
+	return withThinking(base, info.Thinking), activity, reportAt
 }
 
 // parse returns the transcript Info for p, reusing the cached parse when the
@@ -226,11 +251,17 @@ func (s *scanner) parse(p string, fi os.FileInfo, fresh map[string]cacheEntry) (
 // until a later non-error line clears it. A closed session (ended) is never
 // shown as error, so a stale transcript does not stay red forever.
 func sessionStatus(sessionID, lastStopReason string, lastAPIError int, age time.Duration) string {
-	st := statusFor(sessionID, lastStopReason, age)
-	if lastAPIError != 0 && (st == "working" || st == "idle") {
+	return withError(statusFor(sessionID, lastStopReason, age), lastAPIError)
+}
+
+// withError layers a transient "error" over a live base status when the last
+// assistant line was an API error: only working/idle become error (a closed or
+// waiting session is never overwritten red).
+func withError(base string, lastAPIError int) string {
+	if lastAPIError != 0 && (base == "working" || base == "idle") {
 		return "error"
 	}
-	return st
+	return base
 }
 
 // withThinking refines an active status to "thinking" when the transcript's last
