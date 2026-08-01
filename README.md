@@ -57,6 +57,10 @@ claude-fleet  tui       # client: terminal dashboard
 you install on every machine running Claude Code sessions. See
 [ADR-0003](docs/adr/0003-split-client-and-daemon-binaries.md).
 
+The daemon also serves a **read-only web dashboard** at its root URL — a browser
+mirror of the TUI. Open it, paste the fleet token, and watch the fleet from a
+phone or laptop. No extra process: it is embedded in `claude-fleetd`.
+
 ## Design choices
 
 - **Go, static binaries** — trivial self-hosting, cross-platform, minimal
@@ -84,8 +88,10 @@ claude-fleet init --server http://host:8080 --token <token> --machine "$(hostnam
 # cover already-open sessions too (run this as a service):
 claude-fleet watch
 
-# view the fleet:
+# view the fleet in the terminal:
 claude-fleet tui
+
+# ...or in a browser: open http://host:8080 and paste the token
 ```
 
 Hooks cover sessions started *after* `init`; the watcher guarantees coverage by

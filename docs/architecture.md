@@ -12,7 +12,7 @@ Claude Code hook  →  claude-fleet report  ┐
                                           ├─→  POST /api/report  →  claude-fleetd  →  SQLite
 claude-fleet watch (scans transcripts)  ──┘        (server)              │
                                                                          ▼
-              Terminal dashboard (TUI)  ←──── SSE /api/events ←──── current state
+     Terminal dashboard (TUI) / web browser  ←──── SSE /api/events ←──── current state
 ```
 
 Two independent paths feed the server: **hooks** (event-driven, precise) via
@@ -27,7 +27,8 @@ Two binaries, split along the deployment boundary (see
 [ADR-0004](adr/0004-when-to-split-a-binary.md)):
 
 - **`claude-fleetd`** — the server daemon. One per fleet, on a host machine.
-  Carries SQLite and the HTTP/SSE API. Subcommands: `serve`, `token`.
+  Carries SQLite, the HTTP/SSE API, and the embedded web dashboard. Subcommands:
+  `serve`, `token`.
 - **`claude-fleet`** — the client. Installed on every machine running Claude Code
   sessions. Stays minimal (no server code, no SQLite). Subcommands: `init`,
   `report`, `watch`, `tui`.
@@ -44,9 +45,14 @@ A fleet is *N* client machines all reporting to one daemon.
 | Reporter | `claude-fleet` | `report` | Invoked by Claude Code hooks; sends one event per hook |
 | Watcher | `claude-fleet` | `watch` | Background service: scans local transcripts, derives status from process presence + activity, reports every session (covering ones the hooks miss), and holds the usage lease to fetch subscription usage |
 | Terminal client | `claude-fleet` | `tui` | Live dashboard in the terminal (Bubble Tea) |
+| Web dashboard | `claude-fleetd` | `serve` | Read-only browser mirror of the TUI, served at `GET /` (static assets embedded via `go:embed`) |
 
-A **web dashboard** is planned but not yet built: the daemon serves the API only,
-and the TUI is currently the sole client.
+The **web dashboard** is the second client, served by the daemon itself (no build
+step, no framework — plain HTML/CSS/JS as `go:embed` static files, consistent with
+the single-binary ethos of [ADR-0002](adr/0002-single-go-binary-with-sqlite.md)). Open the
+daemon's URL in a browser and paste the fleet token; it is kept in the browser and
+sent as a bearer token on same-origin API calls. Read-only, like every client
+(observe-only, [ADR-0005](adr/0005-observe-only.md)).
 
 ## Unit of tracking
 
