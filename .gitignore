@@ -6,6 +6,8 @@
 /.dev/
 *.out
 *.html
+# ...but the web dashboard's embedded shell is source, not a generated artifact.
+!internal/web/static/*.html
 coverage.*
 
 # Local dev database

@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/haribo/claude-fleet/internal/api"
@@ -92,6 +93,27 @@ func TestEveryAPIRouteRejectsUnauthenticated(t *testing.T) {
 		if rec.Code != http.StatusUnauthorized {
 			t.Errorf("%s %s with wrong token = %d, want 401", r.method, r.path, rec.Code)
 		}
+	}
+}
+
+func TestWebDashboardServedUnauthenticated(t *testing.T) {
+	srv := newTestServer(t)
+	// The app shell and its assets load with no token (they hold no fleet data);
+	// the API stays token-protected (covered by TestEveryAPIRouteRejects...).
+	for _, path := range []string{"/", "/static/app.js", "/static/app.css"} {
+		if rec := do(t, srv, http.MethodGet, path, nil, false); rec.Code != http.StatusOK {
+			t.Errorf("GET %s without token = %d, want 200", path, rec.Code)
+		}
+	}
+	// A strict CSP must ride along on the shell.
+	rec := do(t, srv, http.MethodGet, "/", nil, false)
+	if csp := rec.Header().Get("Content-Security-Policy"); !strings.Contains(csp, "default-src 'self'") {
+		t.Errorf("shell CSP = %q, want default-src 'self'", csp)
+	}
+	// An unknown path is not the shell — the app is hash-routed, so "/{$}" matches
+	// only the exact root and everything else 404s.
+	if rec := do(t, srv, http.MethodGet, "/nope", nil, false); rec.Code != http.StatusNotFound {
+		t.Errorf("GET /nope = %d, want 404", rec.Code)
 	}
 }
 
