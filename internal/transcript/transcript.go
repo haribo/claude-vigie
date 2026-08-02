@@ -35,6 +35,14 @@ type Info struct {
 	// recent tool_use block), else "" — the watcher's fallback for the "doing"
 	// column when the PostToolUse hook did not report it.
 	Activity string
+	// PendingTool is the name of the most recent foreground tool_use with no
+	// matching tool_result — a tool genuinely still awaiting a result. Empty when
+	// every tool_use has been answered. Used to detect a stalled turn (#256).
+	PendingTool string
+	// BackgroundActive is true when an unresolved tool_use is a backgrounded Bash
+	// (run_in_background) — a real background task still running, which legitimately
+	// keeps the session working rather than stalling it (#256).
+	BackgroundActive bool
 }
 
 type usage struct {
@@ -83,6 +91,7 @@ func Parse(path string) (*Info, error) {
 	var info Info
 	var titles titleTracker
 	seen := make(map[string]bool)
+	pending := newPendingTools()
 
 	sc := bufio.NewScanner(f)
 	sc.Buffer(make([]byte, 0, 64*1024), maxLine)
@@ -92,8 +101,12 @@ func Parse(path string) (*Info, error) {
 			continue // skip malformed lines rather than fail the whole parse
 		}
 		info.applyMeta(l, &titles)
-		if l.Type == "assistant" {
+		switch l.Type {
+		case "assistant":
 			info.applyAssistant(l, seen)
+			pending.addToolUses(l.Message.Content)
+		case "user":
+			pending.clearToolResults(l.Message.Content)
 		}
 	}
 	if err := sc.Err(); err != nil {
@@ -101,6 +114,7 @@ func Parse(path string) (*Info, error) {
 	}
 
 	info.Title = titles.resolve()
+	info.PendingTool, info.BackgroundActive = pending.resolve()
 	return &info, nil
 }
 

@@ -808,9 +808,12 @@ func lessBy(a, b api.SessionView, key sortKey) bool {
 	}
 }
 
-// statusRank orders statuses by activity: working > waiting > idle > ended.
+// statusRank orders statuses for the status sort: a stalled turn (a hung tool
+// needing a look) ranks above everything, then working > waiting > idle > ended.
 func statusRank(status string) int {
 	switch status {
+	case "stalled":
+		return 5
 	case "working":
 		return 4
 	case "waiting":
