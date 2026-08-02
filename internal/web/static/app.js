@@ -92,6 +92,7 @@ const COLS = [
   { key: "project", label: "Project", cmp: (a, b) => projectName(a.project_dir).localeCompare(projectName(b.project_dir)) },
   { key: "branch", label: "Branch", cmp: (a, b) => (a.git_branch || "").localeCompare(b.git_branch || "") },
   { key: "model", label: "Model", cmp: (a, b) => (a.model || "").localeCompare(b.model || "") },
+  { key: "effort", label: "Effort", cmp: (a, b) => (a.effort || "").localeCompare(b.effort || "") },
   { key: "tokens", label: "Tokens", num: true, cmp: (a, b) => totalTokens(a.usage || {}) - totalTokens(b.usage || {}) },
   { key: "seen", label: "Seen", num: true, cmp: (a, b) => ageSec(b.last_seen_at) - ageSec(a.last_seen_at) },
   { key: "activity", label: "Activity", nosort: true },
@@ -145,6 +146,7 @@ function renderSessions() {
       <td class="proj" title="${proj}">${proj}</td>
       <td class="branch dim" title="${branch}">${branch}</td>
       <td class="${s.model ? "dim" : "faint"}">${esc(dash(shortModel(s.model)))}</td>
+      <td class="${s.effort ? "dim" : "faint"}">${esc(dash(s.effort))}</td>
       <td class="num">${humanTokens(totalTokens(s.usage || {}))}</td>
       <td class="num dim">${relAge(s.last_seen_at)}</td>
       <td>${sparkSVG(s.samples)}</td>
@@ -280,7 +282,8 @@ function openDetail(id) {
   const ctx = [
     field("Session id", esc(s.id), "mut"), field("User", esc(dash(s.user)), "mut"), field("Machine", esc(s.machine)),
     field("Directory", esc(dash(s.project_dir)), "mut"), field("Branch", s.git_branch ? esc(s.git_branch) : "—"),
-    field("Model", esc(dash(shortModel(s.model))), s.model ? "" : "mut"), field("Doing", esc(dash(s.activity)), doingWait ? "wait" : "mut"),
+    field("Model", esc(dash(shortModel(s.model))), s.model ? "" : "mut"), field("Effort", esc(dash(s.effort)), s.effort ? "" : "mut"),
+    field("Doing", esc(dash(s.activity)), doingWait ? "wait" : "mut"),
     field("Remote control", s.remote_control ? "on ◉" : "off ○", "mut"),
     s.remote_url ? field("Remote", `<a href="${esc(s.remote_url)}" target="_blank" rel="noopener noreferrer">${esc(s.remote_url)}</a>`) : "",
     field("Last tool", esc(dash(s.last_tool)), "mut"),

@@ -79,6 +79,7 @@ func Run(event string, stdin io.Reader) error {
 		if info, err := transcript.Parse(p.TranscriptPath); err == nil {
 			req.Usage = &info.Usage
 			req.Model = info.Model
+			req.Effort = info.Effort
 			req.Title = info.Title
 		}
 	}

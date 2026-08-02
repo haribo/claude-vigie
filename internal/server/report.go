@@ -189,6 +189,9 @@ func applyReport(sess store.Session, isNew bool, req api.ReportRequest) store.Se
 	if req.Model != "" {
 		sess.Model = req.Model
 	}
+	if req.Effort != "" {
+		sess.Effort = req.Effort
+	}
 	if req.Title != "" {
 		sess.Title = req.Title
 	}

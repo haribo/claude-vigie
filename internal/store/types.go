@@ -3,13 +3,16 @@ package store
 // Session is the current state of one Claude Code session. Empty strings mean
 // "unknown / not set" (e.g. EndedAt is empty until the session ends).
 type Session struct {
-	ID            string
-	Title         string
-	User          string // OS account that launched the session
-	Machine       string
-	ProjectDir    string
-	GitBranch     string
-	Model         string
+	ID         string
+	Title      string
+	User       string // OS account that launched the session
+	Machine    string
+	ProjectDir string
+	GitBranch  string
+	Model      string
+	// Effort is the reasoning effort of the last assistant turn (low/medium/high/
+	// xhigh/max), or empty when unknown. Derived from the transcript, best-effort.
+	Effort        string
 	Status        string
 	LastTool      string
 	Usage         Usage
