@@ -18,5 +18,10 @@
       <summary>Poll interval (seconds)</summary>
       <description>How often to refresh session state from the server.</description>
     </key>
+    <key name="notify" type="b">
+      <default>true</default>
+      <summary>Desktop notifications</summary>
+      <description>Notify when a session starts waiting for input (edge-triggered).</description>
+    </key>
   </schema>
 </schemalist>

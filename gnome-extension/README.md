@@ -1,15 +1,14 @@
 # Claude Vigie — GNOME Shell extension
 
 A top-bar indicator for [vigie](../README.md): it shows, at a glance, how
-many Claude Code sessions across your fleet are **waiting for input**, and lists
-sessions grouped by status in a dropdown.
+many Claude Code sessions across your fleet are **waiting for input**, lists
+sessions grouped by status in a dropdown, and **pushes a notification** when a
+session starts waiting — so a blocked session reaches you whether or not you're
+looking at the bar.
 
 It is a **read-only** client of a `vigied` server — it polls
 `GET /api/sessions` and never writes into or drives a session (observe-only, see
 [ADR-0005](../docs/adr/0005-observe-only.md)).
-
-> Scope: this first version is the **indicator**. A push notification when a
-> session enters `waiting` is the follow-up (issue #64).
 
 ## Requirements
 
@@ -40,12 +39,17 @@ Open the extension preferences (via *Extensions* app, or
 - **Server URL** — e.g. `https://fleet.example.com` (or `http://localhost:8080`).
 - **Token** — the shared fleet token.
 - **Poll interval** — seconds between refreshes (default 5).
+- **Desktop notifications** — notify when a session starts waiting (default on).
 
 ## Behavior
 
 - The radar icon shows a **count badge** and turns to the attention color when at
   least one session is `waiting`.
-- Clicking it opens a dropdown listing sessions grouped by status
+- A **notification** fires when a session **transitions into `waiting`**
+  (edge-triggered — once per transition, not every poll). The first poll after
+  launch only seeds state, so enabling the extension never notifies for sessions
+  that were already waiting. Toggle it off in preferences.
+- Clicking the icon opens a dropdown listing sessions grouped by status
   (`working` / `waiting` / `idle` / `ended`) with project, machine, and branch.
 - If the server is unreachable or the token is wrong, the icon dims and the menu
   shows the reason.
