@@ -178,7 +178,8 @@ func (s *scanner) scan(root, machine string, maxAge time.Duration, now time.Time
 		}
 		usage := info.Usage
 		status, activity, reportAt := resolveStatus(reg, id, info, activityAge, lastActivity)
-		rc := reg[id].Bridge
+		rc := reg[id].BridgeSessionID != ""
+		remoteURL := reg[id].remoteURL()
 		apiErr := 0
 		if status == "error" {
 			apiErr = info.LastAPIError // carry the HTTP code only while the error is shown
@@ -194,6 +195,7 @@ func (s *scanner) scan(root, machine string, maxAge time.Duration, now time.Time
 			Title:          info.Title,
 			Status:         status,
 			RemoteControl:  &rc,
+			RemoteURL:      remoteURL,
 			Usage:          &usage,
 			APIErrorStatus: apiErr,
 			Activity:       activity,

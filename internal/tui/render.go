@@ -302,6 +302,11 @@ func renderDetail(s api.SessionView) string {
 		detailField("Status", statusDetail(s)),
 		detailField("Doing", orDash(s.Activity)),
 		detailField("Remote control", rcLabel(s.RemoteControl)),
+	}
+	if s.RemoteURL != "" { // the /rc resume link, only while remote control is on
+		lines = append(lines, detailField("Remote URL", s.RemoteURL))
+	}
+	lines = append(lines,
 		detailField("Last tool", orDash(s.LastTool)),
 		detailField("Started", orDash(s.StartedAt)),
 		detailField("Last seen", orDash(s.LastSeenAt)),
@@ -312,7 +317,7 @@ func renderDetail(s api.SessionView) string {
 		detailField("Cache create", humanizeTokens(s.Usage.CacheCreationTokens)),
 		detailField("Cache read", humanizeTokens(s.Usage.CacheReadTokens)),
 		detailField("Total", humanizeTokens(totalTokens(s))),
-	}
+	)
 	panel := lipgloss.NewStyle().
 		Border(lipgloss.RoundedBorder()).
 		BorderForeground(cAccent).

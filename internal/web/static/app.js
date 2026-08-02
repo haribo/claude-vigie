@@ -281,7 +281,9 @@ function openDetail(id) {
     field("Session id", esc(s.id), "mut"), field("User", esc(dash(s.user)), "mut"), field("Machine", esc(s.machine)),
     field("Directory", esc(dash(s.project_dir)), "mut"), field("Branch", s.git_branch ? esc(s.git_branch) : "—"),
     field("Model", esc(dash(shortModel(s.model))), s.model ? "" : "mut"), field("Doing", esc(dash(s.activity)), doingWait ? "wait" : "mut"),
-    field("Remote control", s.remote_control ? "on ◉" : "off ○", "mut"), field("Last tool", esc(dash(s.last_tool)), "mut"),
+    field("Remote control", s.remote_control ? "on ◉" : "off ○", "mut"),
+    s.remote_url ? field("Remote", `<a href="${esc(s.remote_url)}" target="_blank" rel="noopener noreferrer">${esc(s.remote_url)}</a>`) : "",
+    field("Last tool", esc(dash(s.last_tool)), "mut"),
   ].join("");
   const times = [field("Started", esc(dash(s.started_at)), "mut"), field("Last seen", esc(dash(s.last_seen_at)), "mut"), s.ended_at ? field("Ended", esc(s.ended_at), "mut") : ""].join("");
   const spark = (s.samples && s.samples.length) ? sparkSVG(s.samples, 300, 46) : '<span class="faint">no recent activity</span>';

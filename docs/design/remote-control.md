@@ -25,6 +25,10 @@ A session is remotely controlled **iff its Claude session file has a non-empty
 - Source: `~/.claude/sessions/<pid>.json`, written by Claude Code, e.g.
   `{"sessionId": "...", "name": "tribnest", "status": "idle", "bridgeSessionId": "session_014wi…"}`.
 - `bridgeSessionId` present → `/rc` active; absent/empty → not.
+- The **resume URL** is `https://claude.ai/code/<bridgeSessionId>` — the same link
+  Claude prints in the session and writes verbatim as the `url` field of the
+  transcript's `bridge_status` lines. It is surfaced (§ 3) so the operator can open
+  the controlled session; it clears with the flag when `/rc` goes off (#253).
 - Verified: tribnest, plain-note, vigie carry a bridge (rc on); shellf,
   melonia, sirius do not (rc off) — matching what the operator sees in each
   session's terminal footer.
@@ -42,6 +46,8 @@ scan, and the `c` toggle and its write endpoint are gone.
 ## 3. Display
 
 - The `RC` column shows the **detected** state: active vs inactive.
+- The **resume URL** appears in the session detail — a plain "Remote" line in the
+  TUI, a clickable link in the web dashboard — only while rc is active.
 - It is read-only with respect to reality — it never shows an operator wish that
   isn't true on the session.
 
