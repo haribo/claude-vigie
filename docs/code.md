@@ -8,6 +8,19 @@ After modifying Go code:
 2. **Linter**: run `just code-lint`
 3. **Docs**: update documentation if behavior or public API changed
 
+## Testing
+
+- **Regression-test-first for bug fixes.** Every bug fix starts with a test that
+  *reproduces the bug*: it fails before the fix, passes after, and stays as a
+  guard. Line coverage is not a substitute — the status functions were near 100%
+  covered when the #201, #233 and #235 bugs slipped through. Name the case after
+  the issue and reference the number in a comment (see `TestReconcileWatch`, whose
+  cases are tagged `#190`/`#201`/`#233`), so the guard stays traceable.
+- **Sequence and interleaving bugs need a replay test** over the real path, not
+  just unit tests of each layer in isolation (see `reconcile_timeline_test.go`,
+  #203) — that is where the reconciliation bugs actually lived.
+- Prefer table-driven cases; the coverage gate (#223) is a floor, not the goal.
+
 ## Comments
 
 **Comments should explain WHY, never HOW.** If code needs explanation, simplify it.
