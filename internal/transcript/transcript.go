@@ -4,7 +4,6 @@
 package transcript
 
 import (
-	"bufio"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -73,49 +72,23 @@ type line struct {
 	Message        message `json:"message"`
 }
 
-// maxLine bounds a single JSONL line; transcript messages can be large
-// (embedded tool output), so allow well beyond bufio's 64K default.
-const maxLine = 16 * 1024 * 1024
-
-// Parse reads the transcript at path and returns the extracted Info. Token
+// Parse reads the whole transcript at path and returns the extracted Info. Token
 // usage is summed over assistant messages (deduplicated by message id, since
-// retries repeat a line). The title is customTitle (/rename) if present, else
-// aiTitle. LastStopReason is the stop_reason of the last assistant message.
+// retries repeat a line); the title is customTitle (/rename) if present, else
+// aiTitle; LastStopReason is the stop_reason of the last assistant message. It is
+// a convenience wrapper over Parser for one-shot callers (the reporter); the
+// watcher parses incrementally (see Parser, #257).
 func Parse(path string) (*Info, error) {
 	f, err := os.Open(path)
 	if err != nil {
 		return nil, fmt.Errorf("opening transcript: %w", err)
 	}
 	defer func() { _ = f.Close() }()
-
-	var info Info
-	var titles titleTracker
-	seen := make(map[string]bool)
-	pending := newPendingTools()
-
-	sc := bufio.NewScanner(f)
-	sc.Buffer(make([]byte, 0, 64*1024), maxLine)
-	for sc.Scan() {
-		var l line
-		if err := json.Unmarshal(sc.Bytes(), &l); err != nil {
-			continue // skip malformed lines rather than fail the whole parse
-		}
-		info.applyMeta(l, &titles)
-		switch l.Type {
-		case "assistant":
-			info.applyAssistant(l, seen)
-			pending.addToolUses(l.Message.Content)
-		case "user":
-			pending.clearToolResults(l.Message.Content)
-		}
+	p := NewParser()
+	if err := p.Advance(f); err != nil {
+		return nil, err
 	}
-	if err := sc.Err(); err != nil {
-		return nil, fmt.Errorf("reading transcript: %w", err)
-	}
-
-	info.Title = titles.resolve()
-	info.PendingTool, info.BackgroundActive = pending.resolve()
-	return &info, nil
+	return p.Info(), nil
 }
 
 func (info *Info) applyMeta(l line, titles *titleTracker) {
