@@ -4,8 +4,8 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/haribo/claude-fleet/internal/api"
-	"github.com/haribo/claude-fleet/internal/store"
+	"github.com/haribo/claude-vigie/internal/api"
+	"github.com/haribo/claude-vigie/internal/store"
 )
 
 // staleReportAfter is how long a session may go without a report before it is
@@ -72,12 +72,14 @@ func toView(s store.Session, samples []int64, now time.Time) api.SessionView {
 			CacheCreationTokens: s.Usage.CacheCreationTokens,
 			CacheReadTokens:     s.Usage.CacheReadTokens,
 		},
-		StartedAt:      s.StartedAt,
-		LastSeenAt:     s.LastSeenAt,
-		EndedAt:        s.EndedAt,
-		RemoteControl:  s.RemoteControl,
-		APIErrorStatus: s.APIErrorStatus,
-		Activity:       s.Activity,
-		Samples:        samples,
+		StartedAt:       s.StartedAt,
+		LastSeenAt:      s.LastSeenAt,
+		EndedAt:         s.EndedAt,
+		RemoteControl:   s.RemoteControl,
+		RemoteURL:       s.RemoteURL,
+		APIErrorStatus:  s.APIErrorStatus,
+		Activity:        s.Activity,
+		StatusChangedAt: s.StatusChangedAt,
+		Samples:         samples,
 	}
 }

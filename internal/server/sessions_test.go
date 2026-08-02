@@ -4,7 +4,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/haribo/claude-fleet/internal/store"
+	"github.com/haribo/claude-vigie/internal/store"
 )
 
 func TestReportStaleAndToView(t *testing.T) {

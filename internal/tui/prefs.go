@@ -8,7 +8,7 @@ import (
 
 	"github.com/pelletier/go-toml/v2"
 
-	"github.com/haribo/claude-fleet/internal/api"
+	"github.com/haribo/claude-vigie/internal/api"
 )
 
 // prefs holds the operator's TUI display preferences.
@@ -18,12 +18,13 @@ type prefs struct {
 	sortKey       sortKey       // sessions table order
 	sortReversed  bool          // reverse the sort direction
 	groupBy       groupBy       // grouping of the sessions table
+	notify        bool          // desktop notifications on working→attention (#260)
 }
 
 // defaultPrefs are used when no preferences file exists: hide only ended
-// sessions, keep idle ones visible regardless of age, sort by last seen.
+// sessions, keep idle ones visible regardless of age, sort by last seen, notify.
 func defaultPrefs() prefs {
-	return prefs{hideEnded: true, idleHideAfter: 0, sortKey: sortLastSeen, groupBy: groupNone}
+	return prefs{hideEnded: true, idleHideAfter: 0, sortKey: sortLastSeen, groupBy: groupNone, notify: true}
 }
 
 // visible reports whether a session should be shown given these preferences.
@@ -46,6 +47,7 @@ type prefsFile struct {
 	SortKey       string `toml:"sort_key"`        // stable name (see sortNames); "" = default
 	SortReversed  bool   `toml:"sort_reversed"`
 	GroupBy       string `toml:"group_by"` // stable name (see groupNames); "" = off
+	Notify        *bool  `toml:"notify"`   // pointer: absent = default (on)
 }
 
 func prefsPath() (string, error) {
@@ -53,7 +55,7 @@ func prefsPath() (string, error) {
 	if err != nil {
 		return "", err
 	}
-	return filepath.Join(dir, "claude-fleet", "tui.toml"), nil
+	return filepath.Join(dir, "vigie", "tui.toml"), nil
 }
 
 // renderPrefsTOML renders a commented TOML file for the given preferences, so
@@ -63,7 +65,10 @@ func renderPrefsTOML(p prefs) string {
 	if p.idleHideAfter > 0 {
 		idle = p.idleHideAfter.String()
 	}
-	return fmt.Sprintf(`# claude-fleet TUI preferences
+	return fmt.Sprintf(`# vigie TUI preferences
+
+# Desktop notifications when a session starts waiting on you (working→attention).
+notify = %t
 
 # Hide ended (closed) sessions from the list.
 hide_ended = %t
@@ -80,7 +85,7 @@ sort_reversed = %t
 
 # Group the sessions table: off, machine, project.
 group_by = %q
-`, p.hideEnded, idle, sortNames[p.sortKey], p.sortReversed, groupNames[p.groupBy])
+`, p.notify, p.hideEnded, idle, sortNames[p.sortKey], p.sortReversed, groupNames[p.groupBy])
 }
 
 // savePrefs writes the preferences file (best-effort; the UI must not block).
@@ -136,10 +141,18 @@ func loadPrefs() prefs {
 	}
 	data, err := os.ReadFile(path)
 	if os.IsNotExist(err) {
-		savePrefs(p) // create a commented default file
-		return p
-	}
-	if err != nil {
+		// Read-fallback: honor a tui.toml written under the pre-rename
+		// ~/.config/claude-fleet directory; otherwise create a commented default.
+		if dir, dErr := os.UserConfigDir(); dErr == nil {
+			if d2, e2 := os.ReadFile(filepath.Join(dir, "claude-fleet", "tui.toml")); e2 == nil {
+				data = d2
+			}
+		}
+		if data == nil {
+			savePrefs(p) // create a commented default file
+			return p
+		}
+	} else if err != nil {
 		return p
 	}
 	var f prefsFile
@@ -153,5 +166,8 @@ func loadPrefs() prefs {
 	p.sortKey = sortKeyByName(f.SortKey)
 	p.sortReversed = f.SortReversed
 	p.groupBy = groupByName(f.GroupBy)
+	if f.Notify != nil { // absent keeps the default (on)
+		p.notify = *f.Notify
+	}
 	return p
 }

@@ -1,20 +1,19 @@
-# Claude Fleet — GNOME Shell extension
+# Claude Vigie — GNOME Shell extension
 
-A top-bar indicator for [claude-fleet](../README.md): it shows, at a glance, how
-many Claude Code sessions across your fleet are **waiting for input**, and lists
-sessions grouped by status in a dropdown.
+A top-bar indicator for [vigie](../README.md): it shows, at a glance, how
+many Claude Code sessions across your fleet are **waiting for input**, lists
+sessions grouped by status in a dropdown, and **pushes a notification** when a
+session starts waiting — so a blocked session reaches you whether or not you're
+looking at the bar.
 
-It is a **read-only** client of a `claude-fleetd` server — it polls
+It is a **read-only** client of a `vigied` server — it polls
 `GET /api/sessions` and never writes into or drives a session (observe-only, see
 [ADR-0005](../docs/adr/0005-observe-only.md)).
-
-> Scope: this first version is the **indicator**. A push notification when a
-> session enters `waiting` is the follow-up (issue #64).
 
 ## Requirements
 
 - GNOME Shell 45–50 (ESM extensions).
-- A reachable `claude-fleetd` server and its token.
+- A reachable `vigied` server and its token.
 
 ## Install (from source)
 
@@ -22,30 +21,35 @@ It is a **read-only** client of a `claude-fleetd` server — it polls
 cd gnome-extension
 gnome-extensions pack --force \
   --extra-source=icons \
-  --schema=schemas/org.gnome.shell.extensions.claude-fleet.gschema.xml
-gnome-extensions install --force claude-fleet@haribo.github.io.shell-extension.zip
+  --schema=schemas/org.gnome.shell.extensions.claude-vigie.gschema.xml
+gnome-extensions install --force claude-vigie@haribo.github.io.shell-extension.zip
 ```
 
 Then log out/in (Wayland) or restart the Shell (`Alt+F2`, `r`, X11), and enable it:
 
 ```bash
-gnome-extensions enable claude-fleet@haribo.github.io
+gnome-extensions enable claude-vigie@haribo.github.io
 ```
 
 ## Configure
 
 Open the extension preferences (via *Extensions* app, or
-`gnome-extensions prefs claude-fleet@haribo.github.io`) and set:
+`gnome-extensions prefs claude-vigie@haribo.github.io`) and set:
 
 - **Server URL** — e.g. `https://fleet.example.com` (or `http://localhost:8080`).
 - **Token** — the shared fleet token.
 - **Poll interval** — seconds between refreshes (default 5).
+- **Desktop notifications** — notify when a session starts waiting (default on).
 
 ## Behavior
 
 - The radar icon shows a **count badge** and turns to the attention color when at
   least one session is `waiting`.
-- Clicking it opens a dropdown listing sessions grouped by status
+- A **notification** fires when a session **transitions into `waiting`**
+  (edge-triggered — once per transition, not every poll). The first poll after
+  launch only seeds state, so enabling the extension never notifies for sessions
+  that were already waiting. Toggle it off in preferences.
+- Clicking the icon opens a dropdown listing sessions grouped by status
   (`working` / `waiting` / `idle` / `ended`) with project, machine, and branch.
 - If the server is unreachable or the token is wrong, the icon dims and the menu
   shows the reason.
@@ -57,5 +61,5 @@ with the commands above, then restart the Shell. Logs:
 
 ```bash
 journalctl --user -f -o cat /usr/bin/gnome-shell   # runtime (extension.js)
-journalctl --user -f -o cat | grep -i claude-fleet  # our console.debug lines
+journalctl --user -f -o cat | grep -i vigie  # our console.debug lines
 ```

@@ -2,14 +2,14 @@
 
 **Status:** Accepted.
 
-Source of truth for what a session's **status** means in claude-fleet and what
+Source of truth for what a session's **status** means in vigie and what
 makes it change — the user-observable behavior, not the code. Like everything in
-claude-fleet, status is **detected**, never operator-set
+vigie, status is **detected**, never operator-set
 ([ADR-0005](../adr/0005-observe-only.md)).
 
 ---
 
-## 1. The six statuses
+## 1. The seven statuses
 
 Every session shows exactly one status. What each tells the operator:
 
@@ -18,13 +18,15 @@ Every session shows exactly one status. What each tells the operator:
 | `working`  | Claude is actively producing — a turn is running.                       |
 | `thinking` | Claude is reasoning inside a turn — extended thinking, before it outputs text or a tool call. A sub-state of an active turn. |
 | `waiting`  | Claude has stopped and is **waiting on the human** (a prompt or permission). |
+| `stalled`  | A turn is **parked on a hung tool** — a `tool_use` never got its `tool_result` and the session has gone quiet. Distinct from idle: the turn is unfinished, not between turns. |
 | `idle`     | The session is open and alive but between turns — nobody is acting.     |
 | `error`    | The session hit a live Claude API error (500 / 529 / 429). Transient — clears when it recovers. |
 | `ended`    | The session is over (closed, or its process is gone).                   |
 
-`waiting` is the one status that carries intent: it means *the operator is the
-blocker*, not Claude. It is what the dashboard exists to surface — the session
-that needs a human right now.
+`waiting` and `stalled` are the two statuses that call the operator: `waiting`
+means *the operator is the blocker*; `stalled` means *a tool hung and the turn is
+stuck*. Both are what the dashboard exists to surface — the sessions that need a
+human right now.
 
 ---
 
@@ -65,9 +67,14 @@ hooks aren't installed). It derives status from two signals — is the session's
 - last assistant block is a `thinking` block → `thinking` (reasoning before any
   text/tool output); a later text/tool line clears it. A heuristic: at rest a
   finished turn ends with text/tool, so this reads true only mid-turn.
+- a foreground `tool_use` with no matching `tool_result` (paired by id) while the
+  session is otherwise quiet and idle → `stalled` (the tool hung, the turn is
+  parked). An unresolved *background* Bash (`run_in_background`) instead keeps the
+  session `working` — a real background task, not a hang. This exact pairing
+  replaces the old blind 5-minute "a tool may still be running" window.
 
-The watcher can see `working`, `thinking`, `idle`, `ended`, and `error`. It
-**cannot** see `waiting`.
+The watcher can see `working`, `thinking`, `idle`, `stalled`, `ended`, and
+`error`. It **cannot** see `waiting`.
 
 ---
 
@@ -138,6 +145,7 @@ trust it:
 | `ended`    | hook `SessionEnd`; watcher (dead process, or no mapping + quiet); server (no report for ~60 s) | **Reliable** for a hooked end or a dead process; a **heuristic** for a hooks-free session that simply went quiet. |
 | `error`    | watcher (`isApiErrorMessage` in the transcript) | **Reliable signal, sampled.** The flag is unambiguous, but surfaced only at the next scan, not instantly (Claude Code has no error hook). |
 | `thinking` | watcher only (last content block is a `thinking` block) | **Best-effort heuristic.** No hook signals reasoning; it is inferred from the transcript, sampled every ~2 s, invisible in a hooks-only deployment, and can briefly mis-read when a `tool_use` block follows the thinking block. |
+| `stalled`  | watcher only (unresolved `tool_use`↔`tool_result` + quiet) | **Reliable signal, sampled.** The pairing is exact (an id match), not a timeout guess; surfaced at the next scan once the session has been quiet past a short threshold. Invisible in a hooks-only deployment. |
 
 **Decision on `thinking` (#207): kept, as an explicit best-effort refinement.**
 Dropping it would lose a genuine, if imperfect, signal; hardening it to real-time

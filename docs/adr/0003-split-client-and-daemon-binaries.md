@@ -27,8 +27,8 @@ and minimizing the client's surface.
 
 Ship **two binaries**:
 
-- **`claude-fleetd`** — the server daemon (`serve`).
-- **`claude-fleet`** — the client (`init`, `report`, `tui`).
+- **`vigied`** — the server daemon (`serve`).
+- **`vigie`** — the client (`init`, `report`, `tui`).
 
 Shared code lives in `internal/` (`config`, `api`, `version`). The split is
 enforced by imports: client packages must not import `internal/server`,
@@ -50,7 +50,7 @@ tailscaled).
 ### Positive
 
 - The client stays small and focused; server code is isolated to the host
-- Clear mental model: `claude-fleetd` serves, `claude-fleet` is what you install
+- Clear mental model: `vigied` serves, `vigie` is what you install
 
 ### Negative
 

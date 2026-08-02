@@ -3,7 +3,7 @@ package main
 import (
 	"os"
 
-	"github.com/haribo/claude-fleet/internal/client"
+	"github.com/haribo/claude-vigie/internal/client"
 )
 
 func main() {

@@ -8,6 +8,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"os"
 	"os/user"
@@ -15,12 +16,12 @@ import (
 	"strings"
 	"time"
 
-	"github.com/haribo/claude-fleet/internal/api"
-	"github.com/haribo/claude-fleet/internal/clock"
-	"github.com/haribo/claude-fleet/internal/config"
-	"github.com/haribo/claude-fleet/internal/presence"
-	"github.com/haribo/claude-fleet/internal/transcript"
-	"github.com/haribo/claude-fleet/internal/usage"
+	"github.com/haribo/claude-vigie/internal/api"
+	"github.com/haribo/claude-vigie/internal/clock"
+	"github.com/haribo/claude-vigie/internal/config"
+	"github.com/haribo/claude-vigie/internal/presence"
+	"github.com/haribo/claude-vigie/internal/transcript"
+	"github.com/haribo/claude-vigie/internal/usage"
 )
 
 // Options configures the watch loop.
@@ -113,7 +114,9 @@ func collectDeadMappings(maxAge time.Duration) {
 type cacheEntry struct {
 	modTime time.Time
 	size    int64
-	info    *transcript.Info
+	// parser carries the cumulative parse state, so a growing transcript is
+	// advanced by only its new bytes instead of being re-parsed whole (#257).
+	parser *transcript.Parser
 }
 
 // scanner scans transcripts and caches each parse, so an unchanged (idle)
@@ -141,7 +144,7 @@ func (s *scanner) scan(root, machine string, maxAge time.Duration, now time.Time
 	}
 
 	osUser := systemUser()
-	rcMap := remoteControlled()
+	reg := readRegistry() // Claude Code's authoritative status source (#254)
 	var reports []api.ReportRequest
 	fresh := make(map[string]cacheEntry, len(s.cache))
 	for _, p := range paths {
@@ -177,8 +180,9 @@ func (s *scanner) scan(root, machine string, maxAge time.Duration, now time.Time
 			id = strings.TrimSuffix(filepath.Base(p), ".jsonl")
 		}
 		usage := info.Usage
-		rc := rcMap[id]
-		status := withThinking(sessionStatus(id, info.LastStopReason, info.LastAPIError, activityAge), info.Thinking)
+		status, activity, reportAt := resolveStatus(reg, id, info, activityAge, lastActivity)
+		rc := reg[id].BridgeSessionID != ""
+		remoteURL := reg[id].remoteURL()
 		apiErr := 0
 		if status == "error" {
 			apiErr = info.LastAPIError // carry the HTTP code only while the error is shown
@@ -194,30 +198,98 @@ func (s *scanner) scan(root, machine string, maxAge time.Duration, now time.Time
 			Title:          info.Title,
 			Status:         status,
 			RemoteControl:  &rc,
+			RemoteURL:      remoteURL,
 			Usage:          &usage,
 			APIErrorStatus: apiErr,
-			Activity:       info.Activity,
-			Timestamp:      lastActivity.UTC().Format(time.RFC3339),
+			Activity:       activity,
+			Timestamp:      reportAt.UTC().Format(time.RFC3339),
 		})
 	}
 	s.cache = fresh // drop entries for files no longer scanned
 	return reports, nil
 }
 
-// parse returns the transcript Info for p, reusing the cached parse when the
-// file is unchanged (same mod time and size) since the last scan. The reused or
-// freshly parsed entry is recorded in fresh (the next scan's cache).
-func (s *scanner) parse(p string, fi os.FileInfo, fresh map[string]cacheEntry) (*transcript.Info, error) {
-	if e, ok := s.cache[p]; ok && e.modTime.Equal(fi.ModTime()) && e.size == fi.Size() {
-		fresh[p] = e
-		return e.info, nil
+// resolveStatus derives a session's status, activity, and report time. When
+// Claude Code's session registry (#254) covers the session, its own status is
+// authoritative — busy→working, idle/shell→idle, waiting→waiting — and a
+// confidently-dead process reads ended. This is exactly what a hooks-free machine
+// needs: without it, a quiet-but-alive session with no hook mapping is wrongly
+// derived as ended. The SEEN timestamp deliberately stays on the fresh transcript
+// activity, not the registry (whose status time lags a running turn). error and
+// thinking still refine the base. Sessions the registry does not cover (older
+// clients) fall back to the transcript heuristic.
+func resolveStatus(reg map[string]sessionRecord, id string, info *transcript.Info, activityAge time.Duration, lastActivity time.Time) (status, activity string, reportAt time.Time) {
+	activity, reportAt = info.Activity, lastActivity
+	rec, known := reg[id]
+	var base string
+	switch {
+	case known && registryDead(rec):
+		return "ended", activity, reportAt // the backing process is gone
+	case known:
+		base = withError(mapRegistryStatus(rec.Status), info.LastAPIError)
+		if base == "waiting" && activity == "" && rec.WaitingFor != "" {
+			activity = capText(rec.WaitingFor, 80) // surface the ask in DOING
+		}
+	default:
+		base = sessionStatus(id, info.LastStopReason, info.LastAPIError, activityAge)
 	}
-	info, err := transcript.Parse(p)
+	base = withThinking(base, info.Thinking)
+	base = refineWithTools(base, info, activityAge) // background keeps working; a hung tool stalls (#256)
+	if base == "stalled" && activity == "" {
+		activity = "stopped at " + info.PendingTool
+	}
+	return base, activity, reportAt
+}
+
+// stalledAfter is how long a quiet session with an unanswered foreground tool
+// call must sit before it reads as stalled rather than idle.
+const stalledAfter = 45 * time.Second
+
+// refineWithTools reclassifies a quiet/idle session using the transcript's
+// unresolved tool calls (#256): a still-running background task keeps it working,
+// and a foreground tool that never got a result — with the session quiet — is a
+// stalled turn, not a silent idle. Only an idle base is touched, so
+// working/waiting/error/ended are never overridden.
+func refineWithTools(base string, info *transcript.Info, activityAge time.Duration) string {
+	if base != "idle" {
+		return base
+	}
+	if info.BackgroundActive {
+		return "working" // a backgrounded tool is still running
+	}
+	if info.PendingTool != "" && activityAge >= stalledAfter {
+		return "stalled" // a foreground tool hung; the turn is parked
+	}
+	return base
+}
+
+// parse returns the transcript Info for p. An unchanged file (same mod time and
+// size) reuses the cached parser with no I/O; a grown file (append-only) resumes
+// the cached parser from its offset and folds in only the new bytes; anything
+// else (a shrunk/rewritten file, or first sight) is parsed from scratch (#257).
+func (s *scanner) parse(p string, fi os.FileInfo, fresh map[string]cacheEntry) (*transcript.Info, error) {
+	e, ok := s.cache[p]
+	if ok && e.modTime.Equal(fi.ModTime()) && e.size == fi.Size() {
+		fresh[p] = e
+		return e.parser.Info(), nil
+	}
+	parser := transcript.NewParser()
+	if ok && fi.Size() > e.size { // append-only growth: resume from where we stopped
+		parser = e.parser
+	}
+	f, err := os.Open(p) //nolint:gosec // path comes from our own transcript glob
 	if err != nil {
 		return nil, err
 	}
-	fresh[p] = cacheEntry{modTime: fi.ModTime(), size: fi.Size(), info: info}
-	return info, nil
+	defer func() { _ = f.Close() }()
+	if _, err := f.Seek(parser.Offset(), io.SeekStart); err != nil {
+		return nil, fmt.Errorf("seeking transcript: %w", err)
+	}
+	if err := parser.Advance(f); err != nil {
+		return nil, err
+	}
+	fresh[p] = cacheEntry{modTime: fi.ModTime(), size: fi.Size(), parser: parser}
+	return parser.Info(), nil
 }
 
 // sessionStatus layers a transient "error" status on top of the base
@@ -226,11 +298,17 @@ func (s *scanner) parse(p string, fi os.FileInfo, fresh map[string]cacheEntry) (
 // until a later non-error line clears it. A closed session (ended) is never
 // shown as error, so a stale transcript does not stay red forever.
 func sessionStatus(sessionID, lastStopReason string, lastAPIError int, age time.Duration) string {
-	st := statusFor(sessionID, lastStopReason, age)
-	if lastAPIError != 0 && (st == "working" || st == "idle") {
+	return withError(statusFor(sessionID, lastStopReason, age), lastAPIError)
+}
+
+// withError layers a transient "error" over a live base status when the last
+// assistant line was an API error: only working/idle become error (a closed or
+// waiting session is never overwritten red).
+func withError(base string, lastAPIError int) string {
+	if lastAPIError != 0 && (base == "working" || base == "idle") {
 		return "error"
 	}
-	return st
+	return base
 }
 
 // withThinking refines an active status to "thinking" when the transcript's last

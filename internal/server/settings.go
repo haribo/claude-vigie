@@ -5,7 +5,7 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/haribo/claude-fleet/internal/api"
+	"github.com/haribo/claude-vigie/internal/api"
 )
 
 // RetentionMetaKey is the meta key holding the session-retention window (a Go

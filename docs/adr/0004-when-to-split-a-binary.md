@@ -15,10 +15,10 @@ Four levels are easy to conflate and must be kept distinct:
 
 | Level | Example | Named for |
 |-------|---------|-----------|
-| Binary (distributed artifact) | `claude-fleet`, `claude-fleetd` | this ADR |
-| Subcommand | `claude-fleet watch`, `claude-fleet tui` | git/docker style |
+| Binary (distributed artifact) | `vigie`, `vigied` | this ADR |
+| Subcommand | `vigie watch`, `vigie tui` | git/docker style |
 | justfile recipe | `app-serve`, `app-tui` | dev/ops convenience |
-| systemd service | `claude-fleet-watch.service` | an execution mode |
+| systemd service | `vigie-watch.service` | an execution mode |
 
 ## Decision
 
@@ -31,14 +31,14 @@ Otherwise it is a **subcommand** of the relevant binary.
 
 Applied:
 
-- **`claude-fleetd`** — the server. Separate: deployment boundary (central host).
-- **`claude-fleet`** — the client CLI (`init`, `report`, `watch`, `tui`). One
+- **`vigied`** — the server. Separate: deployment boundary (central host).
+- **`vigie`** — the client CLI (`init`, `report`, `watch`, `tui`). One
   binary, subcommands: they share the client code (config, transcript, api), run
   on the same machine, same role.
-- **`claude-fleet-gui`** (future) — a GTK4 desktop app. Separate: heavy CGO/GTK
+- **`vigie-gui`** (future) — a GTK4 desktop app. Separate: heavy CGO/GTK
   dependencies that must not bloat the lightweight CLI.
 
-The short name (`claude-fleet`) belongs to the client CLI — the one humans type
+The short name (`vigie`) belongs to the client CLI — the one humans type
 most (per ADR-0003). A new binary does **not** take the short name.
 
 ## Rationale

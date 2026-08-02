@@ -1,6 +1,6 @@
-// Claude Fleet — GNOME Shell top-bar indicator.
+// Claude Vigie — GNOME Shell top-bar indicator.
 //
-// A read-only client of a claude-fleetd server: it polls GET /api/sessions and
+// A read-only client of a vigied server: it polls GET /api/sessions and
 // surfaces how many sessions are waiting for input. It never writes into or
 // drives a session (observe-only, see docs/adr/0005-observe-only.md).
 
@@ -35,17 +35,19 @@ function basename(path) {
 const FleetIndicator = GObject.registerClass(
 class FleetIndicator extends PanelMenu.Button {
     _init(extension) {
-        super._init(0.0, 'Claude Fleet');
+        super._init(0.0, 'Claude Vigie');
 
         this._extension = extension;
         this._settings = extension.getSettings();
         this._session = new Soup.Session();
         this._timeoutId = 0;
         this._settingsChangedId = 0;
+        this._waitingIds = new Set(); // session ids currently waiting, for edge-triggered notifications
+        this._primed = false;         // first poll seeds the set without notifying (no launch storm)
 
         const box = new St.BoxLayout({style_class: 'panel-status-menu-box'});
         this._icon = new St.Icon({
-            gicon: Gio.icon_new_for_string(`${extension.path}/icons/claude-fleet-symbolic.svg`),
+            gicon: Gio.icon_new_for_string(`${extension.path}/icons/vigie-symbolic.svg`),
             style_class: 'system-status-icon',
         });
         this._badge = new St.Label({
@@ -91,7 +93,7 @@ class FleetIndicator extends PanelMenu.Button {
                 bytes = session.send_and_read_finish(res);
             } catch (e) {
                 this._showError('Server unreachable');
-                console.debug(`claude-fleet: ${e}`);
+                console.debug(`vigie: ${e}`);
                 return;
             }
             const status = msg.get_status();
@@ -104,7 +106,7 @@ class FleetIndicator extends PanelMenu.Button {
                 this._update(JSON.parse(text));
             } catch (e) {
                 this._showError('Bad response');
-                console.debug(`claude-fleet: ${e}`);
+                console.debug(`vigie: ${e}`);
             }
         });
     }
@@ -113,6 +115,8 @@ class FleetIndicator extends PanelMenu.Button {
         if (!Array.isArray(sessions))
             sessions = [];
         const waiting = sessions.filter(s => s.status === 'waiting').length;
+
+        this._notifyNewlyWaiting(sessions);
 
         if (waiting > 0) {
             this._icon.add_style_class_name('cf-attention');
@@ -124,6 +128,29 @@ class FleetIndicator extends PanelMenu.Button {
         }
         this._icon.remove_style_class_name('cf-error');
         this._rebuildMenu(sessions);
+    }
+
+    // _notifyNewlyWaiting fires a notification for each session that transitioned
+    // into `waiting` since the last poll (edge-triggered, one per transition). The
+    // first poll only seeds the set, so launching the extension never notifies for
+    // sessions that were already waiting. Observe-only: it reads and reports.
+    _notifyNewlyWaiting(sessions) {
+        const nowWaiting = new Set(sessions.filter(s => s.status === 'waiting').map(s => s.id));
+        if (this._primed && this._settings.get_boolean('notify')) {
+            for (const s of sessions) {
+                if (s.status === 'waiting' && !this._waitingIds.has(s.id))
+                    this._notifyWaiting(s);
+            }
+        }
+        this._waitingIds = nowWaiting;
+        this._primed = true;
+    }
+
+    _notifyWaiting(s) {
+        const name = s.title || basename(s.project_dir) || s.id;
+        const context = [s.machine, s.git_branch].filter(Boolean).join(' · ');
+        Main.notify('Claude Vigie',
+            context ? `${name} (${context}) is waiting for input` : `${name} is waiting for input`);
     }
 
     _showError(message) {
@@ -188,7 +215,7 @@ class FleetIndicator extends PanelMenu.Button {
     }
 });
 
-export default class ClaudeFleetExtension extends Extension {
+export default class VigieExtension extends Extension {
     enable() {
         this._indicator = new FleetIndicator(this);
         Main.panel.addToStatusArea(this.uuid, this._indicator);

@@ -32,7 +32,7 @@ both are known.
   knows the session id. It walks its own `/proc` ancestor chain (`ppid` by
   `ppid`) up to the nearest process whose `comm` is `claude`, and records that
   process's `{pid, start_time}` as the session's mapping.
-- **Store.** Mappings live at `~/.local/state/claude-fleet/sessions/<id>.json`.
+- **Store.** Mappings live at `~/.local/state/vigie/sessions/<id>.json`.
   The path is derived purely from `HOME` — **not** `XDG_STATE_HOME` — so the
   hook's environment and the watcher's systemd environment always resolve to the
   same directory.

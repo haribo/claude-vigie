@@ -1,5 +1,10 @@
 name: CI
 
+# Least privilege: the CI jobs only read the repo (the release workflows declare
+# their own broader scopes). Overrides the token's default permissions (#252).
+permissions:
+  contents: read
+
 on:
   # No paths-ignore: branch protection requires these checks, and a filtered-out
   # workflow never reports them, so a docs-only PR can never merge (#134). The Go
@@ -52,6 +57,36 @@ jobs:
 
       - name: golangci-lint
         run: golangci-lint run ./...
+
+      - name: Check go.mod is tidy
+        run: go mod tidy -diff
+
+  release-config:
+    name: Release config
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-go@v7
+        with:
+          go-version: "1.26"
+          cache: true
+
+      # Validate .goreleaser.yaml and cross-compile the release binaries without
+      # publishing, so a broken config or a build error is caught on the PR rather
+      # than on the day of the tag (#252).
+      - uses: goreleaser/goreleaser-action@v6
+        with:
+          version: "~> v2"
+          args: check
+
+      - uses: goreleaser/goreleaser-action@v6
+        with:
+          version: "~> v2"
+          args: build --snapshot --clean
 
   build-and-test:
     name: Build & test

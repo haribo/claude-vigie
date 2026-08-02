@@ -4,11 +4,12 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
 	"time"
 
-	"github.com/haribo/claude-fleet/internal/api"
-	"github.com/haribo/claude-fleet/internal/store"
+	"github.com/haribo/claude-vigie/internal/api"
+	"github.com/haribo/claude-vigie/internal/store"
 )
 
 func (s *Server) handleReport(w http.ResponseWriter, r *http.Request) {
@@ -69,7 +70,15 @@ func (s *Server) handleReport(w http.ResponseWriter, r *http.Request) {
 	}
 
 	s.maybeSample(ctx, sess.ID, req.Timestamp, sess.Usage.OutputTokens)
-	s.hub.publish()
+	// Delta-gate the SSE fan-out (#258): the watcher re-reports every session
+	// every ~2 s, mostly changing nothing but the heartbeat. Publish only when the
+	// operator-visible state actually changed (or the session is new), so idle
+	// clients stop refetching sessions/usage/stats/platform on every no-op scan.
+	// The heartbeat still lives in ReportedAt; the stale→ended cutoff is evaluated
+	// at read time, and the TUI's own 5 s tick refreshes relative ages.
+	if isNew || visibleSignature(existing) != visibleSignature(sess) {
+		s.hub.publish()
+	}
 
 	metricReports.WithLabelValues(req.Event).Inc()
 	w.WriteHeader(http.StatusNoContent)
@@ -145,6 +154,19 @@ func (s *Server) maybeSample(ctx context.Context, sessionID, at string, output i
 	}
 }
 
+// visibleSignature is a fingerprint of everything the dashboard shows for a
+// session *except* the pure heartbeats (ReportedAt, LastSeenAt), which change on
+// every report and are refreshed by the client's own tick. Two sessions with the
+// same signature are indistinguishable on screen, so an SSE push between them is
+// wasted (#258).
+func visibleSignature(s store.Session) string {
+	u := s.Usage
+	return fmt.Sprintf("%s|%s|%s|%s|%s|%s|%s|%s|%s|%s|%t|%s|%d|%d|%d|%d|%d",
+		s.Status, s.StatusChangedAt, s.Activity, s.Title, s.User, s.Machine, s.Model,
+		s.GitBranch, s.ProjectDir, s.LastTool, s.RemoteControl, s.RemoteURL, s.APIErrorStatus,
+		u.InputTokens, u.OutputTokens, u.CacheCreationTokens, u.CacheReadTokens)
+}
+
 // applyReport merges a report into the session state (read-modify-write).
 // Fields absent from the report are preserved, so an event without usage does
 // not zero the accumulated tokens.
@@ -180,6 +202,7 @@ func applyReport(sess store.Session, isNew bool, req api.ReportRequest) store.Se
 	}
 	if req.RemoteControl != nil {
 		sess.RemoteControl = *req.RemoteControl // detected /rc state (read-only)
+		sess.RemoteURL = req.RemoteURL          // resume URL travels with the /rc flag; "" clears it
 	}
 	if req.LastTool != "" {
 		sess.LastTool = req.LastTool

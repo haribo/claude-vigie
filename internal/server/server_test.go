@@ -6,10 +6,11 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"path/filepath"
+	"strings"
 	"testing"
 
-	"github.com/haribo/claude-fleet/internal/api"
-	"github.com/haribo/claude-fleet/internal/store"
+	"github.com/haribo/claude-vigie/internal/api"
+	"github.com/haribo/claude-vigie/internal/store"
 )
 
 const testToken = "test-token"
@@ -92,6 +93,27 @@ func TestEveryAPIRouteRejectsUnauthenticated(t *testing.T) {
 		if rec.Code != http.StatusUnauthorized {
 			t.Errorf("%s %s with wrong token = %d, want 401", r.method, r.path, rec.Code)
 		}
+	}
+}
+
+func TestWebDashboardServedUnauthenticated(t *testing.T) {
+	srv := newTestServer(t)
+	// The app shell and its assets load with no token (they hold no fleet data);
+	// the API stays token-protected (covered by TestEveryAPIRouteRejects...).
+	for _, path := range []string{"/", "/static/app.js", "/static/app.css"} {
+		if rec := do(t, srv, http.MethodGet, path, nil, false); rec.Code != http.StatusOK {
+			t.Errorf("GET %s without token = %d, want 200", path, rec.Code)
+		}
+	}
+	// A strict CSP must ride along on the shell.
+	rec := do(t, srv, http.MethodGet, "/", nil, false)
+	if csp := rec.Header().Get("Content-Security-Policy"); !strings.Contains(csp, "default-src 'self'") {
+		t.Errorf("shell CSP = %q, want default-src 'self'", csp)
+	}
+	// An unknown path is not the shell — the app is hash-routed, so "/{$}" matches
+	// only the exact root and everything else 404s.
+	if rec := do(t, srv, http.MethodGet, "/nope", nil, false); rec.Code != http.StatusNotFound {
+		t.Errorf("GET /nope = %d, want 404", rec.Code)
 	}
 }
 
@@ -225,6 +247,44 @@ func TestReportExplicitStatusWins(t *testing.T) {
 	}
 }
 
+func TestRemoteURLSurfacedAndCleared(t *testing.T) {
+	srv := newTestServer(t)
+	on, off := true, false
+
+	// A watch report with remote control active carries the resume URL.
+	body, _ := json.Marshal(api.ReportRequest{
+		Event: "watch", SessionID: "s1", Machine: "m", ProjectDir: "/p",
+		Status: "working", RemoteControl: &on, RemoteURL: "https://claude.ai/code/session_01AB",
+		Timestamp: "2026-07-26T10:00:00Z",
+	})
+	if rec := do(t, srv, http.MethodPost, "/api/report", body, true); rec.Code != http.StatusNoContent {
+		t.Fatalf("report = %d", rec.Code)
+	}
+	viewOf := func() api.SessionView {
+		rec := do(t, srv, http.MethodGet, "/api/sessions", nil, true)
+		var views []api.SessionView
+		if err := json.Unmarshal(rec.Body.Bytes(), &views); err != nil || len(views) != 1 {
+			t.Fatalf("sessions = %s (err %v)", rec.Body, err)
+		}
+		return views[0]
+	}
+	if v := viewOf(); !v.RemoteControl || v.RemoteURL != "https://claude.ai/code/session_01AB" {
+		t.Fatalf("remote not surfaced: rc=%v url=%q", v.RemoteControl, v.RemoteURL)
+	}
+
+	// When /rc is switched off the URL is cleared with the flag.
+	off2, _ := json.Marshal(api.ReportRequest{
+		Event: "watch", SessionID: "s1", Machine: "m", ProjectDir: "/p",
+		Status: "working", RemoteControl: &off, RemoteURL: "", Timestamp: "2026-07-26T10:01:00Z",
+	})
+	if rec := do(t, srv, http.MethodPost, "/api/report", off2, true); rec.Code != http.StatusNoContent {
+		t.Fatalf("report off = %d", rec.Code)
+	}
+	if v := viewOf(); v.RemoteControl || v.RemoteURL != "" {
+		t.Errorf("remote not cleared: rc=%v url=%q", v.RemoteControl, v.RemoteURL)
+	}
+}
+
 func TestReportValidation(t *testing.T) {
 	srv := newTestServer(t)
 	if rec := do(t, srv, http.MethodPost, "/api/report", []byte(`{"event":"Stop"}`), true); rec.Code != http.StatusBadRequest {
@@ -232,5 +292,48 @@ func TestReportValidation(t *testing.T) {
 	}
 	if rec := do(t, srv, http.MethodPost, "/api/report", []byte(`not json`), true); rec.Code != http.StatusBadRequest {
 		t.Errorf("bad json = %d, want 400", rec.Code)
+	}
+}
+
+func TestSSEDeltaGating(t *testing.T) {
+	srv := newTestServer(t)
+	ch := srv.hub.subscribe()
+	published := func() bool { // non-blocking: did a report fan out an SSE event?
+		select {
+		case <-ch:
+			return true
+		default:
+			return false
+		}
+	}
+	report := func(status, ts string, out int64) {
+		t.Helper()
+		body, _ := json.Marshal(api.ReportRequest{
+			Event: "watch", SessionID: "s1", Machine: "m", ProjectDir: "/p",
+			Status: status, Usage: &api.Usage{OutputTokens: out}, Timestamp: ts,
+		})
+		if rec := do(t, srv, http.MethodPost, "/api/report", body, true); rec.Code != http.StatusNoContent {
+			t.Fatalf("report = %d", rec.Code)
+		}
+	}
+
+	report("working", "2026-08-02T10:00:00Z", 100)
+	if !published() {
+		t.Fatal("a new session must publish")
+	}
+	// Same visible state, later timestamp (heartbeat only) → no publish.
+	report("working", "2026-08-02T10:00:02Z", 100)
+	if published() {
+		t.Error("an unchanged report must not publish (only the heartbeat moved)")
+	}
+	// Real change (status) → publish.
+	report("waiting", "2026-08-02T10:00:04Z", 100)
+	if !published() {
+		t.Error("a status change must publish")
+	}
+	// Real change (tokens grew) → publish.
+	report("waiting", "2026-08-02T10:00:06Z", 250)
+	if !published() {
+		t.Error("a token change must publish")
 	}
 }

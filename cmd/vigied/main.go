@@ -3,7 +3,7 @@ package main
 import (
 	"os"
 
-	"github.com/haribo/claude-fleet/internal/daemon"
+	"github.com/haribo/claude-vigie/internal/daemon"
 )
 
 func main() {

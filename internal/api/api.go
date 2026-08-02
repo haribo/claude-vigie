@@ -24,6 +24,7 @@ type ReportRequest struct {
 	Activity       string `json:"activity,omitempty"`
 	Status         string `json:"status,omitempty"`           // explicit status (watcher); empty = derive from event
 	RemoteControl  *bool  `json:"remote_control,omitempty"`   // detected /rc state (watcher); nil = no info
+	RemoteURL      string `json:"remote_url,omitempty"`       // /rc resume URL (watcher); "" clears it, set with RemoteControl
 	Usage          *Usage `json:"usage,omitempty"`            // present on Stop / SessionEnd
 	APIErrorStatus int    `json:"api_error_status,omitempty"` // HTTP code of a live API error (watcher); 0 = none
 	Timestamp      string `json:"timestamp"`                  // RFC3339, event time
@@ -39,23 +40,25 @@ type Usage struct {
 
 // SessionView is a session as returned by /api/sessions.
 type SessionView struct {
-	ID             string  `json:"id"`
-	Title          string  `json:"title,omitempty"`
-	User           string  `json:"user,omitempty"`
-	Machine        string  `json:"machine"`
-	ProjectDir     string  `json:"project_dir"`
-	GitBranch      string  `json:"git_branch,omitempty"`
-	Model          string  `json:"model,omitempty"`
-	Status         string  `json:"status"`
-	LastTool       string  `json:"last_tool,omitempty"`
-	Usage          Usage   `json:"usage"`
-	StartedAt      string  `json:"started_at"`
-	LastSeenAt     string  `json:"last_seen_at"`
-	EndedAt        string  `json:"ended_at,omitempty"`
-	RemoteControl  bool    `json:"remote_control"`
-	APIErrorStatus int     `json:"api_error_status,omitempty"` // HTTP code when Status == "error", else 0
-	Activity       string  `json:"activity,omitempty"`         // short "doing"/"waiting on" message
-	Samples        []int64 `json:"samples,omitempty"`          // recent output-token samples, oldest first
+	ID              string  `json:"id"`
+	Title           string  `json:"title,omitempty"`
+	User            string  `json:"user,omitempty"`
+	Machine         string  `json:"machine"`
+	ProjectDir      string  `json:"project_dir"`
+	GitBranch       string  `json:"git_branch,omitempty"`
+	Model           string  `json:"model,omitempty"`
+	Status          string  `json:"status"`
+	LastTool        string  `json:"last_tool,omitempty"`
+	Usage           Usage   `json:"usage"`
+	StartedAt       string  `json:"started_at"`
+	LastSeenAt      string  `json:"last_seen_at"`
+	EndedAt         string  `json:"ended_at,omitempty"`
+	RemoteControl   bool    `json:"remote_control"`
+	RemoteURL       string  `json:"remote_url,omitempty"`        // /rc resume URL while remote control is active
+	APIErrorStatus  int     `json:"api_error_status,omitempty"`  // HTTP code when Status == "error", else 0
+	Activity        string  `json:"activity,omitempty"`          // short "doing"/"waiting on" message
+	StatusChangedAt string  `json:"status_changed_at,omitempty"` // RFC3339, when Status last changed
+	Samples         []int64 `json:"samples,omitempty"`           // recent output-token samples, oldest first
 }
 
 // Settings are the server-wide settings (read/written at /api/settings).

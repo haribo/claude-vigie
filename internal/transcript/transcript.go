@@ -4,13 +4,12 @@
 package transcript
 
 import (
-	"bufio"
 	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
 
-	"github.com/haribo/claude-fleet/internal/api"
+	"github.com/haribo/claude-vigie/internal/api"
 )
 
 // Info is what we extract from a transcript.
@@ -35,6 +34,14 @@ type Info struct {
 	// recent tool_use block), else "" — the watcher's fallback for the "doing"
 	// column when the PostToolUse hook did not report it.
 	Activity string
+	// PendingTool is the name of the most recent foreground tool_use with no
+	// matching tool_result — a tool genuinely still awaiting a result. Empty when
+	// every tool_use has been answered. Used to detect a stalled turn (#256).
+	PendingTool string
+	// BackgroundActive is true when an unresolved tool_use is a backgrounded Bash
+	// (run_in_background) — a real background task still running, which legitimately
+	// keeps the session working rather than stalling it (#256).
+	BackgroundActive bool
 }
 
 type usage struct {
@@ -65,43 +72,23 @@ type line struct {
 	Message        message `json:"message"`
 }
 
-// maxLine bounds a single JSONL line; transcript messages can be large
-// (embedded tool output), so allow well beyond bufio's 64K default.
-const maxLine = 16 * 1024 * 1024
-
-// Parse reads the transcript at path and returns the extracted Info. Token
+// Parse reads the whole transcript at path and returns the extracted Info. Token
 // usage is summed over assistant messages (deduplicated by message id, since
-// retries repeat a line). The title is customTitle (/rename) if present, else
-// aiTitle. LastStopReason is the stop_reason of the last assistant message.
+// retries repeat a line); the title is customTitle (/rename) if present, else
+// aiTitle; LastStopReason is the stop_reason of the last assistant message. It is
+// a convenience wrapper over Parser for one-shot callers (the reporter); the
+// watcher parses incrementally (see Parser, #257).
 func Parse(path string) (*Info, error) {
 	f, err := os.Open(path)
 	if err != nil {
 		return nil, fmt.Errorf("opening transcript: %w", err)
 	}
 	defer func() { _ = f.Close() }()
-
-	var info Info
-	var titles titleTracker
-	seen := make(map[string]bool)
-
-	sc := bufio.NewScanner(f)
-	sc.Buffer(make([]byte, 0, 64*1024), maxLine)
-	for sc.Scan() {
-		var l line
-		if err := json.Unmarshal(sc.Bytes(), &l); err != nil {
-			continue // skip malformed lines rather than fail the whole parse
-		}
-		info.applyMeta(l, &titles)
-		if l.Type == "assistant" {
-			info.applyAssistant(l, seen)
-		}
+	p := NewParser()
+	if err := p.Advance(f); err != nil {
+		return nil, err
 	}
-	if err := sc.Err(); err != nil {
-		return nil, fmt.Errorf("reading transcript: %w", err)
-	}
-
-	info.Title = titles.resolve()
-	return &info, nil
+	return p.Info(), nil
 }
 
 func (info *Info) applyMeta(l line, titles *titleTracker) {

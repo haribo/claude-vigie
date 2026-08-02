@@ -12,8 +12,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/haribo/claude-fleet/internal/clock"
-	"github.com/haribo/claude-fleet/internal/store"
+	"github.com/haribo/claude-vigie/internal/clock"
+	"github.com/haribo/claude-vigie/internal/store"
+	"github.com/haribo/claude-vigie/internal/web"
 )
 
 // Store is the persistence surface the server depends on (accept interfaces).
@@ -74,6 +75,14 @@ func (s *Server) Handler() http.Handler {
 	mux.Handle("GET /api/stats", s.auth(http.HandlerFunc(s.handleStats)))
 	mux.Handle("GET /api/settings", s.auth(http.HandlerFunc(s.handleGetSettings)))
 	mux.Handle("POST /api/settings", s.auth(http.HandlerFunc(s.handleSetSettings)))
+	// The read-only web dashboard: the app shell ("/") and its assets ("/static/")
+	// are served unauthenticated — they hold no fleet data. The JavaScript then
+	// authenticates its own /api calls with the token the operator pastes. "/{$}"
+	// matches only the exact root (the app is hash-routed), so unknown paths still
+	// 404 instead of serving the shell.
+	webUI := web.Handler()
+	mux.Handle("GET /{$}", webUI)
+	mux.Handle("GET /static/", webUI)
 	// RED metrics wrap the whole API; auth stays per-route. /healthz and /metrics
 	// live on the ops listener (daemon), never on the token-protected API port.
 	// limitBody caps request bodies before any handler reads them.

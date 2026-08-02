@@ -37,3 +37,4 @@ Rules must be concise. One rule per line when possible.
 - Never modify existing tests without explicit approval
 - If a test fails after code changes, report it instead of fixing it silently
 - Adding new tests is always allowed
+- Bug fixes start with a failing regression test that reproduces the bug (reference the issue number in the test); see `docs/code.md` Testing

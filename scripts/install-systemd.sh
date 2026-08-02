@@ -14,13 +14,13 @@ case "$ROLE" in
   server)
     ADDR="${3:?missing addr}"
     DB="${4:?missing db}"
-    cat > "$UNIT_DIR/claude-fleetd.service" <<EOF
+    cat > "$UNIT_DIR/vigied.service" <<EOF
 [Unit]
-Description=Claude Fleet server
+Description=Claude Vigie server
 After=network.target
 
 [Service]
-ExecStart=$BIN_DIR/claude-fleetd serve --addr $ADDR --db $DB
+ExecStart=$BIN_DIR/vigied serve --addr $ADDR --db $DB
 Restart=on-failure
 RestartSec=5
 
@@ -28,18 +28,18 @@ RestartSec=5
 WantedBy=default.target
 EOF
     systemctl --user daemon-reload
-    systemctl --user enable claude-fleetd.service
-    systemctl --user restart claude-fleetd.service
-    echo "installed and started claude-fleetd.service ($ADDR)"
+    systemctl --user enable vigied.service
+    systemctl --user restart vigied.service
+    echo "installed and started vigied.service ($ADDR)"
     ;;
   watch)
-    cat > "$UNIT_DIR/claude-fleet-watch.service" <<EOF
+    cat > "$UNIT_DIR/vigie-watch.service" <<EOF
 [Unit]
-Description=Claude Fleet watcher
+Description=Claude Vigie watcher
 After=network.target
 
 [Service]
-ExecStart=$BIN_DIR/claude-fleet watch
+ExecStart=$BIN_DIR/vigie watch
 Restart=on-failure
 RestartSec=5
 
@@ -47,9 +47,9 @@ RestartSec=5
 WantedBy=default.target
 EOF
     systemctl --user daemon-reload
-    systemctl --user enable claude-fleet-watch.service
-    systemctl --user restart claude-fleet-watch.service
-    echo "installed and started claude-fleet-watch.service"
+    systemctl --user enable vigie-watch.service
+    systemctl --user restart vigie-watch.service
+    echo "installed and started vigie-watch.service"
     ;;
   *)
     echo "unknown role: $ROLE (use 'server' or 'watch')" >&2

@@ -7,7 +7,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/haribo/claude-fleet/internal/api"
+	"github.com/haribo/claude-vigie/internal/api"
 )
 
 func TestMetricsExposition(t *testing.T) {
@@ -31,12 +31,12 @@ func TestMetricsExposition(t *testing.T) {
 	}
 	out := rec.Body.String()
 	for _, want := range []string{
-		`fleet_reports_total{event="watch"}`,
-		`fleet_http_requests_total`,
-		`fleet_http_request_duration_seconds`,
-		`fleet_sessions{status="working"}`,
-		`fleet_build_info{`,
-		`fleet_sse_events_published_total`,
+		`vigie_reports_total{event="watch"}`,
+		`vigie_http_requests_total`,
+		`vigie_http_request_duration_seconds`,
+		`vigie_sessions{status="working"}`,
+		`vigie_build_info{`,
+		`vigie_sse_events_published_total`,
 		`go_goroutines`, // default Go collector is registered
 	} {
 		if !strings.Contains(out, want) {

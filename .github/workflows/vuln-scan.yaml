@@ -1,0 +1,51 @@
+name: Vuln scan
+
+# govulncheck on PR/push only covers *changing* code. This scheduled run covers
+# the third case: a CVE published against dependencies of code that isn't moving
+# (#251). Runs on the default branch; a dedicated workflow so the full CI does not
+# run to waste every week.
+on:
+  schedule:
+    - cron: "0 6 * * 1" # every Monday, 06:00 UTC
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write # to file an issue when a vulnerability is found
+
+jobs:
+  govulncheck:
+    name: Vulnerability scan
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-go@v7
+        with:
+          go-version: "1.26"
+          cache: true
+
+      - name: Install govulncheck
+        run: go install golang.org/x/vuln/cmd/govulncheck@latest
+
+      - name: Run govulncheck
+        run: govulncheck ./...
+
+      - name: File an issue on failure
+        if: failure()
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          title="govulncheck found a vulnerability"
+          # Dedup: don't pile up an issue every week while one is still open.
+          if [ -n "$(gh issue list --state open --search "$title in:title" --json number -q '.[0].number')" ]; then
+            echo "an open issue already tracks this — not filing another"
+            exit 0
+          fi
+          gh issue create --title "$title" --label "type: chore" --body \
+            "The weekly scheduled \`govulncheck ./...\` reported a vulnerability. Review the run and update the affected dependency (or the Go toolchain).
+
+          Run: $RUN_URL
+
+          Reproduce locally: \`just code-check\` (or \`govulncheck ./...\`)."

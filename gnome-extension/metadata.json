@@ -1,10 +1,10 @@
 {
-  "uuid": "claude-fleet@haribo.github.io",
-  "name": "Claude Fleet",
-  "description": "Top-bar indicator for Claude Code sessions across your fleet: shows how many sessions are waiting for input. Read-only client of a claude-fleet server.",
+  "uuid": "claude-vigie@haribo.github.io",
+  "name": "Claude Vigie",
+  "description": "Top-bar indicator for Claude Code sessions across your fleet: shows how many sessions are waiting for input. Read-only client of a vigie server.",
   "shell-version": ["45", "46", "47", "48", "49", "50"],
-  "url": "https://github.com/haribo/claude-fleet",
-  "settings-schema": "org.gnome.shell.extensions.claude-fleet",
-  "gettext-domain": "claude-fleet",
+  "url": "https://github.com/haribo/claude-vigie",
+  "settings-schema": "org.gnome.shell.extensions.claude-vigie",
+  "gettext-domain": "claude-vigie",
   "version-name": "0.1.0"
 }

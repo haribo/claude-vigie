@@ -2,7 +2,7 @@
 
 **Status:** Accepted.
 
-Source of truth for the **usage** claude-fleet reports — the Claude subscription
+Source of truth for the **usage** vigie reports — the Claude subscription
 budget, not per-session token counts (those are in the session row). The
 user-observable behavior, not the code.
 
@@ -10,7 +10,7 @@ user-observable behavior, not the code.
 
 ## 1. What it shows
 
-Claude's subscription enforces two rolling usage windows. claude-fleet mirrors
+Claude's subscription enforces two rolling usage windows. vigie mirrors
 both, as a strip under the sessions table:
 
 - **5-hour window** — percentage of the short rolling limit used, with the time

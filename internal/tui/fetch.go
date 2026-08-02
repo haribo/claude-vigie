@@ -9,8 +9,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/haribo/claude-fleet/internal/api"
-	"github.com/haribo/claude-fleet/internal/config"
+	"github.com/haribo/claude-vigie/internal/api"
+	"github.com/haribo/claude-vigie/internal/config"
 )
 
 // httpClient carries a timeout (http.DefaultClient has none); the per-request

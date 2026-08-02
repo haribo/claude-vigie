@@ -13,17 +13,17 @@ import (
 	"github.com/prometheus/client_golang/prometheus/collectors"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 
-	"github.com/haribo/claude-fleet/internal/clock"
+	"github.com/haribo/claude-vigie/internal/clock"
 )
 
 // This file is the daemon's only Prometheus dependency; the client packages
 // never import it (ADR-0003, enforced by depguard). Labels are deliberately
 // bounded — never session_id / machine / project — so cardinality stays finite.
 
-const metricsNamespace = "fleet"
+const metricsNamespace = "vigie"
 
 var (
-	// reg is the daemon's registry: Go/process collectors, the fleet_* metrics
+	// reg is the daemon's registry: Go/process collectors, the vigie_* metrics
 	// below, and a scrape-time state collector the daemon registers separately.
 	reg = prometheus.NewRegistry()
 
@@ -95,7 +95,7 @@ func MetricsHandler() http.Handler {
 	return promhttp.HandlerFor(reg, promhttp.HandlerOpts{})
 }
 
-// SetBuildInfo records the fleet_build_info series.
+// SetBuildInfo records the vigie_build_info series.
 func SetBuildInfo(version, goVersion string) {
 	metricBuildInfo.WithLabelValues(version, goVersion).Set(1)
 }
@@ -189,7 +189,7 @@ var (
 
 // statusOrder is every status the gauge reports, so each series exists (=0) even
 // when no session currently holds it.
-var statusOrder = []string{"working", "thinking", "waiting", "idle", "error", "ended"}
+var statusOrder = []string{"working", "thinking", "waiting", "idle", "stalled", "error", "ended"}
 
 func (c *stateCollector) Describe(ch chan<- *prometheus.Desc) {
 	ch <- descSessions

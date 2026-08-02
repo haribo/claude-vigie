@@ -9,8 +9,8 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 
-	"github.com/haribo/claude-fleet/internal/api"
-	"github.com/haribo/claude-fleet/internal/clock"
+	"github.com/haribo/claude-vigie/internal/api"
+	"github.com/haribo/claude-vigie/internal/clock"
 )
 
 // pollInterval is the fallback refresh. SSE pushes data changes instantly, so
@@ -31,10 +31,14 @@ const (
 var tabNames = []string{"Sessions", "Stats", "Machines", "Settings"}
 
 // settingsCount is the number of editable rows in the Settings tab.
-const settingsCount = 3
+const settingsCount = 4
 
-// retentionRow is the index of the server session-retention row in Settings.
-const retentionRow = 2
+// retentionRow is the index of the server session-retention row in Settings;
+// notifyRow toggles desktop notifications (#260).
+const (
+	retentionRow = 2
+	notifyRow    = 3
+)
 
 // sortKey identifies how the sessions table is ordered.
 type sortKey int
@@ -103,7 +107,7 @@ type model struct {
 	fetchStats      func() (api.StatsResponse, error)
 	fetchPlatform   func() (api.PlatformStatus, error)
 	setRetention    func(v string) error
-	serverURL       string // read-only; set via `claude-fleet init`
+	serverURL       string // read-only; set via `vigie init`
 	serverRetention time.Duration
 	stats           api.StatsResponse
 	statsPeriod     period
@@ -130,9 +134,12 @@ type model struct {
 	prefs           prefs
 	settingsCursor  int
 	events          <-chan struct{}
-	conn            <-chan bool      // server-connection state pushed by the SSE loop
-	sseLive         bool             // is the SSE stream currently connected
-	clock           func() time.Time // injected wall clock; defaults to clock.Now
+	conn            <-chan bool       // server-connection state pushed by the SSE loop
+	sseLive         bool              // is the SSE stream currently connected
+	clock           func() time.Time  // injected wall clock; defaults to clock.Now
+	prevStatus      map[string]string // last status per session, for notify transitions (#260)
+	focused         bool              // terminal has focus → suppress desktop notifications
+	seen            map[string]string // per-session acked StatusChangedAt, for unread (#259)
 }
 
 // now reads the injected clock, falling back to the system clock so a model
@@ -303,6 +310,10 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.WindowSizeMsg:
 		m.width = msg.Width
+	case tea.FocusMsg:
+		m.focused = true // operator is watching → suppress desktop notifications
+	case tea.BlurMsg:
+		m.focused = false
 	case tea.KeyMsg:
 		return m.handleKey(msg)
 	case retentionDoneMsg:
@@ -336,6 +347,7 @@ func (m model) applySessions(msg sessionsMsg) model {
 		m.err = msg.err
 		return m
 	}
+	m = m.withNotifiedTransitions(msg.sessions) // desktop notify on working→attention (#260)
 	m.sessions = msg.sessions
 	m.err = nil
 	m.history = append(m.history, countByStatus(m.sessions, "working"))
@@ -436,6 +448,13 @@ func (m model) handleSessionsKey(msg tea.KeyMsg) model {
 	case "a":
 		m.showAll = !m.showAll
 		m.cursor = 0
+	case "n": // jump to the oldest session waiting on the operator (#261)
+		if id := nextAttention(m.sessions); id != "" {
+			m.selectedID = id
+			m.cursor = m.cursorForSelection()
+			m.detail = true
+			m = m.ack(id) // jumping to it counts as viewing it (#259)
+		}
 	default:
 		return m.handleNavKey(msg)
 	}
@@ -483,6 +502,9 @@ func (m model) editSetting(dir int) (tea.Model, tea.Cmd) {
 	case retentionRow:
 		m.serverRetention = cycleRetention(m.serverRetention, dir)
 		return m, m.setRetentionCmd(m.serverRetention)
+	case notifyRow:
+		m.prefs.notify = !m.prefs.notify
+		savePrefs(m.prefs)
 	}
 	return m, nil
 }
@@ -501,6 +523,7 @@ func (m model) handleNavKey(msg tea.KeyMsg) model {
 	case "enter":
 		if len(vis) > 0 {
 			m.detail = true
+			m = m.ack(idAt(vis, m.cursor)) // opening the detail marks it read (#259)
 		}
 	case "esc":
 		if m.detail {
@@ -602,13 +625,13 @@ func (m model) View() string {
 func (m model) renderSettings() string {
 	var b strings.Builder
 
-	// Connection is read-only here: it is set per machine by `claude-fleet init`
+	// Connection is read-only here: it is set per machine by `vigie init`
 	// and shared with the watcher/reporter. Editing it from the TUI would only
 	// change this process and leave the watcher on the old server. The token is
 	// never shown.
 	b.WriteString(dimStyle.Render("Connection") + "\n\n")
 	b.WriteString("  " + labelStyle.Render(pad("Server", 24)) + m.serverURL +
-		dimStyle.Render("   (read-only — set via `claude-fleet init`)") + "\n\n")
+		dimStyle.Render("   (read-only — set via `vigie init`)") + "\n\n")
 
 	b.WriteString(dimStyle.Render("Preferences") + "\n\n")
 	rows := []struct {
@@ -619,6 +642,7 @@ func (m model) renderSettings() string {
 		{"Hide ended sessions", onOffLabel(m.prefs.hideEnded), false},
 		{"Hide idle after", idleLabel(m.prefs.idleHideAfter), false},
 		{"Session retention", retentionLabel(m.serverRetention), true},
+		{"Desktop notifications", onOffLabel(m.prefs.notify), false},
 	}
 	for i, r := range rows {
 		gutter := "  "
@@ -672,7 +696,7 @@ func (m model) viewSessions() string {
 	var b strings.Builder
 	// The tab-bar separator frames the summary strip above; a rule below
 	// separates it from the table.
-	b.WriteString(joinLR(renderSummary(m.sessions, m.history), m.summaryRight(), m.width) + "\n")
+	b.WriteString(joinLR(renderSummary(m.sessions, m.history, m.unreadCount()), m.summaryRight(), m.width) + "\n")
 	b.WriteString(rule(m.width) + "\n")
 	if m.filtering || m.filter != "" {
 		b.WriteString(m.filterLine() + "\n")
@@ -680,7 +704,7 @@ func (m model) viewSessions() string {
 	if len(vis) == 0 {
 		b.WriteString(dimStyle.Render("no sessions match the filter"))
 	} else {
-		b.WriteString(renderGroupedTable(vis, m.width, cursor, m.groupBy, sortState{m.sortKey, m.sortReversed}))
+		b.WriteString(renderGroupedTable(vis, m.width, cursor, m.groupBy, sortState{m.sortKey, m.sortReversed}, m.unreadSet()))
 	}
 	b.WriteString(rule(m.width) + "\n" + renderUsageStrip(m.usage) + platformStrip(m.platform))
 	return b.String()
@@ -784,9 +808,12 @@ func lessBy(a, b api.SessionView, key sortKey) bool {
 	}
 }
 
-// statusRank orders statuses by activity: working > waiting > idle > ended.
+// statusRank orders statuses for the status sort: a stalled turn (a hung tool
+// needing a look) ranks above everything, then working > waiting > idle > ended.
 func statusRank(status string) int {
 	switch status {
+	case "stalled":
+		return 5
 	case "working":
 		return 4
 	case "waiting":

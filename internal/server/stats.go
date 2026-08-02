@@ -4,8 +4,8 @@ import (
 	"net/http"
 	"sort"
 
-	"github.com/haribo/claude-fleet/internal/api"
-	"github.com/haribo/claude-fleet/internal/store"
+	"github.com/haribo/claude-vigie/internal/api"
+	"github.com/haribo/claude-vigie/internal/store"
 )
 
 // topSessionsLimit bounds the ranked sessions returned by the stats endpoint.

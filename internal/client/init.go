@@ -9,8 +9,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/haribo/claude-fleet/internal/config"
-	"github.com/haribo/claude-fleet/internal/install"
+	"github.com/haribo/claude-vigie/internal/config"
+	"github.com/haribo/claude-vigie/internal/install"
 )
 
 // defaultEvents are the hooks installed by default. PostToolUse is included so
@@ -23,7 +23,7 @@ func runInit(args []string) int {
 	server := fs.String("server", "", "fleet server URL to report to")
 	token := fs.String("token", "", "shared auth token")
 	machine := fs.String("machine", "", "machine name (defaults to the hostname)")
-	uninstall := fs.Bool("uninstall", false, "remove claude-fleet hooks and stop reporting")
+	uninstall := fs.Bool("uninstall", false, "remove vigie hooks and stop reporting")
 	if err := fs.Parse(args); err != nil {
 		return 2
 	}
@@ -34,7 +34,7 @@ func runInit(args []string) int {
 			fmt.Fprintf(os.Stderr, "init: %v\n", err)
 			return 1
 		}
-		fmt.Printf("removed claude-fleet hooks from %s\n", path)
+		fmt.Printf("removed vigie hooks from %s\n", path)
 		return 0
 	}
 
@@ -64,7 +64,7 @@ func runInit(args []string) int {
 
 	binPath, err := os.Executable()
 	if err != nil {
-		binPath = "claude-fleet"
+		binPath = "vigie"
 	}
 
 	settingsPath, err := install.Install(defaultEvents, binPath, "", 5)
@@ -73,7 +73,7 @@ func runInit(args []string) int {
 		return 1
 	}
 
-	fmt.Printf(`claude-fleet configured:
+	fmt.Printf(`vigie configured:
   config:   %s
   hooks:    %s
   server:   %s
@@ -111,7 +111,7 @@ func testConnection(cfg *config.Config) error {
 	case http.StatusUnauthorized:
 		return fmt.Errorf("invalid token")
 	case http.StatusNotFound:
-		return fmt.Errorf("%s responded 404 — not a claude-fleet server (wrong port, or claude-fleetd not running there)", cfg.ServerURL)
+		return fmt.Errorf("%s responded 404 — not a vigie server (wrong port, or vigied not running there)", cfg.ServerURL)
 	default:
 		return fmt.Errorf("unexpected status %s", resp.Status)
 	}

@@ -104,11 +104,11 @@ linters:
             - "**/internal/report/**"
             - "**/internal/tui/**"
           deny:
-            - pkg: github.com/haribo/claude-fleet/internal/server
+            - pkg: github.com/haribo/claude-vigie/internal/server
               desc: client must not link the server (ADR-0003)
-            - pkg: github.com/haribo/claude-fleet/internal/store
+            - pkg: github.com/haribo/claude-vigie/internal/store
               desc: client must not link the store (ADR-0003)
-            - pkg: github.com/haribo/claude-fleet/web
+            - pkg: github.com/haribo/claude-vigie/web
               desc: client must not link the web dashboard (ADR-0003)
             - pkg: github.com/prometheus/client_golang
               desc: metrics live in the daemon only (ADR-0003); the client never links prometheus

@@ -7,7 +7,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/haribo/claude-fleet/internal/api"
+	"github.com/haribo/claude-vigie/internal/api"
 )
 
 // TestScanReplay drives the watcher over faithful transcript fixtures on an

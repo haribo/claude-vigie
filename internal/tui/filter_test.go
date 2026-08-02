@@ -4,7 +4,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/haribo/claude-fleet/internal/api"
+	"github.com/haribo/claude-vigie/internal/api"
 )
 
 func TestPrefsVisible(t *testing.T) {
