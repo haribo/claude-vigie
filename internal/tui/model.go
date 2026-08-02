@@ -31,10 +31,14 @@ const (
 var tabNames = []string{"Sessions", "Stats", "Machines", "Settings"}
 
 // settingsCount is the number of editable rows in the Settings tab.
-const settingsCount = 3
+const settingsCount = 4
 
-// retentionRow is the index of the server session-retention row in Settings.
-const retentionRow = 2
+// retentionRow is the index of the server session-retention row in Settings;
+// notifyRow toggles desktop notifications (#260).
+const (
+	retentionRow = 2
+	notifyRow    = 3
+)
 
 // sortKey identifies how the sessions table is ordered.
 type sortKey int
@@ -130,9 +134,11 @@ type model struct {
 	prefs           prefs
 	settingsCursor  int
 	events          <-chan struct{}
-	conn            <-chan bool      // server-connection state pushed by the SSE loop
-	sseLive         bool             // is the SSE stream currently connected
-	clock           func() time.Time // injected wall clock; defaults to clock.Now
+	conn            <-chan bool       // server-connection state pushed by the SSE loop
+	sseLive         bool              // is the SSE stream currently connected
+	clock           func() time.Time  // injected wall clock; defaults to clock.Now
+	prevStatus      map[string]string // last status per session, for notify transitions (#260)
+	focused         bool              // terminal has focus → suppress desktop notifications
 }
 
 // now reads the injected clock, falling back to the system clock so a model
@@ -303,6 +309,10 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.WindowSizeMsg:
 		m.width = msg.Width
+	case tea.FocusMsg:
+		m.focused = true // operator is watching → suppress desktop notifications
+	case tea.BlurMsg:
+		m.focused = false
 	case tea.KeyMsg:
 		return m.handleKey(msg)
 	case retentionDoneMsg:
@@ -336,6 +346,7 @@ func (m model) applySessions(msg sessionsMsg) model {
 		m.err = msg.err
 		return m
 	}
+	m = m.withNotifiedTransitions(msg.sessions) // desktop notify on working→attention (#260)
 	m.sessions = msg.sessions
 	m.err = nil
 	m.history = append(m.history, countByStatus(m.sessions, "working"))
@@ -436,6 +447,12 @@ func (m model) handleSessionsKey(msg tea.KeyMsg) model {
 	case "a":
 		m.showAll = !m.showAll
 		m.cursor = 0
+	case "n": // jump to the oldest session waiting on the operator (#261)
+		if id := nextAttention(m.sessions); id != "" {
+			m.selectedID = id
+			m.cursor = m.cursorForSelection()
+			m.detail = true
+		}
 	default:
 		return m.handleNavKey(msg)
 	}
@@ -483,6 +500,9 @@ func (m model) editSetting(dir int) (tea.Model, tea.Cmd) {
 	case retentionRow:
 		m.serverRetention = cycleRetention(m.serverRetention, dir)
 		return m, m.setRetentionCmd(m.serverRetention)
+	case notifyRow:
+		m.prefs.notify = !m.prefs.notify
+		savePrefs(m.prefs)
 	}
 	return m, nil
 }
@@ -619,6 +639,7 @@ func (m model) renderSettings() string {
 		{"Hide ended sessions", onOffLabel(m.prefs.hideEnded), false},
 		{"Hide idle after", idleLabel(m.prefs.idleHideAfter), false},
 		{"Session retention", retentionLabel(m.serverRetention), true},
+		{"Desktop notifications", onOffLabel(m.prefs.notify), false},
 	}
 	for i, r := range rows {
 		gutter := "  "
