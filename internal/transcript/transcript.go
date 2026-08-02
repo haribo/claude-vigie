@@ -14,11 +14,17 @@ import (
 
 // Info is what we extract from a transcript.
 type Info struct {
-	SessionID      string
-	Cwd            string
-	GitBranch      string
-	Title          string
-	Model          string
+	SessionID string
+	Cwd       string
+	GitBranch string
+	Title     string
+	Model     string
+	// Effort is the reasoning effort of the last assistant line that carried one
+	// (low/medium/high/xhigh/max). Claude Code writes it at the root of assistant
+	// lines, but not on every line (older sessions and some message types omit it),
+	// so the last non-empty value is kept rather than cleared — best-effort, same
+	// caveat as the "thinking" status.
+	Effort         string
 	Usage          api.Usage
 	LastStopReason string // stop_reason of the last assistant message
 	LastActivity   string // RFC3339 timestamp of the last line
@@ -67,6 +73,7 @@ type line struct {
 	CustomTitle    string  `json:"customTitle"`
 	AiTitle        string  `json:"aiTitle"`
 	Timestamp      string  `json:"timestamp"`
+	Effort         string  `json:"effort"` // reasoning effort, root-level on assistant lines
 	IsAPIError     bool    `json:"isApiErrorMessage"`
 	APIErrorStatus int     `json:"apiErrorStatus"`
 	Message        message `json:"message"`
@@ -122,6 +129,9 @@ func (info *Info) applyAssistant(l line, seen map[string]bool) {
 	info.Activity = lastToolActivity(m.Content)
 	if m.Model != "" {
 		info.Model = m.Model
+	}
+	if l.Effort != "" {
+		info.Effort = l.Effort // keep the last reported effort; a line without it does not clear it
 	}
 	if m.ID != "" {
 		if seen[m.ID] {

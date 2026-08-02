@@ -64,6 +64,7 @@ func toView(s store.Session, samples []int64, now time.Time) api.SessionView {
 		ProjectDir: s.ProjectDir,
 		GitBranch:  s.GitBranch,
 		Model:      s.Model,
+		Effort:     s.Effort,
 		Status:     status,
 		LastTool:   s.LastTool,
 		Usage: api.Usage{

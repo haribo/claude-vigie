@@ -195,6 +195,7 @@ func (s *scanner) scan(root, machine string, maxAge time.Duration, now time.Time
 			ProjectDir:     info.Cwd,
 			GitBranch:      info.GitBranch,
 			Model:          info.Model,
+			Effort:         info.Effort,
 			Title:          info.Title,
 			Status:         status,
 			RemoteControl:  &rc,

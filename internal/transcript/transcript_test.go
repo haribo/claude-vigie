@@ -110,6 +110,43 @@ func TestParseThinking(t *testing.T) {
 	}
 }
 
+func TestParseEffort(t *testing.T) {
+	dir := t.TempDir()
+
+	// effort is root-level on assistant lines and is surfaced as-is (#286).
+	high := filepath.Join(dir, "high.jsonl")
+	writeJSONL(t, high,
+		`{"type":"assistant","timestamp":"2026-07-26T10:00:00Z","effort":"high","message":{"id":"m1","stop_reason":"end_turn"}}`,
+	)
+	if info, err := Parse(high); err != nil {
+		t.Fatal(err)
+	} else if info.Effort != "high" {
+		t.Errorf("Effort = %q, want high", info.Effort)
+	}
+
+	// A later line without effort keeps the last known value (best-effort, not
+	// cleared) — Claude Code omits it on some lines.
+	kept := filepath.Join(dir, "kept.jsonl")
+	writeJSONL(t, kept,
+		`{"type":"assistant","timestamp":"2026-07-26T10:00:00Z","effort":"medium","message":{"id":"m1","stop_reason":"end_turn"}}`,
+		`{"type":"assistant","timestamp":"2026-07-26T10:00:02Z","message":{"id":"m2","stop_reason":"end_turn"}}`,
+	)
+	if info, err := Parse(kept); err != nil {
+		t.Fatal(err)
+	} else if info.Effort != "medium" {
+		t.Errorf("Effort = %q, want medium (kept from the earlier line)", info.Effort)
+	}
+
+	// No effort anywhere → empty.
+	none := filepath.Join(dir, "none.jsonl")
+	writeJSONL(t, none, `{"type":"assistant","message":{"id":"m1","stop_reason":"end_turn"}}`)
+	if info, err := Parse(none); err != nil {
+		t.Fatal(err)
+	} else if info.Effort != "" {
+		t.Errorf("Effort = %q, want empty", info.Effort)
+	}
+}
+
 func TestToolActivity(t *testing.T) {
 	cases := []struct{ tool, input, want string }{
 		{"Bash", `{"description":"run the tests","command":"go test"}`, "Bash: run the tests"},

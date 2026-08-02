@@ -14,7 +14,8 @@ type ReportRequest struct {
 	ProjectDir string `json:"project_dir"`
 	GitBranch  string `json:"git_branch,omitempty"`
 	Model      string `json:"model,omitempty"`
-	Title      string `json:"title,omitempty"` // conversation title (/rename or auto)
+	Effort     string `json:"effort,omitempty"` // reasoning effort of the last assistant turn
+	Title      string `json:"title,omitempty"`  // conversation title (/rename or auto)
 	LastTool   string `json:"last_tool,omitempty"`
 	// NotificationType is the Claude Code Notification hook's notification_type
 	// (e.g. permission_prompt vs idle_prompt); it splits waiting from idle.
@@ -47,6 +48,7 @@ type SessionView struct {
 	ProjectDir      string  `json:"project_dir"`
 	GitBranch       string  `json:"git_branch,omitempty"`
 	Model           string  `json:"model,omitempty"`
+	Effort          string  `json:"effort,omitempty"` // reasoning effort of the last assistant turn
 	Status          string  `json:"status"`
 	LastTool        string  `json:"last_tool,omitempty"`
 	Usage           Usage   `json:"usage"`
