@@ -8,6 +8,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"os"
 	"os/user"
@@ -113,7 +114,9 @@ func collectDeadMappings(maxAge time.Duration) {
 type cacheEntry struct {
 	modTime time.Time
 	size    int64
-	info    *transcript.Info
+	// parser carries the cumulative parse state, so a growing transcript is
+	// advanced by only its new bytes instead of being re-parsed whole (#257).
+	parser *transcript.Parser
 }
 
 // scanner scans transcripts and caches each parse, so an unchanged (idle)
@@ -260,20 +263,33 @@ func refineWithTools(base string, info *transcript.Info, activityAge time.Durati
 	return base
 }
 
-// parse returns the transcript Info for p, reusing the cached parse when the
-// file is unchanged (same mod time and size) since the last scan. The reused or
-// freshly parsed entry is recorded in fresh (the next scan's cache).
+// parse returns the transcript Info for p. An unchanged file (same mod time and
+// size) reuses the cached parser with no I/O; a grown file (append-only) resumes
+// the cached parser from its offset and folds in only the new bytes; anything
+// else (a shrunk/rewritten file, or first sight) is parsed from scratch (#257).
 func (s *scanner) parse(p string, fi os.FileInfo, fresh map[string]cacheEntry) (*transcript.Info, error) {
-	if e, ok := s.cache[p]; ok && e.modTime.Equal(fi.ModTime()) && e.size == fi.Size() {
+	e, ok := s.cache[p]
+	if ok && e.modTime.Equal(fi.ModTime()) && e.size == fi.Size() {
 		fresh[p] = e
-		return e.info, nil
+		return e.parser.Info(), nil
 	}
-	info, err := transcript.Parse(p)
+	parser := transcript.NewParser()
+	if ok && fi.Size() > e.size { // append-only growth: resume from where we stopped
+		parser = e.parser
+	}
+	f, err := os.Open(p) //nolint:gosec // path comes from our own transcript glob
 	if err != nil {
 		return nil, err
 	}
-	fresh[p] = cacheEntry{modTime: fi.ModTime(), size: fi.Size(), info: info}
-	return info, nil
+	defer func() { _ = f.Close() }()
+	if _, err := f.Seek(parser.Offset(), io.SeekStart); err != nil {
+		return nil, fmt.Errorf("seeking transcript: %w", err)
+	}
+	if err := parser.Advance(f); err != nil {
+		return nil, err
+	}
+	fresh[p] = cacheEntry{modTime: fi.ModTime(), size: fi.Size(), parser: parser}
+	return parser.Info(), nil
 }
 
 // sessionStatus layers a transient "error" status on top of the base
