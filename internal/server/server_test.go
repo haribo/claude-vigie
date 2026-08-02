@@ -247,6 +247,44 @@ func TestReportExplicitStatusWins(t *testing.T) {
 	}
 }
 
+func TestRemoteURLSurfacedAndCleared(t *testing.T) {
+	srv := newTestServer(t)
+	on, off := true, false
+
+	// A watch report with remote control active carries the resume URL.
+	body, _ := json.Marshal(api.ReportRequest{
+		Event: "watch", SessionID: "s1", Machine: "m", ProjectDir: "/p",
+		Status: "working", RemoteControl: &on, RemoteURL: "https://claude.ai/code/session_01AB",
+		Timestamp: "2026-07-26T10:00:00Z",
+	})
+	if rec := do(t, srv, http.MethodPost, "/api/report", body, true); rec.Code != http.StatusNoContent {
+		t.Fatalf("report = %d", rec.Code)
+	}
+	viewOf := func() api.SessionView {
+		rec := do(t, srv, http.MethodGet, "/api/sessions", nil, true)
+		var views []api.SessionView
+		if err := json.Unmarshal(rec.Body.Bytes(), &views); err != nil || len(views) != 1 {
+			t.Fatalf("sessions = %s (err %v)", rec.Body, err)
+		}
+		return views[0]
+	}
+	if v := viewOf(); !v.RemoteControl || v.RemoteURL != "https://claude.ai/code/session_01AB" {
+		t.Fatalf("remote not surfaced: rc=%v url=%q", v.RemoteControl, v.RemoteURL)
+	}
+
+	// When /rc is switched off the URL is cleared with the flag.
+	off2, _ := json.Marshal(api.ReportRequest{
+		Event: "watch", SessionID: "s1", Machine: "m", ProjectDir: "/p",
+		Status: "working", RemoteControl: &off, RemoteURL: "", Timestamp: "2026-07-26T10:01:00Z",
+	})
+	if rec := do(t, srv, http.MethodPost, "/api/report", off2, true); rec.Code != http.StatusNoContent {
+		t.Fatalf("report off = %d", rec.Code)
+	}
+	if v := viewOf(); v.RemoteControl || v.RemoteURL != "" {
+		t.Errorf("remote not cleared: rc=%v url=%q", v.RemoteControl, v.RemoteURL)
+	}
+}
+
 func TestReportValidation(t *testing.T) {
 	srv := newTestServer(t)
 	if rec := do(t, srv, http.MethodPost, "/api/report", []byte(`{"event":"Stop"}`), true); rec.Code != http.StatusBadRequest {

@@ -20,7 +20,19 @@ type sessionRecord struct {
 	WaitingFor string // reason when Status == "waiting" (a permission/dialog)
 	PID        int
 	ProcStart  uint64 // /proc start time (clock ticks) — a pid-reuse guard
-	Bridge     bool   // bridgeSessionId present → /rc active
+	// BridgeSessionID is Claude's remote-control session id (session_01…), set
+	// while /rc is active; empty otherwise. It forms the resume URL (#253).
+	BridgeSessionID string
+}
+
+// remoteURL builds the /rc resume URL from the bridge session id, or "" when /rc
+// is off. The prefix matches the url field Claude writes verbatim in the
+// transcript's bridge_status lines.
+func (r sessionRecord) remoteURL() string {
+	if r.BridgeSessionID == "" {
+		return ""
+	}
+	return "https://claude.ai/code/" + r.BridgeSessionID
 }
 
 // readRegistry reads Claude Code's session registry and returns the record per
@@ -59,7 +71,7 @@ func readRegistry() map[string]sessionRecord {
 		ps, _ := strconv.ParseUint(raw.ProcStart, 10, 64)
 		m[raw.SessionID] = sessionRecord{
 			SessionID: raw.SessionID, Status: raw.Status, WaitingFor: raw.WaitingFor,
-			PID: raw.PID, ProcStart: ps, Bridge: raw.BridgeSessionID != "",
+			PID: raw.PID, ProcStart: ps, BridgeSessionID: raw.BridgeSessionID,
 		}
 	}
 	return m
@@ -70,7 +82,7 @@ func readRegistry() map[string]sessionRecord {
 func remoteControlled() map[string]bool {
 	m := map[string]bool{}
 	for id, rec := range readRegistry() {
-		m[id] = rec.Bridge
+		m[id] = rec.BridgeSessionID != ""
 	}
 	return m
 }

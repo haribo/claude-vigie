@@ -17,6 +17,7 @@ type Session struct {
 	LastSeenAt    string // RFC3339
 	EndedAt       string // RFC3339, empty while the session is active
 	RemoteControl bool   // operator-toggled remote-control flag
+	RemoteURL     string // /rc resume URL (https://claude.ai/code/session_…) while active
 	ReportedAt    string // RFC3339 server time of the last report (heartbeat)
 	// APIErrorStatus is the HTTP code of a live API error the session hit
 	// (500/529/429…), else 0. Set by the watcher; transient — cleared when the

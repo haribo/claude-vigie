@@ -176,6 +176,8 @@ td.dim { color: var(--muted); } td.faint { color: var(--faint); }
 .field:not(:last-child) { border-bottom: 1px solid var(--surface-2); }
 .field .k { color: var(--muted); font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; }
 .field .v { word-break: break-word; } .field .v.mut { color: var(--muted); } .field .v.wait { color: var(--waiting); font-weight: 600; }
+.field .v a { color: var(--accent); text-decoration: none; word-break: break-all; }
+.field .v a:hover { text-decoration: underline; }
 .tok { display: flex; justify-content: space-between; padding: 7px 0; font-variant-numeric: tabular-nums; }
 .tok:not(:last-child) { border-bottom: 1px solid var(--surface-2); }
 .tok .k { color: var(--muted); text-transform: uppercase; letter-spacing: 0.5px; font-size: 11px; }
