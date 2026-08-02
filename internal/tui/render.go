@@ -21,6 +21,7 @@ var (
 	tabActiveStyle   = lipgloss.NewStyle().Bold(true).Foreground(cAccent)
 	tabRuleStyle     = lipgloss.NewStyle().Foreground(cAccent)
 	groupHeaderStyle = lipgloss.NewStyle().Bold(true).Foreground(cAccent2)
+	unreadDot        = lipgloss.NewStyle().Bold(true).Foreground(cAccent) // new-attention marker (#259)
 	keycapStyle      = lipgloss.NewStyle().Foreground(cText).Background(cSurface)
 )
 
@@ -179,13 +180,13 @@ func sortArrow(reversed bool) string {
 // renderTable renders the sessions, dropping low-priority columns to fit width
 // (width <= 0 means unknown: show everything). The row at index selected is
 // marked with a cursor (selected < 0 for none).
-func renderTable(sessions []api.SessionView, width, selected int, st sortState) string {
+func renderTable(sessions []api.SessionView, width, selected int, st sortState, unread map[string]bool) string {
 	cols := visibleColumns(width)
 	var b strings.Builder
 	b.WriteString(renderHeaderRow(cols, st) + "\n")
 	b.WriteString(rule(width) + "\n")
 	for idx, s := range sessions {
-		b.WriteString(renderRow(cols, s, idx == selected, width) + "\n")
+		b.WriteString(renderRow(cols, s, idx == selected, unread[s.ID], width) + "\n")
 	}
 	return b.String()
 }
@@ -207,7 +208,7 @@ func renderHeaderRow(cols []column, st sortState) string {
 	return "  " + headerStyle.Render(strings.Join(headers, colSep))
 }
 
-func renderRow(cols []column, s api.SessionView, selected bool, termWidth int) string {
+func renderRow(cols []column, s api.SessionView, selected, unread bool, termWidth int) string {
 	// When selected, the background is applied to every segment (each cell and
 	// separator) individually: applying it once over the whole line fails
 	// because the cells' own ANSI reset sequences cut it off.
@@ -230,6 +231,9 @@ func renderRow(cols []column, s api.SessionView, selected bool, termWidth int) s
 				style = style.Background(cSel)
 			}
 		}
+		if unread && c.header == "NAME" { // an unacknowledged attention session (#259)
+			style = style.Bold(true)
+		}
 		cells[i] = style.Render(txt)
 	}
 	sep := colSep
@@ -238,7 +242,11 @@ func renderRow(cols []column, s api.SessionView, selected bool, termWidth int) s
 	}
 	body := strings.Join(cells, sep)
 	if !selected {
-		return "  " + body
+		gutter := "  "
+		if unread { // a blue dot marks the new attention event in the left margin
+			gutter = unreadDot.Render("●") + " "
+		}
+		return gutter + body
 	}
 	line := cursorStyle.Render("▎") + bg.Render(" ") + body
 	if used := rowWidth(cols); termWidth > used {
@@ -249,9 +257,9 @@ func renderRow(cols []column, s api.SessionView, selected bool, termWidth int) s
 
 // renderGroupedTable renders sessions grouped by gb, with a header and token
 // subtotal per group. gb == groupNone falls back to a flat table.
-func renderGroupedTable(sessions []api.SessionView, width, selected int, gb groupBy, st sortState) string {
+func renderGroupedTable(sessions []api.SessionView, width, selected int, gb groupBy, st sortState, unread map[string]bool) string {
 	if gb == groupNone {
-		return renderTable(sessions, width, selected, st)
+		return renderTable(sessions, width, selected, st, unread)
 	}
 
 	subtotal := map[string]int64{}
@@ -273,7 +281,7 @@ func renderGroupedTable(sessions []api.SessionView, width, selected int, gb grou
 			b.WriteString(groupHeaderStyle.Render(fmt.Sprintf("▸ %s  (%d · %s)", orDash(k), count[k], humanizeTokens(subtotal[k]))) + "\n")
 			lastKey, first = k, false
 		}
-		b.WriteString(renderRow(cols, s, idx == selected, width) + "\n")
+		b.WriteString(renderRow(cols, s, idx == selected, unread[s.ID], width) + "\n")
 	}
 	return b.String()
 }
@@ -351,7 +359,7 @@ var (
 // renderSummary renders the fleet summary strip: status counts, total output
 // tokens across the fleet, and an activity sparkline (working sessions over the
 // recent polls held in history).
-func renderSummary(sessions []api.SessionView, history []int) string {
+func renderSummary(sessions []api.SessionView, history []int, unread int) string {
 	counts := map[string]int{}
 	var totalOut int64
 	rcActive := 0
@@ -381,6 +389,9 @@ func renderSummary(sessions []api.SessionView, history []int) string {
 		"    " + labelStyle.Render("rc ") + rcOnStyle.Render(fmt.Sprintf("◉ %d", rcActive))
 	if s := sparkline(history); s != "" {
 		line += "    " + labelStyle.Render("activity ") + s
+	}
+	if unread > 0 { // sessions needing a human that the operator hasn't looked at (#259)
+		line += "    " + unreadDot.Render(fmt.Sprintf("● %d unread", unread))
 	}
 	return line
 }

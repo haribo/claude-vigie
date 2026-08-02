@@ -57,6 +57,50 @@ func (m model) withNotifiedTransitions(next []api.SessionView) model {
 // without spawning notify-send.
 var notifyFn = notifySend
 
+// unread reports whether an attention session has an unacknowledged change: it is
+// in an attention state and its status changed since the operator last opened it.
+// Keyed on StatusChangedAt, not LastSeenAt (which the watcher bumps every tick),
+// so a session re-marks unread only when it transitions again (#259).
+func (m model) unread(s api.SessionView) bool {
+	return isAttention(s.Status) && m.seen[s.ID] < s.StatusChangedAt
+}
+
+// unreadSet is the id→unread map the table renderer consumes.
+func (m model) unreadSet() map[string]bool {
+	u := make(map[string]bool, len(m.sessions))
+	for _, s := range m.sessions {
+		if m.unread(s) {
+			u[s.ID] = true
+		}
+	}
+	return u
+}
+
+// unreadCount is the number of attention sessions not yet acknowledged.
+func (m model) unreadCount() int {
+	n := 0
+	for _, s := range m.sessions {
+		if m.unread(s) {
+			n++
+		}
+	}
+	return n
+}
+
+// ack marks the session read: opening its detail is the acknowledgement. Mutating
+// the shared seen map works through the value receiver (maps are references).
+func (m model) ack(id string) model {
+	if m.seen == nil {
+		m.seen = map[string]string{}
+	}
+	for _, s := range m.sessions {
+		if s.ID == id {
+			m.seen[id] = s.StatusChangedAt
+		}
+	}
+	return m
+}
+
 // notifySend delivers a best-effort desktop notification. It runs only under a
 // graphical session (never SSH/headless), never critical, never with sound, and
 // never blocks — a missing notify-send or display simply does nothing, so the
