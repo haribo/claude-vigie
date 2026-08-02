@@ -109,3 +109,33 @@ func TestHookActivity(t *testing.T) {
 		}
 	}
 }
+
+func TestRunReportsHookContract(t *testing.T) {
+	var got api.ReportRequest
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_ = json.NewDecoder(r.Body).Decode(&got)
+		w.WriteHeader(http.StatusNoContent)
+	}))
+	defer srv.Close()
+
+	// A permission Notification carries its notification_type and the ask as the
+	// activity — the split that lets the server tell waiting from idle.
+	writeConfig(t, srv.URL)
+	payload := `{"session_id":"s1","cwd":"/p","hook_event_name":"Notification","notification_type":"permission_prompt","message":"Allow Bash(git push)?"}`
+	if err := Run("Notification", strings.NewReader(payload)); err != nil {
+		t.Fatalf("Run Notification: %v", err)
+	}
+	if got.Event != "Notification" || got.NotificationType != "permission_prompt" || got.Activity != "Allow Bash(git push)?" {
+		t.Errorf("Notification report = %+v", got)
+	}
+
+	// A PostToolUse turns the tool call into the "doing" activity.
+	got = api.ReportRequest{}
+	post := `{"session_id":"s1","cwd":"/p","hook_event_name":"PostToolUse","tool_name":"Bash","tool_input":{"description":"run the tests"}}`
+	if err := Run("PostToolUse", strings.NewReader(post)); err != nil {
+		t.Fatalf("Run PostToolUse: %v", err)
+	}
+	if got.Event != "PostToolUse" || got.Activity == "" {
+		t.Errorf("PostToolUse report = %+v (want a non-empty activity)", got)
+	}
+}
