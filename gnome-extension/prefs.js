@@ -6,7 +6,7 @@ import Gtk from 'gi://Gtk';
 
 import {ExtensionPreferences} from 'resource:///org/gnome/Shell/Extensions/js/extensions/prefs.js';
 
-export default class ClaudeFleetPreferences extends ExtensionPreferences {
+export default class VigiePreferences extends ExtensionPreferences {
     fillPreferencesWindow(window) {
         const settings = this.getSettings();
 
@@ -41,6 +41,13 @@ export default class ClaudeFleetPreferences extends ExtensionPreferences {
             pollRow.set_value(settings.get_int('poll-interval'));
         });
         group.add(pollRow);
+
+        const notifyRow = new Adw.SwitchRow({
+            title: 'Desktop notifications',
+            subtitle: 'Notify when a session starts waiting for input',
+        });
+        settings.bind('notify', notifyRow, 'active', Gio.SettingsBindFlags.DEFAULT);
+        group.add(notifyRow);
 
         window.add(page);
     }
