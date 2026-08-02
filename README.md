@@ -58,8 +58,8 @@ you install on every machine running Claude Code sessions. See
 [ADR-0003](docs/adr/0003-split-client-and-daemon-binaries.md).
 
 The daemon also serves a **read-only web dashboard** at its root URL — a browser
-mirror of the TUI. Open it, paste the fleet token, and watch the fleet from a
-phone or laptop. No extra process: it is embedded in `vigied`.
+mirror of the TUI. Open it, paste the server token, and watch every machine
+from a phone or laptop. No extra process: it is embedded in `vigied`.
 
 ## Design choices
 
@@ -88,7 +88,7 @@ vigie init --server http://host:8080 --token <token> --machine "$(hostname)"
 # cover already-open sessions too (run this as a service):
 vigie watch
 
-# view the fleet in the terminal:
+# view the board in the terminal:
 vigie tui
 
 # ...or in a browser: open http://host:8080 and paste the token
