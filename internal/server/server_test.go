@@ -294,3 +294,46 @@ func TestReportValidation(t *testing.T) {
 		t.Errorf("bad json = %d, want 400", rec.Code)
 	}
 }
+
+func TestSSEDeltaGating(t *testing.T) {
+	srv := newTestServer(t)
+	ch := srv.hub.subscribe()
+	published := func() bool { // non-blocking: did a report fan out an SSE event?
+		select {
+		case <-ch:
+			return true
+		default:
+			return false
+		}
+	}
+	report := func(status, ts string, out int64) {
+		t.Helper()
+		body, _ := json.Marshal(api.ReportRequest{
+			Event: "watch", SessionID: "s1", Machine: "m", ProjectDir: "/p",
+			Status: status, Usage: &api.Usage{OutputTokens: out}, Timestamp: ts,
+		})
+		if rec := do(t, srv, http.MethodPost, "/api/report", body, true); rec.Code != http.StatusNoContent {
+			t.Fatalf("report = %d", rec.Code)
+		}
+	}
+
+	report("working", "2026-08-02T10:00:00Z", 100)
+	if !published() {
+		t.Fatal("a new session must publish")
+	}
+	// Same visible state, later timestamp (heartbeat only) → no publish.
+	report("working", "2026-08-02T10:00:02Z", 100)
+	if published() {
+		t.Error("an unchanged report must not publish (only the heartbeat moved)")
+	}
+	// Real change (status) → publish.
+	report("waiting", "2026-08-02T10:00:04Z", 100)
+	if !published() {
+		t.Error("a status change must publish")
+	}
+	// Real change (tokens grew) → publish.
+	report("waiting", "2026-08-02T10:00:06Z", 250)
+	if !published() {
+		t.Error("a token change must publish")
+	}
+}
