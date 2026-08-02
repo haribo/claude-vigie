@@ -27,7 +27,7 @@ var (
 // footer renders the keycap-style key hints for the active tab.
 func footer(t tab) string {
 	hints := [][2]string{
-		{"⇥", "switch"}, {"↑↓", "select"}, {"enter", "detail"},
+		{"⇥", "switch"}, {"↑↓", "select"}, {"enter", "detail"}, {"n", "next"},
 		{"/", "filter"}, {"s", "sort"}, {"S", "reverse"}, {"g", "group"}, {"a", "all"},
 		{"r", "refresh"}, {"q", "quit"},
 	}

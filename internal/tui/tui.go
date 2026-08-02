@@ -34,7 +34,11 @@ func Run(cfg *config.Config) error {
 		events:        events,
 		conn:          conn,
 		clock:         clock.Now,
+		prevStatus:    map[string]string{},
+		focused:       true, // assume focused at start; blur/focus events correct it
 	}
-	_, err := tea.NewProgram(m, tea.WithAltScreen()).Run()
+	// WithReportFocus lets the terminal tell us focus/blur, so desktop
+	// notifications stay silent while the operator is watching the TUI (#260).
+	_, err := tea.NewProgram(m, tea.WithAltScreen(), tea.WithReportFocus()).Run()
 	return err
 }
