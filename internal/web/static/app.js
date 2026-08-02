@@ -7,8 +7,8 @@
 // via CSSOM (element.style), never inline attributes, to keep the strict CSP.
 
 const TOKEN_KEY = "cf_token";
-const STATUSES = ["working", "thinking", "waiting", "idle", "error", "ended"];
-const RANK = { working: 0, thinking: 1, waiting: 2, idle: 3, error: 4, ended: 5 };
+const STATUSES = ["working", "thinking", "waiting", "idle", "stalled", "error", "ended"];
+const RANK = { stalled: 0, working: 1, thinking: 2, waiting: 3, idle: 4, error: 5, ended: 6 };
 
 let token = localStorage.getItem(TOKEN_KEY) || "";
 let sessions = [], byId = new Map();
@@ -134,7 +134,7 @@ function renderSessions() {
   }).join("");
   const rows = visibleSessions().map((s) => {
     const st = STATUSES.includes(s.status) ? s.status : "idle";
-    const attn = s.status === "waiting" ? " attn" : "";
+    const attn = (s.status === "waiting" || s.status === "stalled") ? " attn" : "";
     const rc = s.remote_control ? '<span class="rc-on" title="Remote control on">◉</span>' : '<span class="rc-off" title="Remote control off">○</span>';
     const code = (s.status === "error" && s.api_error_status) ? ` <span class="code">${s.api_error_status}</span>` : "";
     const name = esc(s.title || s.id), proj = esc(projectName(s.project_dir)), branch = esc(dash(s.git_branch));

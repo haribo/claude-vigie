@@ -218,17 +218,46 @@ func (s *scanner) scan(root, machine string, maxAge time.Duration, now time.Time
 func resolveStatus(reg map[string]sessionRecord, id string, info *transcript.Info, activityAge time.Duration, lastActivity time.Time) (status, activity string, reportAt time.Time) {
 	activity, reportAt = info.Activity, lastActivity
 	rec, known := reg[id]
+	var base string
 	switch {
-	case !known:
-		return withThinking(sessionStatus(id, info.LastStopReason, info.LastAPIError, activityAge), info.Thinking), activity, reportAt
-	case registryDead(rec):
+	case known && registryDead(rec):
 		return "ended", activity, reportAt // the backing process is gone
+	case known:
+		base = withError(mapRegistryStatus(rec.Status), info.LastAPIError)
+		if base == "waiting" && activity == "" && rec.WaitingFor != "" {
+			activity = capText(rec.WaitingFor, 80) // surface the ask in DOING
+		}
+	default:
+		base = sessionStatus(id, info.LastStopReason, info.LastAPIError, activityAge)
 	}
-	base := withError(mapRegistryStatus(rec.Status), info.LastAPIError)
-	if base == "waiting" && activity == "" && rec.WaitingFor != "" {
-		activity = capText(rec.WaitingFor, 80) // surface the ask in DOING
+	base = withThinking(base, info.Thinking)
+	base = refineWithTools(base, info, activityAge) // background keeps working; a hung tool stalls (#256)
+	if base == "stalled" && activity == "" {
+		activity = "stopped at " + info.PendingTool
 	}
-	return withThinking(base, info.Thinking), activity, reportAt
+	return base, activity, reportAt
+}
+
+// stalledAfter is how long a quiet session with an unanswered foreground tool
+// call must sit before it reads as stalled rather than idle.
+const stalledAfter = 45 * time.Second
+
+// refineWithTools reclassifies a quiet/idle session using the transcript's
+// unresolved tool calls (#256): a still-running background task keeps it working,
+// and a foreground tool that never got a result — with the session quiet — is a
+// stalled turn, not a silent idle. Only an idle base is touched, so
+// working/waiting/error/ended are never overridden.
+func refineWithTools(base string, info *transcript.Info, activityAge time.Duration) string {
+	if base != "idle" {
+		return base
+	}
+	if info.BackgroundActive {
+		return "working" // a backgrounded tool is still running
+	}
+	if info.PendingTool != "" && activityAge >= stalledAfter {
+		return "stalled" // a foreground tool hung; the turn is parked
+	}
+	return base
 }
 
 // parse returns the transcript Info for p, reusing the cached parse when the

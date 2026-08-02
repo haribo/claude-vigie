@@ -9,8 +9,9 @@ import (
 )
 
 // attentionStatuses are the states that call for the operator — the session is
-// blocked and needs a human. (`stalled` will join once #256 lands.)
-var attentionStatuses = map[string]bool{"waiting": true, "error": true}
+// blocked and needs a human: it is waiting on input, it errored, or a tool hung
+// (stalled, #256).
+var attentionStatuses = map[string]bool{"waiting": true, "error": true, "stalled": true}
 
 func isAttention(status string) bool { return attentionStatuses[status] }
 

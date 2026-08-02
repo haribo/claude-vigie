@@ -381,6 +381,9 @@ func renderSummary(sessions []api.SessionView, history []int, unread int) string
 		statusStyle("waiting").Render(fmt.Sprintf("● waiting %d", counts["waiting"])),
 		statusStyle("idle").Render(fmt.Sprintf("● idle %d", counts["idle"])),
 	)
+	if n := counts["stalled"]; n > 0 { // a hung tool: shown only when present
+		parts = append(parts, statusStyle("stalled").Render(fmt.Sprintf("● stalled %d", n)))
+	}
 	if n := counts["error"]; n > 0 { // an alert: shown only when present
 		parts = append(parts, statusStyle("error").Render(fmt.Sprintf("● error %d", n)))
 	}
@@ -526,6 +529,8 @@ func statusStyle(status string) lipgloss.Style {
 		return lipgloss.NewStyle().Foreground(cAccent2) // violet — reasoning inside a turn
 	case "error":
 		return lipgloss.NewStyle().Foreground(cRed)
+	case "stalled":
+		return lipgloss.NewStyle().Foreground(cOrange) // a foreground tool hung
 	default:
 		return dimStyle // ended / unknown
 	}

@@ -189,7 +189,7 @@ var (
 
 // statusOrder is every status the gauge reports, so each series exists (=0) even
 // when no session currently holds it.
-var statusOrder = []string{"working", "thinking", "waiting", "idle", "error", "ended"}
+var statusOrder = []string{"working", "thinking", "waiting", "idle", "stalled", "error", "ended"}
 
 func (c *stateCollector) Describe(ch chan<- *prometheus.Desc) {
 	ch <- descSessions
