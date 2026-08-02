@@ -139,6 +139,7 @@ type model struct {
 	clock           func() time.Time  // injected wall clock; defaults to clock.Now
 	prevStatus      map[string]string // last status per session, for notify transitions (#260)
 	focused         bool              // terminal has focus → suppress desktop notifications
+	seen            map[string]string // per-session acked StatusChangedAt, for unread (#259)
 }
 
 // now reads the injected clock, falling back to the system clock so a model
@@ -452,6 +453,7 @@ func (m model) handleSessionsKey(msg tea.KeyMsg) model {
 			m.selectedID = id
 			m.cursor = m.cursorForSelection()
 			m.detail = true
+			m = m.ack(id) // jumping to it counts as viewing it (#259)
 		}
 	default:
 		return m.handleNavKey(msg)
@@ -521,6 +523,7 @@ func (m model) handleNavKey(msg tea.KeyMsg) model {
 	case "enter":
 		if len(vis) > 0 {
 			m.detail = true
+			m = m.ack(idAt(vis, m.cursor)) // opening the detail marks it read (#259)
 		}
 	case "esc":
 		if m.detail {
@@ -693,7 +696,7 @@ func (m model) viewSessions() string {
 	var b strings.Builder
 	// The tab-bar separator frames the summary strip above; a rule below
 	// separates it from the table.
-	b.WriteString(joinLR(renderSummary(m.sessions, m.history), m.summaryRight(), m.width) + "\n")
+	b.WriteString(joinLR(renderSummary(m.sessions, m.history, m.unreadCount()), m.summaryRight(), m.width) + "\n")
 	b.WriteString(rule(m.width) + "\n")
 	if m.filtering || m.filter != "" {
 		b.WriteString(m.filterLine() + "\n")
@@ -701,7 +704,7 @@ func (m model) viewSessions() string {
 	if len(vis) == 0 {
 		b.WriteString(dimStyle.Render("no sessions match the filter"))
 	} else {
-		b.WriteString(renderGroupedTable(vis, m.width, cursor, m.groupBy, sortState{m.sortKey, m.sortReversed}))
+		b.WriteString(renderGroupedTable(vis, m.width, cursor, m.groupBy, sortState{m.sortKey, m.sortReversed}, m.unreadSet()))
 	}
 	b.WriteString(rule(m.width) + "\n" + renderUsageStrip(m.usage) + platformStrip(m.platform))
 	return b.String()

@@ -113,7 +113,7 @@ func TestRenderSummary(t *testing.T) {
 		{Status: "working", Usage: api.Usage{OutputTokens: 500}},
 		{Status: "idle", Usage: api.Usage{OutputTokens: 200}},
 	}
-	out := renderSummary(sessions, []int{1, 2, 2})
+	out := renderSummary(sessions, []int{1, 2, 2}, 0)
 	for _, want := range []string{"working 2", "idle 1", "waiting 0", "out ", "activity "} {
 		if !strings.Contains(out, want) {
 			t.Errorf("summary missing %q:\n%s", want, out)
@@ -216,7 +216,7 @@ func TestRenderGroupedTableHasHeaders(t *testing.T) {
 		{Title: "b", Machine: "m1", Usage: api.Usage{OutputTokens: 200}},
 		{Title: "c", Machine: "m2", Usage: api.Usage{OutputTokens: 50}},
 	}
-	out := renderGroupedTable(sessions, 200, -1, groupMachine, sortState{})
+	out := renderGroupedTable(sessions, 200, -1, groupMachine, sortState{}, nil)
 	for _, want := range []string{"▸ m1", "▸ m2", "(2 ·"} {
 		if !strings.Contains(out, want) {
 			t.Errorf("grouped table missing %q:\n%s", want, out)
