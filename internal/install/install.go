@@ -2,10 +2,10 @@
 // Code settings (~/.claude/settings.json), idempotently, preserving any
 // existing hooks and settings. Client side; imports nothing heavy.
 //
-// A hook "leg" is identified by its FLEET_CONFIG value: the production leg has
-// none, a dev leg carries FLEET_CONFIG=<path>. Legs are independent, so a
-// session can report to several servers at once and each leg is installed or
-// removed without touching the others.
+// A hook "leg" is identified by its config-path override: the production leg has
+// none, a dev leg carries VIGIE_CONFIG=<path> (or the deprecated FLEET_CONFIG=<path>,
+// still recognized). Legs are independent, so a session can report to several
+// servers at once and each leg is installed or removed without touching the others.
 package install
 
 import (
@@ -42,24 +42,41 @@ func SettingsPath() (string, error) {
 }
 
 // command builds the report hook command for one event and leg. configPath is
-// the FLEET_CONFIG for the leg ("" for the production leg).
+// the config-path override for the leg ("" for the production leg); a dev leg
+// carries it as VIGIE_CONFIG.
 func command(binPath, configPath, event string) string {
 	if configPath == "" {
 		return fmt.Sprintf("%s report --event=%s", binPath, event)
 	}
-	return fmt.Sprintf("FLEET_CONFIG=%s %s report --event=%s", configPath, binPath, event)
+	return fmt.Sprintf("VIGIE_CONFIG=%s %s report --event=%s", configPath, binPath, event)
 }
 
-// owns reports whether a hook command belongs to the leg identified by
-// configPath (production when empty).
+// legMarkers are the env-var prefixes that tag a dev leg: the current VIGIE_CONFIG
+// and the deprecated FLEET_CONFIG, still recognized so legs installed before the
+// rename keep matching (#289).
+var legMarkers = []string{"VIGIE_CONFIG=", "FLEET_CONFIG="}
+
+// owns reports whether a hook command belongs to the leg identified by configPath
+// (production when empty). A dev leg is recognized under either env-var name, so
+// a leg installed before the rename is still uninstalled or replaced correctly.
 func owns(cmd, configPath string) bool {
 	if !strings.Contains(cmd, reportMarker) {
 		return false
 	}
 	if configPath == "" {
-		return !strings.Contains(cmd, "FLEET_CONFIG=")
+		for _, m := range legMarkers {
+			if strings.Contains(cmd, m) {
+				return false
+			}
+		}
+		return true
 	}
-	return strings.Contains(cmd, "FLEET_CONFIG="+configPath)
+	for _, m := range legMarkers {
+		if strings.Contains(cmd, m+configPath) {
+			return true
+		}
+	}
+	return false
 }
 
 // Install merges the reporting hooks for one leg (binPath, configPath) into the

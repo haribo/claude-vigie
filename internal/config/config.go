@@ -4,8 +4,9 @@
 // (config.toml), is written by `claude-fleet init`, and is never committed (it
 // holds a secret token). A pre-TOML config.json is migrated on first load.
 //
-// FLEET_CONFIG overrides the path with an explicit file, so a dev run can point
-// at a local server without touching the installed production config.
+// VIGIE_CONFIG (or the deprecated FLEET_CONFIG) overrides the path with an
+// explicit file, so a dev run can point at a local server without touching the
+// installed production config.
 package config
 
 import (
@@ -48,11 +49,21 @@ func legacyDirPath(name string) (string, error) {
 	return filepath.Join(d, "claude-fleet", name), nil
 }
 
-// Path returns the config file path. FLEET_CONFIG, when set, overrides it with
-// an explicit file (used by dev runs to target a local server without touching
-// the installed production config).
+// envConfigPath returns the config-path override from the environment: VIGIE_CONFIG
+// when set, else the deprecated FLEET_CONFIG (still honored for hooks installed
+// before the rename). Empty when neither is set — the production leg (#289).
+func envConfigPath() string {
+	if p := os.Getenv("VIGIE_CONFIG"); p != "" {
+		return p
+	}
+	return os.Getenv("FLEET_CONFIG")
+}
+
+// Path returns the config file path. VIGIE_CONFIG (or the deprecated
+// FLEET_CONFIG), when set, overrides it with an explicit file (used by dev runs
+// to target a local server without touching the installed production config).
 func Path() (string, error) {
-	if p := os.Getenv("FLEET_CONFIG"); p != "" {
+	if p := envConfigPath(); p != "" {
 		return p, nil
 	}
 	d, err := dir()
@@ -79,7 +90,7 @@ func Load() (*Config, error) {
 		return nil, err
 	}
 	data, err := os.ReadFile(path)
-	if errors.Is(err, os.ErrNotExist) && os.Getenv("FLEET_CONFIG") == "" {
+	if errors.Is(err, os.ErrNotExist) && envConfigPath() == "" {
 		// Read-fallback: a config.toml written under the pre-rename
 		// ~/.config/claude-fleet directory is still honored (soft migration).
 		if old, oErr := legacyDirPath("config.toml"); oErr == nil {
@@ -90,8 +101,8 @@ func Load() (*Config, error) {
 	}
 	if errors.Is(err, os.ErrNotExist) {
 		// Legacy config.json migration applies only to the default path, not to
-		// an explicit FLEET_CONFIG override.
-		if os.Getenv("FLEET_CONFIG") == "" {
+		// an explicit VIGIE_CONFIG / FLEET_CONFIG override.
+		if envConfigPath() == "" {
 			if cfg, ok, mErr := migrateLegacy(); mErr != nil {
 				return nil, mErr
 			} else if ok {
@@ -161,6 +172,6 @@ func migrateLegacy() (*Config, bool, error) {
 // OSUser returns the $USER environment value (the OS account name), or "".
 func OSUser() string { return os.Getenv("USER") }
 
-// EnvConfigPath returns the FLEET_CONFIG override ("" when unset), which selects
-// the dev vs production config leg.
-func EnvConfigPath() string { return os.Getenv("FLEET_CONFIG") }
+// EnvConfigPath returns the config-path override ("" when unset), which selects
+// the dev vs production config leg: VIGIE_CONFIG, or the deprecated FLEET_CONFIG.
+func EnvConfigPath() string { return envConfigPath() }

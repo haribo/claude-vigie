@@ -10,8 +10,9 @@ import (
 )
 
 // runHooks installs or removes one reporting leg. The leg is selected by
-// FLEET_CONFIG: unset is the production leg; a path is a dev leg that reports to
-// that config's server alongside production. Legs are independent.
+// VIGIE_CONFIG (or the deprecated FLEET_CONFIG): unset is the production leg; a
+// path is a dev leg that reports to that config's server alongside production.
+// Legs are independent.
 func runHooks(args []string) int {
 	if len(args) == 0 {
 		hooksUsage()
@@ -58,7 +59,7 @@ func legName(configPath string) string {
 	if configPath == "" {
 		return "production"
 	}
-	return "dev (FLEET_CONFIG=" + configPath + ")"
+	return "dev (VIGIE_CONFIG=" + configPath + ")"
 }
 
 func hooksUsage() {
@@ -68,8 +69,8 @@ Usage:
   vigie hooks install [--detailed]   install the reporting hooks for this leg
   vigie hooks uninstall              remove the reporting hooks for this leg
 
-The leg is selected by FLEET_CONFIG: unset installs the production leg; set to a
-config file installs a dev leg that reports to that server too. Legs are
-independent — installing or removing one never touches the others.
+The leg is selected by VIGIE_CONFIG (or the deprecated FLEET_CONFIG): unset installs
+the production leg; set to a config file installs a dev leg that reports to that
+server too. Legs are independent — installing or removing one never touches the others.
 `)
 }
