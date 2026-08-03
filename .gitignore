@@ -6,8 +6,10 @@
 /.dev/
 *.out
 *.html
-# ...but the web dashboard's embedded shell is source, not a generated artifact.
+# ...but the web dashboard's embedded shell and the landing page are source, not
+# generated artifacts.
 !internal/web/static/*.html
+!site/*.html
 coverage.*
 
 # Local dev database
