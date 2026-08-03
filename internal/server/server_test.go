@@ -285,6 +285,39 @@ func TestRemoteURLSurfacedAndCleared(t *testing.T) {
 	}
 }
 
+func TestWatcherStatusPerMachine(t *testing.T) {
+	srv := newTestServer(t)
+
+	// alpha reports through the watcher; beta has a session but reports on hooks alone.
+	watch, _ := json.Marshal(api.ReportRequest{
+		Event: "watch", SessionID: "a1", Machine: "alpha", ProjectDir: "/p",
+	})
+	if rec := do(t, srv, http.MethodPost, "/api/report", watch, true); rec.Code != http.StatusNoContent {
+		t.Fatalf("alpha watch report = %d", rec.Code)
+	}
+	hook, _ := json.Marshal(api.ReportRequest{
+		Event: "UserPromptSubmit", SessionID: "b1", Machine: "beta", ProjectDir: "/p",
+	})
+	if rec := do(t, srv, http.MethodPost, "/api/report", hook, true); rec.Code != http.StatusNoContent {
+		t.Fatalf("beta hook report = %d", rec.Code)
+	}
+
+	rec := do(t, srv, http.MethodGet, "/api/watcher", nil, true)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("watcher = %d, want 200", rec.Code)
+	}
+	var ws api.WatcherStatus
+	if err := json.Unmarshal(rec.Body.Bytes(), &ws); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if ws.Machines["alpha"] == "" {
+		t.Errorf("alpha should carry a watcher heartbeat, got %+v", ws.Machines)
+	}
+	if v, ok := ws.Machines["beta"]; !ok || v != "" {
+		t.Errorf("beta should be present with an empty heartbeat, got %q (ok=%v)", v, ok)
+	}
+}
+
 func TestReportValidation(t *testing.T) {
 	srv := newTestServer(t)
 	if rec := do(t, srv, http.MethodPost, "/api/report", []byte(`{"event":"Stop"}`), true); rec.Code != http.StatusBadRequest {

@@ -92,7 +92,11 @@ type UsageReport struct {
 // WatcherStatus reports when the server last received a watch report, so the
 // client can warn that statuses may be stale. LastSeen is empty if never.
 type WatcherStatus struct {
-	LastSeen string `json:"last_seen,omitempty"` // RFC3339
+	LastSeen string `json:"last_seen,omitempty"` // RFC3339 — most recent watch report, any machine
+	// Machines maps each machine that currently has sessions to the RFC3339 time
+	// of its last watch report, or "" when no watcher ever reported for it. Lets
+	// the client flag machines running on hooks alone (#284).
+	Machines map[string]string `json:"machines,omitempty"`
 }
 
 // PlatformStatus is the Claude platform health the server polls from

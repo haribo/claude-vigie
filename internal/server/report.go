@@ -54,8 +54,16 @@ func (s *Server) handleReport(w http.ResponseWriter, r *http.Request) {
 	// The watcher polls frequently; keep its scans out of the event log, but
 	// record a heartbeat so clients can detect an absent watcher.
 	if req.Event == "watch" {
-		if err := s.store.SetMeta(ctx, watchSeenKey, s.now().UTC().Format(time.RFC3339)); err != nil {
+		now := s.now().UTC().Format(time.RFC3339)
+		if err := s.store.SetMeta(ctx, watchSeenKey, now); err != nil {
 			s.log.Error("recording watch heartbeat", "error", err)
+		}
+		// Per-machine heartbeat too, so the client can tell which machines run a
+		// watcher and which report on hooks alone (#284).
+		if req.Machine != "" {
+			if err := s.store.SetMeta(ctx, machineWatchKey(req.Machine), now); err != nil {
+				s.log.Error("recording per-machine watch heartbeat", "error", err, "machine", req.Machine)
+			}
 		}
 	} else {
 		// A hook event closes the previous status interval; roll up its

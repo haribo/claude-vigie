@@ -115,6 +115,7 @@ type model struct {
 	usage           api.UsageReport
 	platform        api.PlatformStatus
 	watcherSeen     string
+	watcherMachines map[string]string // per-machine last watch report, RFC3339 (#284)
 	gotWatcher      bool
 	err             error
 	width           int
@@ -191,8 +192,9 @@ type eventMsg struct{}
 type connMsg struct{ live bool }
 
 type watcherMsg struct {
-	seen string
-	err  error
+	seen     string
+	machines map[string]string
+	err      error
 }
 
 type settingsMsg struct {
@@ -281,7 +283,7 @@ func (m model) watcherCmd() tea.Cmd {
 	}
 	return func() tea.Msg {
 		s, err := m.fetchWatcher()
-		return watcherMsg{seen: s.LastSeen, err: err}
+		return watcherMsg{seen: s.LastSeen, machines: s.Machines, err: err}
 	}
 }
 
@@ -374,6 +376,7 @@ func (m model) applyDataMsg(msg tea.Msg) model {
 	case watcherMsg:
 		if msg.err == nil {
 			m.watcherSeen = msg.seen
+			m.watcherMachines = msg.machines
 			m.gotWatcher = true
 		}
 	case statsMsg:
@@ -611,7 +614,7 @@ func (m model) View() string {
 	case tabStats:
 		b.WriteString(m.renderStats())
 	case tabMachines:
-		b.WriteString(renderMachines(m.sessions, m.width))
+		b.WriteString(renderMachines(m.sessions, m.watcherMachines, m.width))
 	case tabSettings:
 		b.WriteString(m.renderSettings())
 	}
