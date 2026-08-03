@@ -1,0 +1,679 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>vigie — the lookout for your Claude Code sessions</title>
+  <meta name="description" content="vigie is an observe-only monitor for Claude Code sessions across every machine — who's working, who's waiting on you, who stalled. Self-hosted, two static binaries, MIT.">
+  <meta name="theme-color" content="#100d08">
+  <link rel="icon" type="image/svg+xml" href="assets/favicon.svg">
+  <meta property="og:type" content="website">
+  <meta property="og:title" content="vigie — the lookout for your Claude Code sessions">
+  <meta property="og:description" content="An observe-only monitor for Claude Code sessions across every machine. Self-hosted.">
+  <meta property="og:image" content="assets/hero.svg">
+  <style>
+  :root {
+    --font-mono: ui-monospace, "SF Mono", "SFMono-Regular", "Cascadia Code", "JetBrains Mono", Menlo, Consolas, monospace;
+    --font-sans: system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+
+    /* warm, amber-biased neutrals */
+    --ground: #100d08;
+    --panel: #17130c;
+    --panel-2: #1f1a11;
+    --line: #322817;
+    --ink: #f0e9d8;
+    --muted: #a49877;
+    --faint: #6f6650;
+
+    /* brand accent — the logo terracotta (#D9663F) */
+    --amber: #d9663f;
+    --amber-deep: #b8502e;
+    --amber-pale: #f0a883;
+
+    /* semantic status hues — the product's own key, separate from the accent */
+    --s-working: #d9663f;
+    --s-thinking: #c084fc;
+    --s-waiting: #fbbf24;
+    --s-stalled: #fb7185;
+    --s-idle: #64748b;
+    --s-error: #ef4444;
+    --s-ended: #545056;
+
+    --scope-glow: rgba(217,102,63,0.5);
+    --shadow: 0 1px 0 rgba(255,255,255,0.03), 0 18px 40px -24px rgba(0,0,0,0.8);
+    --radius: 14px;
+    --maxw: 1120px;
+  }
+  @media (prefers-color-scheme: light) {
+    :root {
+      --ground: #f4eee1; --panel: #fbf7ee; --panel-2: #f3ecdc; --line: #e2d6bd;
+      --ink: #221c12; --muted: #6b5f47; --faint: #9a8c6e;
+      --amber: #c2410c; --amber-deep: #9a3412; --amber-pale: #b8502e;
+      --scope-glow: rgba(194,65,12,0.4);
+      --shadow: 0 1px 0 rgba(255,255,255,0.6), 0 18px 40px -26px rgba(120,80,20,0.35);
+    }
+  }
+  :root[data-theme="dark"] {
+    --ground: #100d08; --panel: #17130c; --panel-2: #1f1a11; --line: #322817;
+    --ink: #f0e9d8; --muted: #a49877; --faint: #6f6650;
+    --amber: #d9663f; --amber-deep: #b8502e; --amber-pale: #f0a883;
+    --scope-glow: rgba(217,102,63,0.5);
+    --shadow: 0 1px 0 rgba(255,255,255,0.03), 0 18px 40px -24px rgba(0,0,0,0.8);
+  }
+  :root[data-theme="light"] {
+    --ground: #f4eee1; --panel: #fbf7ee; --panel-2: #f3ecdc; --line: #e2d6bd;
+    --ink: #221c12; --muted: #6b5f47; --faint: #9a8c6e;
+    --amber: #c2410c; --amber-deep: #9a3412; --amber-pale: #b8502e;
+    --scope-glow: rgba(194,65,12,0.4);
+    --shadow: 0 1px 0 rgba(255,255,255,0.6), 0 18px 40px -26px rgba(120,80,20,0.35);
+  }
+
+  * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  body {
+    margin: 0; background: var(--ground); color: var(--ink);
+    font-family: var(--font-sans);
+    -webkit-font-smoothing: antialiased; text-rendering: optimizeLegibility;
+    line-height: 1.6;
+  }
+  .wrap { width: 100%; max-width: var(--maxw); margin: 0 auto; padding: 0 24px; }
+  a { color: inherit; }
+  h1, h2, h3 { text-wrap: balance; line-height: 1.05; margin: 0; }
+  .mono { font-family: var(--font-mono); }
+  .mark { display: block; color: var(--ink); }
+  .mark .ring { stroke: currentColor; opacity: 0.32; }
+  .eyebrow {
+    font-family: var(--font-mono); font-size: 0.75rem; letter-spacing: 0.18em;
+    text-transform: uppercase; color: var(--amber); margin: 0 0 18px;
+    display: flex; align-items: center; gap: 10px;
+  }
+  .eyebrow::before { content: ""; width: 26px; height: 1px; background: var(--amber); opacity: 0.6; }
+
+  /* nav */
+  nav {
+    position: sticky; top: 0; z-index: 50; backdrop-filter: blur(10px);
+    background: color-mix(in srgb, var(--ground) 82%, transparent);
+    border-bottom: 1px solid var(--line);
+  }
+  .nav-in { display: flex; align-items: center; justify-content: space-between; height: 60px; }
+  .brand { display: flex; align-items: center; gap: 11px; font-family: var(--font-mono); font-weight: 600; letter-spacing: 0.02em; }
+  .brand b { font-weight: 700; }
+  .brand .tld { color: var(--faint); font-weight: 400; }
+  .nav-links { display: flex; align-items: center; gap: 26px; }
+  .nav-links a { text-decoration: none; font-size: 0.9rem; color: var(--muted); transition: color .15s; }
+  .nav-links a:hover { color: var(--ink); }
+  .nav-cta {
+    font-family: var(--font-mono); font-size: 0.82rem; padding: 7px 14px;
+    border: 1px solid var(--line); border-radius: 8px; color: var(--ink) !important; background: var(--panel-2);
+  }
+  .nav-cta:hover { border-color: var(--amber); }
+  .toggle {
+    display: inline-grid; place-items: center; width: 34px; height: 34px;
+    border: 1px solid var(--line); border-radius: 8px; background: var(--panel-2);
+    color: var(--muted); cursor: pointer; font-size: 1rem;
+  }
+  .toggle:hover { color: var(--ink); border-color: var(--amber); }
+  :focus-visible { outline: 2px solid var(--amber); outline-offset: 2px; border-radius: 4px; }
+  @media (max-width: 720px) { .nav-links .hide-sm { display: none; } }
+
+  /* hero */
+  .hero { padding: 74px 0 40px; }
+  .hero-grid { display: grid; grid-template-columns: 1.05fr 0.95fr; gap: 54px; align-items: center; }
+  .hero h1 { font-size: clamp(2.6rem, 5.6vw, 4.15rem); font-weight: 800; letter-spacing: -0.02em; }
+  .hero h1 .glow { color: var(--amber); }
+  .lede { font-size: clamp(1.05rem, 1.6vw, 1.22rem); color: var(--muted); margin: 22px 0 30px; max-width: 34ch; }
+  .cta-row { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; }
+  .btn {
+    font-family: var(--font-mono); font-size: 0.92rem; text-decoration: none;
+    padding: 12px 20px; border-radius: 10px; display: inline-flex; align-items: center; gap: 9px;
+    transition: transform .12s, box-shadow .2s, background .2s, border-color .2s;
+  }
+  .btn-primary { background: var(--amber); color: #fff; font-weight: 600; box-shadow: 0 10px 30px -12px var(--scope-glow); }
+  .btn-primary:hover { transform: translateY(-1px); background: var(--amber-deep); }
+  .btn-ghost { background: transparent; color: var(--ink); border: 1px solid var(--line); }
+  .btn-ghost:hover { border-color: var(--amber); }
+  .hero-meta { margin-top: 26px; display: flex; gap: 20px; flex-wrap: wrap; font-family: var(--font-mono); font-size: 0.78rem; color: var(--faint); }
+  .hero-meta span { display: flex; align-items: center; gap: 7px; }
+  .hero-meta i { width: 5px; height: 5px; border-radius: 50%; background: var(--amber); display: inline-block; }
+
+  /* radar scope (always a dark instrument screen) */
+  .scope-frame {
+    background: radial-gradient(120% 120% at 50% 0%, #1c1305 0%, #0a0803 62%);
+    border: 1px solid #3a2c14; border-radius: 18px; padding: 18px;
+    box-shadow: var(--shadow), inset 0 0 60px rgba(0,0,0,0.6); position: relative;
+  }
+  .scope-frame::after {
+    content: "SECTOR 04 · ON WATCH"; position: absolute; top: 14px; right: 20px;
+    font-family: var(--font-mono); font-size: 0.62rem; letter-spacing: 0.16em; color: #8a6238;
+  }
+  canvas#radar { width: 100%; height: auto; display: block; border-radius: 10px; }
+  .scope-cap { display: flex; justify-content: space-between; margin-top: 12px; font-family: var(--font-mono); font-size: 0.66rem; color: #8a6238; letter-spacing: 0.1em; }
+
+  /* section frame */
+  section.block { padding: 58px 0; border-top: 1px solid var(--line); }
+  .sec-head { max-width: 60ch; margin-bottom: 34px; }
+  .sec-head h2 { font-size: clamp(1.5rem, 2.6vw, 1.95rem); font-weight: 800; letter-spacing: -0.015em; text-wrap: pretty; }
+  .sec-head p { color: var(--muted); margin: 12px 0 0; }
+
+  /* how it works: the flow */
+  .flow { display: grid; grid-template-columns: 1fr auto 1fr auto 1fr; align-items: stretch; }
+  .flow-step { background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); padding: 24px 22px; display: flex; flex-direction: column; gap: 11px; position: relative; }
+  .flow-ico { width: 42px; height: 42px; border: 1px solid var(--line); border-radius: 11px; display: grid; place-items: center; color: var(--amber); background: var(--panel-2); }
+  .flow-ix { position: absolute; top: 20px; right: 20px; font-family: var(--font-mono); font-size: 0.72rem; color: var(--faint); letter-spacing: 0.14em; }
+  .flow-step h3 { font-family: var(--font-mono); font-size: 1rem; font-weight: 700; letter-spacing: -0.01em; margin-top: 2px; }
+  .flow-step p { color: var(--muted); font-size: 0.9rem; margin: 0; flex: 1; }
+  .flow-cmd { font-family: var(--font-mono); font-size: 0.72rem; color: var(--amber); background: color-mix(in srgb, var(--amber) 10%, transparent); border: 1px solid color-mix(in srgb, var(--amber) 26%, transparent); border-radius: 7px; padding: 5px 9px; align-self: flex-start; }
+  .flow-link { position: relative; width: 56px; display: grid; place-items: center; }
+  .flow-link .track { width: 100%; height: 2px; background: linear-gradient(90deg, var(--line), color-mix(in srgb, var(--amber) 45%, var(--line))); position: relative; }
+  .flow-link .track::after { content: ""; position: absolute; right: -1px; top: 50%; transform: translateY(-50%); border-left: 6px solid color-mix(in srgb, var(--amber) 55%, var(--line)); border-top: 4px solid transparent; border-bottom: 4px solid transparent; }
+  .flow-link .blip { position: absolute; top: 50%; left: 0; width: 6px; height: 6px; border-radius: 50%; background: var(--amber); box-shadow: 0 0 9px var(--amber); transform: translateY(-50%); animation: travel 2.6s linear infinite; }
+  .flow-link.delay .blip { animation-delay: 1.3s; }
+  @keyframes travel { 0% { left: -3px; opacity: 0; } 12% { opacity: 1; } 82% { opacity: 1; } 100% { left: calc(100% - 3px); opacity: 0; } }
+  @media (max-width: 860px) { .flow { grid-template-columns: 1fr; gap: 14px; } .flow-link { display: none; } }
+
+  /* TUI window */
+  .term { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; overflow: hidden; box-shadow: var(--shadow); }
+  .term-bar { display: flex; align-items: center; gap: 8px; padding: 11px 15px; border-bottom: 1px solid var(--line); background: var(--panel-2); }
+  .term-bar .dot { width: 11px; height: 11px; border-radius: 50%; background: var(--line); }
+  .term-bar .ttl { margin-left: 10px; font-family: var(--font-mono); font-size: 0.76rem; color: var(--faint); }
+  .term-scroll { overflow-x: auto; }
+  table.sessions { width: 100%; border-collapse: collapse; font-family: var(--font-mono); font-size: 0.82rem; min-width: 640px; }
+  table.sessions th { text-align: left; font-weight: 500; color: var(--faint); font-size: 0.68rem; letter-spacing: 0.12em; text-transform: uppercase; padding: 12px 16px; border-bottom: 1px solid var(--line); }
+  table.sessions td { padding: 11px 16px; border-bottom: 1px solid color-mix(in srgb, var(--line) 55%, transparent); white-space: nowrap; }
+  table.sessions tr:last-child td { border-bottom: 0; }
+  table.sessions .doing { color: var(--muted); }
+  table.sessions .seen { color: var(--faint); font-variant-numeric: tabular-nums; }
+  tr.attn { background: color-mix(in srgb, var(--s-waiting) 9%, transparent); }
+  .pill { display: inline-flex; align-items: center; gap: 7px; padding: 3px 9px 3px 8px; border-radius: 999px; font-size: 0.72rem; font-weight: 600; }
+  .pill i { width: 7px; height: 7px; border-radius: 50%; }
+  .pill.working { color: var(--s-working); background: color-mix(in srgb, var(--s-working) 14%, transparent); } .pill.working i { background: var(--s-working); }
+  .pill.thinking { color: var(--s-thinking); background: color-mix(in srgb, var(--s-thinking) 14%, transparent); } .pill.thinking i { background: var(--s-thinking); }
+  .pill.waiting { color: var(--s-waiting); background: color-mix(in srgb, var(--s-waiting) 15%, transparent); } .pill.waiting i { background: var(--s-waiting); animation: ping 1.8s infinite; }
+  .pill.stalled { color: var(--s-stalled); background: color-mix(in srgb, var(--s-stalled) 14%, transparent); } .pill.stalled i { background: var(--s-stalled); }
+  .pill.idle { color: var(--s-idle); background: color-mix(in srgb, var(--s-idle) 16%, transparent); } .pill.idle i { background: var(--s-idle); }
+  .pill.ended { color: var(--s-ended); background: color-mix(in srgb, var(--s-ended) 22%, transparent); } .pill.ended i { background: var(--s-ended); }
+  @keyframes ping { 0% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--s-waiting) 70%, transparent); } 70%,100% { box-shadow: 0 0 0 6px transparent; } }
+
+  /* features */
+  .feat-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 16px; }
+  .feat { background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); padding: 26px 24px; position: relative; overflow: hidden; }
+  .feat h3 { font-family: var(--font-mono); font-size: 1.02rem; font-weight: 700; letter-spacing: -0.01em; margin-bottom: 10px; }
+  .feat p { color: var(--muted); font-size: 0.94rem; margin: 0; }
+  .feat .ix { font-family: var(--font-mono); font-size: 0.7rem; color: var(--amber); letter-spacing: 0.14em; margin-bottom: 16px; display: block; }
+  .feat::before { content: ""; position: absolute; left: 0; top: 24px; bottom: 24px; width: 2px; background: var(--amber); opacity: 0; transition: opacity .2s; }
+  .feat:hover::before { opacity: 0.7; }
+
+  /* status key */
+  .key-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px 34px; }
+  .key-row { display: flex; align-items: baseline; gap: 14px; padding: 12px 0; border-bottom: 1px solid color-mix(in srgb, var(--line) 60%, transparent); }
+  .key-name { font-family: var(--font-mono); font-weight: 600; min-width: 96px; display: flex; align-items: center; gap: 9px; }
+  .key-name i { width: 8px; height: 8px; border-radius: 50%; }
+  .key-desc { color: var(--muted); font-size: 0.9rem; }
+  .key-tag { font-family: var(--font-mono); font-size: 0.6rem; letter-spacing: 0.12em; text-transform: uppercase; color: var(--s-waiting); border: 1px solid color-mix(in srgb, var(--s-waiting) 40%, transparent); border-radius: 5px; padding: 1px 6px; margin-left: auto; align-self: center; }
+
+  /* install */
+  .install-grid { display: grid; grid-template-columns: 0.9fr 1.1fr; gap: 34px; align-items: start; }
+  ol.steps { list-style: none; counter-reset: s; margin: 0; padding: 0; }
+  ol.steps li { counter-increment: s; position: relative; padding: 0 0 22px 46px; }
+  ol.steps li::before { content: counter(s, decimal-leading-zero); position: absolute; left: 0; top: 0; font-family: var(--font-mono); font-size: 0.8rem; color: var(--amber); border: 1px solid var(--line); border-radius: 8px; width: 32px; height: 32px; display: grid; place-items: center; }
+  ol.steps li::after { content: ""; position: absolute; left: 15px; top: 34px; bottom: 4px; width: 1px; background: var(--line); }
+  ol.steps li:last-child::after { display: none; }
+  ol.steps h4 { margin: 4px 0 4px; font-size: 0.98rem; }
+  ol.steps p { margin: 0; color: var(--muted); font-size: 0.9rem; }
+  .install-more { margin-top: 6px; font-family: var(--font-mono); font-size: 0.82rem; }
+  .install-more a { color: var(--amber); text-decoration: none; border-bottom: 1px solid color-mix(in srgb, var(--amber) 40%, transparent); }
+  .install-more a:hover { border-bottom-color: var(--amber); }
+  .code { background: #0c0a06; border: 1px solid #2c2211; border-radius: 12px; overflow: hidden; }
+  .code-bar { display: flex; align-items: center; justify-content: space-between; padding: 10px 14px; border-bottom: 1px solid #2c2211; }
+  .code-bar span { font-family: var(--font-mono); font-size: 0.68rem; letter-spacing: 0.1em; color: #8a6238; text-transform: uppercase; }
+  .copy { font-family: var(--font-mono); font-size: 0.7rem; color: #d9c9a8; background: transparent; border: 1px solid #3a2c14; border-radius: 6px; padding: 4px 10px; cursor: pointer; }
+  .copy:hover { border-color: var(--amber); color: var(--amber-pale); }
+  pre.code-body { margin: 0; padding: 16px; overflow-x: auto; font-family: var(--font-mono); font-size: 0.82rem; line-height: 1.7; color: #e8dcc2; }
+  pre.code-body .c { color: #7a6a48; }
+  pre.code-body .k { color: var(--amber-pale); }
+
+  /* footer */
+  footer { border-top: 1px solid var(--line); padding: 40px 0 60px; }
+  .foot-in { display: flex; justify-content: space-between; align-items: flex-start; gap: 30px; flex-wrap: wrap; }
+  .foot-brand { font-family: var(--font-mono); }
+  .foot-brand .pron { color: var(--faint); font-size: 0.82rem; margin-top: 8px; max-width: 42ch; }
+  .foot-links { display: flex; gap: 40px; }
+  .foot-col h5 { font-family: var(--font-mono); font-size: 0.68rem; letter-spacing: 0.14em; text-transform: uppercase; color: var(--faint); margin: 0 0 12px; }
+  .foot-col a { display: block; text-decoration: none; color: var(--muted); font-size: 0.9rem; padding: 3px 0; }
+  .foot-col a:hover { color: var(--amber); }
+  .foot-note { margin-top: 34px; font-size: 0.78rem; color: var(--faint); font-family: var(--font-mono); }
+
+  @media (max-width: 860px) {
+    .hero-grid { grid-template-columns: 1fr; gap: 40px; }
+    .lede { max-width: none; }
+    .feat-grid, .key-grid, .install-grid { grid-template-columns: 1fr; }
+    .scope-frame { max-width: 460px; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    html { scroll-behavior: auto; }
+    .pill.waiting i { animation: none; }
+    .btn:hover { transform: none; }
+    .flow-link .blip { animation: none; opacity: 0; }
+  }
+  </style>
+</head>
+<body>
+
+<nav>
+  <div class="wrap nav-in">
+    <div class="brand">
+      <svg class="mark" width="24" height="24" viewBox="0 0 100 100" fill="none" aria-hidden="true">
+        <circle class="ring" cx="50" cy="50" r="40" stroke-width="3.5"/>
+        <circle class="ring" cx="50" cy="50" r="26" stroke-width="3.5"/>
+        <path d="M50 50 L50 10 A40 40 0 0 1 82.4 69.6 Z" fill="var(--amber)" opacity="0.18"/>
+        <line x1="50" y1="50" x2="50" y2="10" stroke="var(--amber)" stroke-width="4.5" stroke-linecap="round"/>
+        <circle cx="64.1" cy="23.5" r="5.5" fill="var(--amber)"/>
+        <circle cx="50" cy="50" r="5" fill="var(--amber)"/>
+      </svg>
+      <span><b>vigie</b><span class="tld">.org</span></span>
+    </div>
+    <div class="nav-links">
+      <a href="#how" class="hide-sm">How it works</a>
+      <a href="#watch" class="hide-sm">The board</a>
+      <a href="#features" class="hide-sm">Features</a>
+      <a href="#install">Install</a>
+      <a href="https://github.com/haribo/claude-vigie" class="nav-cta">GitHub ↗</a>
+      <button class="toggle" id="themeBtn" aria-label="Toggle light / dark theme" title="Toggle light / dark">◐</button>
+    </div>
+  </div>
+</nav>
+
+<header class="hero">
+  <div class="wrap hero-grid">
+    <div>
+      <p class="eyebrow">Observe-only session monitor</p>
+      <h1>The <span class="glow">lookout</span> for your Claude Code sessions.</h1>
+      <p class="lede">vigie keeps watch over every Claude Code session across every machine and puts them on one scope — who's working, who's waiting on you, who quietly stalled. It never touches a session. It only watches.</p>
+      <div class="cta-row">
+        <a href="#install" class="btn btn-primary">Get vigie</a>
+        <a href="https://github.com/haribo/claude-vigie" class="btn btn-ghost">Read the source ↗</a>
+      </div>
+      <div class="hero-meta">
+        <span><i></i>self-hosted</span>
+        <span><i></i>two static binaries</span>
+        <span><i></i>CGO-free</span>
+        <span><i></i>MIT</span>
+      </div>
+    </div>
+    <div class="scope-frame">
+      <canvas id="radar" width="720" height="720" role="img" aria-label="Radar scope showing active Claude Code sessions as blips; two are in an attention state."></canvas>
+      <div class="scope-cap"><span>SWEEP · 2s</span><span>7 CONTACTS · 2 ATTN</span></div>
+    </div>
+  </div>
+</header>
+
+<main>
+  <section class="block" id="how">
+    <div class="wrap">
+      <div class="sec-head">
+        <p class="eyebrow">How it works</p>
+        <h2>Three parts, one line of sight.</h2>
+        <p>Every machine reports in, your own server keeps the record, and you watch from wherever you happen to be. No agent to babysit, no per-session wiring.</p>
+      </div>
+      <div class="flow">
+        <div class="flow-step">
+          <div class="flow-ico">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true">
+              <rect x="3" y="4" width="18" height="13" rx="1.5"/>
+              <path d="M7 9l2.4 2L7 13" stroke-linecap="round" stroke-linejoin="round"/>
+              <path d="M13 13h4" stroke-linecap="round"/>
+              <path d="M9 21h6M12 17v4" stroke-linecap="round"/>
+            </svg>
+          </div>
+          <span class="flow-ix">01</span>
+          <h3>On every machine</h3>
+          <p>A hook and a watcher catch each Claude Code session the moment it moves — reading Claude Code's own registry and transcripts.</p>
+          <span class="flow-cmd">vigie report · watch</span>
+        </div>
+
+        <div class="flow-link" aria-hidden="true"><div class="track"><span class="blip"></span></div></div>
+
+        <div class="flow-step">
+          <div class="flow-ico">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true">
+              <rect x="4" y="4" width="16" height="7" rx="1.4"/>
+              <rect x="4" y="13" width="16" height="7" rx="1.4"/>
+              <circle cx="8" cy="7.5" r="0.9" fill="currentColor" stroke="none"/>
+              <circle cx="8" cy="16.5" r="0.9" fill="currentColor" stroke="none"/>
+            </svg>
+          </div>
+          <span class="flow-ix">02</span>
+          <h3>Your own server</h3>
+          <p>vigied collects every report, stores full history in embedded SQLite, and streams changes live over SSE. Self-hosted, one host, no database to deploy.</p>
+          <span class="flow-cmd">vigied serve</span>
+        </div>
+
+        <div class="flow-link delay" aria-hidden="true"><div class="track"><span class="blip"></span></div></div>
+
+        <div class="flow-step">
+          <div class="flow-ico">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true">
+              <circle cx="12" cy="12" r="9"/>
+              <circle cx="12" cy="12" r="3.5"/>
+              <path d="M12 12l6-3.4" stroke-linecap="round"/>
+            </svg>
+          </div>
+          <span class="flow-ix">03</span>
+          <h3>Watch anywhere</h3>
+          <p>Read the live board from your terminal or the read-only web dashboard the daemon serves — same truth on both surfaces.</p>
+          <span class="flow-cmd">tui · web</span>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="block" id="watch">
+    <div class="wrap">
+      <div class="sec-head">
+        <p class="eyebrow">One board, every machine</p>
+        <h2>Every machine on one screen.</h2>
+        <p>Every machine runs a lightweight watcher that reads Claude Code's own registry and transcripts, then reports to your server. The terminal dashboard — and its read-only web twin — show the lot: laptop, workstation, that box in the closet.</p>
+      </div>
+      <div class="term">
+        <div class="term-bar">
+          <span class="dot"></span><span class="dot"></span><span class="dot"></span>
+          <span class="ttl">vigie tui — vigie.example.com · 3 machines · 7 sessions</span>
+        </div>
+        <div class="term-scroll">
+          <table class="sessions">
+            <thead>
+              <tr><th>Status</th><th>Session</th><th>Machine</th><th>Model</th><th>Doing</th><th>Seen</th></tr>
+            </thead>
+            <tbody>
+              <tr class="attn">
+                <td><span class="pill waiting"><i></i>waiting</span></td>
+                <td>api-refactor</td><td>laptop</td><td>opus-4.8</td>
+                <td class="doing">Permission — Bash(git push)</td><td class="seen">now</td>
+              </tr>
+              <tr>
+                <td><span class="pill working"><i></i>working</span></td>
+                <td>vigie-web</td><td>laptop</td><td>opus-4.8</td>
+                <td class="doing">Edit app.js</td><td class="seen">3s</td>
+              </tr>
+              <tr>
+                <td><span class="pill thinking"><i></i>thinking</span></td>
+                <td>store-migration</td><td>workstation</td><td>sonnet-5</td>
+                <td class="doing">reasoning…</td><td class="seen">6s</td>
+              </tr>
+              <tr class="attn">
+                <td><span class="pill stalled"><i></i>stalled</span></td>
+                <td>e2e-suite</td><td>workstation</td><td>opus-4.8</td>
+                <td class="doing">Bash: playwright test</td><td class="seen">51s</td>
+              </tr>
+              <tr>
+                <td><span class="pill working"><i></i>working</span></td>
+                <td>docs-pass</td><td>workstation</td><td>haiku-4.5</td>
+                <td class="doing">Read architecture.md</td><td class="seen">4s</td>
+              </tr>
+              <tr>
+                <td><span class="pill idle"><i></i>idle</span></td>
+                <td>scratch</td><td>ci-box</td><td>sonnet-5</td>
+                <td class="doing">—</td><td class="seen">12m</td>
+              </tr>
+              <tr>
+                <td><span class="pill ended"><i></i>ended</span></td>
+                <td>nightly-build</td><td>ci-box</td><td>haiku-4.5</td>
+                <td class="doing">—</td><td class="seen">1h</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="block" id="features">
+    <div class="wrap">
+      <div class="sec-head">
+        <p class="eyebrow">What it does</p>
+        <h2>It watches, never steers.</h2>
+      </div>
+      <div class="feat-grid">
+        <div class="feat">
+          <span class="ix">01 — PRINCIPLE</span>
+          <h3>It only ever watches</h3>
+          <p>Observe-only by design. There is no control channel and never will be. vigie reads state from Claude Code's registry and transcripts — it can't start, stop, or steer a session, so it can never get in your way.</p>
+        </div>
+        <div class="feat">
+          <span class="ix">02 — REACH</span>
+          <h3>Many machines, one watch</h3>
+          <p>Point each machine's watcher at your server and every machine lands on one board. Presence and status come from Claude Code itself, so a session shows up the moment it starts — no per-session setup.</p>
+        </div>
+        <div class="feat">
+          <span class="ix">03 — SURFACES</span>
+          <h3>Two ways to keep watch</h3>
+          <p>A Bubble Tea TUI in your terminal, and a read-only web dashboard the daemon serves over HTTP — a browser mirror of the TUI. Same truth, wherever you're looking.</p>
+        </div>
+        <div class="feat">
+          <span class="ix">04 — ATTENTION</span>
+          <h3>Alerts that find you</h3>
+          <p>When a session starts waiting, stalls on a hung tool, or errors, vigie tells you: a desktop notification and a next-waiting hotkey that jumps you straight to whatever needs a human.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="block" id="states">
+    <div class="wrap">
+      <div class="sec-head">
+        <p class="eyebrow">The status key</p>
+        <h2>Seven states, read at a glance.</h2>
+        <p>Every session sits in exactly one state. Three of them mean a human is needed — those are the ones vigie surfaces and notifies on.</p>
+      </div>
+      <div class="key-grid">
+        <div class="key-row"><span class="key-name"><i style="background:var(--s-working)"></i>working</span><span class="key-desc">running a tool or writing a reply</span></div>
+        <div class="key-row"><span class="key-name"><i style="background:var(--s-thinking)"></i>thinking</span><span class="key-desc">reasoning inside a turn</span></div>
+        <div class="key-row"><span class="key-name"><i style="background:var(--s-waiting)"></i>waiting</span><span class="key-desc">paused on a permission prompt</span><span class="key-tag">attention</span></div>
+        <div class="key-row"><span class="key-name"><i style="background:var(--s-stalled)"></i>stalled</span><span class="key-desc">a turn parked on a tool that never returned</span><span class="key-tag">attention</span></div>
+        <div class="key-row"><span class="key-name"><i style="background:var(--s-idle)"></i>idle</span><span class="key-desc">alive but quiet, awaiting your prompt</span></div>
+        <div class="key-row"><span class="key-name"><i style="background:var(--s-error)"></i>error</span><span class="key-desc">the last turn hit an API error</span><span class="key-tag">attention</span></div>
+        <div class="key-row"><span class="key-name"><i style="background:var(--s-ended)"></i>ended</span><span class="key-desc">the session's process is gone</span></div>
+      </div>
+    </div>
+  </section>
+
+  <section class="block" id="install">
+    <div class="wrap">
+      <div class="sec-head">
+        <p class="eyebrow">Install</p>
+        <h2>Watching in four commands.</h2>
+        <p>Grab the Linux release, point a machine at your server, and start streaming its sessions. The daemon (<span class="mono">vigied</span>) runs wherever you host; each machine runs the <span class="mono">vigie</span> client.</p>
+      </div>
+      <div class="install-grid">
+        <ol class="steps">
+          <li><h4>Download the release</h4><p>Pull the latest <span class="mono">vigie</span> client archive for Linux from GitHub Releases.</p></li>
+          <li><h4>Point it at your server</h4><p><span class="mono">vigie init</span> writes the client config and installs the reporting hooks into Claude Code.</p></li>
+          <li><h4>Start the watcher</h4><p>Run <span class="mono">vigie watch</span> — or enable the systemd unit — to stream this machine's sessions.</p></li>
+          <li><h4>Open the board</h4><p>Watch from your terminal with <span class="mono">vigie tui</span>, or open the web dashboard your daemon serves.</p></li>
+        </ol>
+        <div>
+          <div class="code">
+            <div class="code-bar"><span>install · linux/amd64</span><button class="copy" id="copyBtn">Copy</button></div>
+            <pre class="code-body" id="codeText"><span class="c"># 1 · install the client into ~/.local/bin</span>
+tar xzf vigie_0.1.0_linux_amd64.tar.gz
+install -m755 vigie ~/.local/bin/
+
+<span class="c"># 2 · point the client at YOUR OWN vigied server</span>
+vigie <span class="k">init</span> \
+  -server https://vigie.example.com \
+  -token  $VIGIE_TOKEN
+
+<span class="c"># 3 · stream this machine's sessions</span>
+vigie <span class="k">watch</span>
+
+<span class="c"># 4 · watch, from anywhere</span>
+vigie <span class="k">tui</span>            <span class="c"># terminal</span>
+open https://vigie.example.com <span class="c"># web</span></pre>
+          </div>
+          <p class="install-more">Running the server, systemd units, TLS front → <a href="https://github.com/haribo/claude-vigie#install--run">full install &amp; deployment on GitHub ↗</a></p>
+        </div>
+      </div>
+    </div>
+  </section>
+</main>
+
+<footer>
+  <div class="wrap">
+    <div class="foot-in">
+      <div class="foot-brand">
+        <div class="brand" style="font-size:1.05rem">
+          <svg class="mark" width="22" height="22" viewBox="0 0 100 100" fill="none" aria-hidden="true">
+            <circle class="ring" cx="50" cy="50" r="40" stroke-width="3.5"/>
+            <line x1="50" y1="50" x2="50" y2="10" stroke="var(--amber)" stroke-width="4.5" stroke-linecap="round"/>
+            <circle cx="64.1" cy="23.5" r="5.5" fill="var(--amber)"/>
+            <circle cx="50" cy="50" r="5" fill="var(--amber)"/>
+          </svg>
+          <span><b>vigie</b></span>
+        </div>
+        <p class="pron">/vi.ʒi/ — French for the lookout who keeps watch from the masthead. It calls what it sees; it never steers the ship.</p>
+      </div>
+      <div class="foot-links">
+        <div class="foot-col">
+          <h5>Project</h5>
+          <a href="https://github.com/haribo/claude-vigie">Source</a>
+          <a href="https://github.com/haribo/claude-vigie/releases">Releases</a>
+          <a href="https://github.com/haribo/claude-vigie/issues">Issues</a>
+        </div>
+        <div class="foot-col">
+          <h5>Docs</h5>
+          <a href="https://github.com/haribo/claude-vigie/tree/develop/docs">Architecture</a>
+          <a href="https://github.com/haribo/claude-vigie/tree/develop/docs/design">Design notes</a>
+          <a href="#install">Install</a>
+        </div>
+      </div>
+    </div>
+    <p class="foot-note">Self-hosted · Linux · Go 1.26 · Not affiliated with Anthropic. Claude Code is a product of Anthropic.</p>
+  </div>
+</footer>
+
+<script>
+  // theme toggle — stamps data-theme so it overrides prefers-color-scheme both ways
+  (function () {
+    var root = document.documentElement, btn = document.getElementById('themeBtn');
+    btn.addEventListener('click', function () {
+      var isDark = matchMedia('(prefers-color-scheme: dark)').matches;
+      var cur = root.getAttribute('data-theme') || (isDark ? 'dark' : 'light');
+      root.setAttribute('data-theme', cur === 'dark' ? 'light' : 'dark');
+    });
+  })();
+
+  // copy install block
+  (function () {
+    var btn = document.getElementById('copyBtn'), pre = document.getElementById('codeText');
+    if (!btn || !pre) return;
+    btn.addEventListener('click', function () {
+      navigator.clipboard && navigator.clipboard.writeText(pre.innerText).then(function () {
+        var o = btn.textContent; btn.textContent = 'Copied'; setTimeout(function () { btn.textContent = o; }, 1400);
+      });
+    });
+  })();
+
+  // radar scope
+  (function () {
+    var cv = document.getElementById('radar');
+    if (!cv) return;
+    var ctx = cv.getContext('2d');
+    var reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
+    var DPR = Math.min(window.devicePixelRatio || 1, 2);
+
+    function size() { var css = cv.clientWidth || 460; cv.width = css * DPR; cv.height = css * DPR; }
+    size();
+    window.addEventListener('resize', size);
+
+    var A = '#d9663f', ATTN_W = '#fbbf24', ATTN_S = '#fb7185';
+    var contacts = [
+      { a: -0.5, r: 0.86, c: ATTN_W, big: true },
+      { a: 0.7,  r: 0.55, c: A },
+      { a: 2.1,  r: 0.72, c: A },
+      { a: 3.0,  r: 0.40, c: ATTN_S, big: true },
+      { a: 3.9,  r: 0.63, c: A },
+      { a: 4.9,  r: 0.30, c: '#64748b' },
+      { a: 5.6,  r: 0.80, c: A }
+    ];
+    contacts.forEach(function (p) { p.lit = 0; });
+
+    var sweep = -Math.PI / 2;
+
+    function draw(dt) {
+      var w = cv.width, h = cv.height, cx = w / 2, cy = h / 2, R = Math.min(w, h) * 0.44;
+      ctx.clearRect(0, 0, w, h);
+
+      var g = ctx.createRadialGradient(cx, cy, 0, cx, cy, R);
+      g.addColorStop(0, 'rgba(64,34,14,0.55)');
+      g.addColorStop(1, 'rgba(10,8,3,0.9)');
+      ctx.fillStyle = g;
+      ctx.beginPath(); ctx.arc(cx, cy, R, 0, Math.PI * 2); ctx.fill();
+
+      ctx.strokeStyle = 'rgba(217,102,63,0.16)'; ctx.lineWidth = 1 * DPR;
+      for (var i = 1; i <= 4; i++) { ctx.beginPath(); ctx.arc(cx, cy, R * i / 4, 0, Math.PI * 2); ctx.stroke(); }
+      ctx.beginPath(); ctx.moveTo(cx - R, cy); ctx.lineTo(cx + R, cy); ctx.moveTo(cx, cy - R); ctx.lineTo(cx, cy + R); ctx.stroke();
+      ctx.strokeStyle = 'rgba(217,102,63,0.28)';
+      for (var b = 0; b < 36; b++) {
+        var ang = b * Math.PI / 18, r0 = R * 0.97, r1 = (b % 3 === 0) ? R * 0.9 : R * 0.94;
+        ctx.beginPath();
+        ctx.moveTo(cx + Math.cos(ang) * r0, cy + Math.sin(ang) * r0);
+        ctx.lineTo(cx + Math.cos(ang) * r1, cy + Math.sin(ang) * r1);
+        ctx.stroke();
+      }
+
+      if (!reduce) sweep += dt * 0.9;
+      var span = 0.5;
+      ctx.save();
+      ctx.beginPath(); ctx.arc(cx, cy, R, 0, Math.PI * 2); ctx.clip();
+      var steps = 44;
+      for (var s = 0; s < steps; s++) {
+        var t = s / steps;
+        var a0 = sweep - span * t, a1 = sweep - span * (t + 1 / steps);
+        ctx.beginPath(); ctx.moveTo(cx, cy);
+        ctx.arc(cx, cy, R, a1, a0); ctx.closePath();
+        ctx.fillStyle = 'rgba(217,102,63,' + (0.32 * (1 - t)) + ')';
+        ctx.fill();
+      }
+      ctx.strokeStyle = 'rgba(240,168,131,0.9)'; ctx.lineWidth = 1.5 * DPR;
+      ctx.beginPath(); ctx.moveTo(cx, cy);
+      ctx.lineTo(cx + Math.cos(sweep) * R, cy + Math.sin(sweep) * R); ctx.stroke();
+      ctx.restore();
+
+      var sw = ((sweep % (Math.PI * 2)) + Math.PI * 2) % (Math.PI * 2);
+      contacts.forEach(function (p) {
+        var pa = ((p.a % (Math.PI * 2)) + Math.PI * 2) % (Math.PI * 2);
+        var diff = Math.abs(sw - pa); if (diff > Math.PI) diff = Math.PI * 2 - diff;
+        if (reduce) { p.lit = 1; }
+        else {
+          if (diff < 0.08) p.lit = 1;
+          else p.lit = Math.max(p.lit - dt * 0.55, p.big ? 0.30 : 0.12);
+        }
+        var px = cx + Math.cos(p.a) * R * p.r, py = cy + Math.sin(p.a) * R * p.r;
+        var rad = (p.big ? 4.6 : 3.4) * DPR;
+        ctx.save();
+        ctx.globalAlpha = Math.min(1, 0.25 + p.lit);
+        ctx.shadowColor = p.c; ctx.shadowBlur = 14 * DPR * p.lit;
+        ctx.fillStyle = p.c;
+        ctx.beginPath(); ctx.arc(px, py, rad, 0, Math.PI * 2); ctx.fill();
+        if (p.big) {
+          ctx.globalAlpha = 0.4 * p.lit; ctx.strokeStyle = p.c; ctx.lineWidth = 1.4 * DPR;
+          ctx.beginPath(); ctx.arc(px, py, rad + (5 + 5 * p.lit) * DPR, 0, Math.PI * 2); ctx.stroke();
+        }
+        ctx.restore();
+      });
+
+      ctx.fillStyle = 'rgba(240,168,131,0.95)';
+      ctx.beginPath(); ctx.arc(cx, cy, 2.4 * DPR, 0, Math.PI * 2); ctx.fill();
+    }
+
+    var last = 0;
+    function frame(ts) {
+      var dt = last ? Math.min((ts - last) / 1000, 0.05) : 0.016; last = ts;
+      draw(dt);
+      if (!reduce) requestAnimationFrame(frame);
+    }
+    if (reduce) draw(0); else requestAnimationFrame(frame);
+  })();
+</script>
+</body>
+</html>
