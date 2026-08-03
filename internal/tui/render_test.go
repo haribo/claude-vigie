@@ -62,7 +62,7 @@ func TestRenderTableWide(t *testing.T) {
 		Model: "claude-opus-4-8", Status: "working",
 		Usage:      api.Usage{OutputTokens: 1500, InputTokens: 500},
 		LastSeenAt: "2026-07-26T17:01:32Z",
-	}}, 200, -1, sortState{})
+	}}, columns, 200, -1, sortState{})
 	// SEEN is relative (time.Now()) and SESSION moved to the detail panel, so
 	// neither is asserted here.
 	for _, want := range []string{"NAME", "my-session", "DIR", "proj", "main", "opus-4-8", "1.5k", "STATUS", "working"} {
@@ -89,7 +89,7 @@ func TestRenderTableNarrowHidesColumns(t *testing.T) {
 		ID: "5c483c16", Title: "my-session", Machine: "laptop",
 		ProjectDir: "/home/x/proj", GitBranch: "main", Status: "working",
 		LastSeenAt: "2026-07-26T17:01:32Z",
-	}}, 60, -1, sortState{})
+	}}, columns, 60, -1, sortState{})
 	for _, want := range []string{"NAME", "DIR", "STATUS"} {
 		if !strings.Contains(out, want) {
 			t.Errorf("narrow table dropped mandatory column %q:\n%s", want, out)

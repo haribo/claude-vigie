@@ -216,7 +216,7 @@ func TestRenderGroupedTableHasHeaders(t *testing.T) {
 		{Title: "b", Machine: "m1", Usage: api.Usage{OutputTokens: 200}},
 		{Title: "c", Machine: "m2", Usage: api.Usage{OutputTokens: 50}},
 	}
-	out := renderGroupedTable(sessions, 200, -1, groupMachine, sortState{})
+	out := renderGroupedTable(sessions, columns, 200, -1, groupMachine, sortState{})
 	for _, want := range []string{"▸ m1", "▸ m2", "(2 ·"} {
 		if !strings.Contains(out, want) {
 			t.Errorf("grouped table missing %q:\n%s", want, out)

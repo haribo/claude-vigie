@@ -473,22 +473,71 @@ func (m model) saveViewPrefs() model {
 	return m
 }
 
+// totalSettingsRows is the base preference rows plus one row per column in the
+// column picker (#308).
+func totalSettingsRows() int { return settingsCount + len(columns) }
+
 func (m model) handleSettingsKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	onColumn := m.settingsCursor >= settingsCount // a column-picker row
 	switch msg.String() {
 	case "down", "j":
-		if m.settingsCursor < settingsCount-1 {
+		if m.settingsCursor < totalSettingsRows()-1 {
 			m.settingsCursor++
 		}
 	case "up", "k":
 		if m.settingsCursor > 0 {
 			m.settingsCursor--
 		}
-	case " ", "enter", "right", "l":
+	case " ", "enter":
+		if onColumn {
+			return m.toggleColumnRow(), nil
+		}
 		return m.editSetting(1)
+	case "right", "l":
+		if !onColumn {
+			return m.editSetting(1)
+		}
 	case "left", "h":
-		return m.editSetting(-1)
+		if !onColumn {
+			return m.editSetting(-1)
+		}
+	case "[": // reorder a visible column up
+		if onColumn {
+			return m.moveColumnRow(-1), nil
+		}
+	case "]": // reorder a visible column down
+		if onColumn {
+			return m.moveColumnRow(1), nil
+		}
 	}
 	return m, nil
+}
+
+// columnAtCursor returns the picker column under the settings cursor.
+func (m model) columnAtCursor() column {
+	return pickerColumns(m.prefs.columnOrder)[m.settingsCursor-settingsCount]
+}
+
+// toggleColumnRow shows/hides the column under the cursor (mandatory ones can't
+// be hidden) and persists (#308).
+func (m model) toggleColumnRow() model {
+	m.prefs.columnOrder = toggleColumn(m.prefs.columnOrder, m.columnAtCursor().key())
+	savePrefs(m.prefs)
+	return m
+}
+
+// moveColumnRow reorders the column under the cursor, keeping the cursor on it.
+func (m model) moveColumnRow(dir int) model {
+	key := m.columnAtCursor().key()
+	m.prefs.columnOrder = moveColumn(m.prefs.columnOrder, key, dir)
+	for i, c := range pickerColumns(m.prefs.columnOrder) {
+		if c.key() == key {
+			m.settingsCursor = settingsCount + i
+			break
+		}
+	}
+	savePrefs(m.prefs)
+	return m
 }
 
 // editSetting changes the selected preference. Local prefs (rows 0-1) are saved
@@ -656,6 +705,26 @@ func (m model) renderSettings() string {
 		}
 		b.WriteString(line + "\n")
 	}
+
+	// Column picker: every column, visible ones first, toggled with space and
+	// reordered with [ ] (#308).
+	b.WriteString("\n" + dimStyle.Render("Columns") +
+		dimStyle.Render("   (space: show/hide    [ ]: reorder)") + "\n\n")
+	for i, c := range pickerColumns(m.prefs.columnOrder) {
+		gutter := "  "
+		if settingsCount+i == m.settingsCursor {
+			gutter = cursorStyle.Render("❯ ")
+		}
+		box := dimStyle.Render("[ ]")
+		if columnVisible(m.prefs.columnOrder, c.key()) {
+			box = statusStyle("working").Render("[x]")
+		}
+		name := c.header
+		if mandatoryColumns[c.key()] {
+			name += dimStyle.Render("  (required)")
+		}
+		b.WriteString(gutter + box + " " + name + "\n")
+	}
 	return b.String()
 }
 
@@ -705,7 +774,7 @@ func (m model) viewSessions() string {
 	if len(vis) == 0 {
 		b.WriteString(dimStyle.Render("no sessions match the filter"))
 	} else {
-		b.WriteString(renderGroupedTable(vis, m.width, cursor, m.groupBy, sortState{m.sortKey, m.sortReversed}))
+		b.WriteString(renderGroupedTable(vis, activeColumns(m.prefs.columnOrder), m.width, cursor, m.groupBy, sortState{m.sortKey, m.sortReversed}))
 	}
 	b.WriteString(rule(m.width) + "\n" + renderUsageStrip(m.usage) + platformStrip(m.platform))
 	return b.String()
