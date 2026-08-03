@@ -150,6 +150,42 @@ func TestScanRegistryAliveBeatsStaleHeuristic(t *testing.T) {
 	t.Fatal("no report for s-busy")
 }
 
+func TestScanRegistryShellShowsInDoing(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	ps := selfProcStart(t)
+	// A live session whose registry status is "shell" (the user dropped to a shell).
+	writeSession(t, home, "shell.json",
+		`{"sessionId":"s-shell","status":"shell","pid":`+strconv.Itoa(os.Getpid())+`,"procStart":"`+strconv.FormatUint(ps, 10)+`"}`)
+
+	root := t.TempDir()
+	proj := filepath.Join(root, "proj")
+	if err := os.MkdirAll(proj, 0o750); err != nil {
+		t.Fatal(err)
+	}
+	writeLines(t, filepath.Join(proj, "s-shell.jsonl"), []string{
+		`{"sessionId":"s-shell","timestamp":"2026-01-01T00:00:00Z","type":"assistant","message":{"id":"m","stop_reason":"end_turn","usage":{"output_tokens":1}}}`,
+	})
+
+	reports, err := Scan(root, "m", 100000*time.Hour, time.Now())
+	if err != nil {
+		t.Fatalf("Scan: %v", err)
+	}
+	for _, r := range reports {
+		if r.SessionID == "s-shell" {
+			// Status stays idle (a shell isn't an attention state), but DOING says "shell".
+			if r.Status != "idle" {
+				t.Errorf("status = %q, want idle", r.Status)
+			}
+			if r.Activity != "shell" {
+				t.Errorf("activity = %q, want shell (#280)", r.Activity)
+			}
+			return
+		}
+	}
+	t.Fatal("no report for s-shell")
+}
+
 func TestScanRegistryDeadIsEnded(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("HOME", home)
