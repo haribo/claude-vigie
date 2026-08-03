@@ -188,8 +188,8 @@ func sortArrow(reversed bool) string {
 // renderTable renders the sessions, dropping low-priority columns to fit width
 // (width <= 0 means unknown: show everything). The row at index selected is
 // marked with a cursor (selected < 0 for none).
-func renderTable(sessions []api.SessionView, width, selected int, st sortState) string {
-	cols := visibleColumns(width)
+func renderTable(sessions []api.SessionView, base []column, width, selected int, st sortState) string {
+	cols := visibleColumns(base, width)
 	var b strings.Builder
 	b.WriteString(renderHeaderRow(cols, st) + "\n")
 	b.WriteString(rule(width) + "\n")
@@ -258,9 +258,9 @@ func renderRow(cols []column, s api.SessionView, selected bool, termWidth int) s
 
 // renderGroupedTable renders sessions grouped by gb, with a header and token
 // subtotal per group. gb == groupNone falls back to a flat table.
-func renderGroupedTable(sessions []api.SessionView, width, selected int, gb groupBy, st sortState) string {
+func renderGroupedTable(sessions []api.SessionView, base []column, width, selected int, gb groupBy, st sortState) string {
 	if gb == groupNone {
-		return renderTable(sessions, width, selected, st)
+		return renderTable(sessions, base, width, selected, st)
 	}
 
 	subtotal := map[string]int64{}
@@ -271,7 +271,7 @@ func renderGroupedTable(sessions []api.SessionView, width, selected int, gb grou
 		count[k]++
 	}
 
-	cols := visibleColumns(width)
+	cols := visibleColumns(base, width)
 	var b strings.Builder
 	b.WriteString(renderHeaderRow(cols, st) + "\n")
 	b.WriteString(rule(width) + "\n")
@@ -467,8 +467,8 @@ func countByStatus(sessions []api.SessionView, status string) int {
 
 // visibleColumns returns the columns that fit in width, dropping the
 // highest-drop columns first. Columns with drop == 0 are always kept.
-func visibleColumns(width int) []column {
-	cols := append([]column(nil), columns...)
+func visibleColumns(base []column, width int) []column {
+	cols := append([]column(nil), base...)
 	if width <= 0 {
 		return cols
 	}
