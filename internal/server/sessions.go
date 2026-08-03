@@ -95,16 +95,17 @@ func toView(s store.Session, samples []int64, now time.Time, machineWatched bool
 		}
 	}
 	return api.SessionView{
-		ID:         s.ID,
-		Title:      s.Title,
-		User:       s.User,
-		Machine:    s.Machine,
-		ProjectDir: s.ProjectDir,
-		GitBranch:  s.GitBranch,
-		Model:      s.Model,
-		Effort:     s.Effort,
-		Status:     status,
-		LastTool:   s.LastTool,
+		ID:            s.ID,
+		Title:         s.Title,
+		User:          s.User,
+		Machine:       s.Machine,
+		ProjectDir:    s.ProjectDir,
+		GitBranch:     s.GitBranch,
+		Model:         s.Model,
+		Effort:        s.Effort,
+		ContextTokens: s.ContextTokens,
+		Status:        status,
+		LastTool:      s.LastTool,
 		Usage: api.Usage{
 			InputTokens:         s.Usage.InputTokens,
 			OutputTokens:        s.Usage.OutputTokens,

@@ -24,7 +24,12 @@ type Info struct {
 	// lines, but not on every line (older sessions and some message types omit it),
 	// so the last non-empty value is kept rather than cleared — best-effort, same
 	// caveat as the "thinking" status.
-	Effort         string
+	Effort string
+	// ContextTokens is the real prompt size of the latest main-thread request — the
+	// last non-sidechain assistant line's input + cache-read + cache-creation
+	// tokens. Compared against the model's window to show how full the context is
+	// (#279). 0 when unknown.
+	ContextTokens  int64
 	Usage          api.Usage
 	LastStopReason string // stop_reason of the last assistant message
 	LastActivity   string // RFC3339 timestamp of the last line
@@ -75,6 +80,7 @@ type line struct {
 	Timestamp      string  `json:"timestamp"`
 	Effort         string  `json:"effort"` // reasoning effort, root-level on assistant lines
 	IsAPIError     bool    `json:"isApiErrorMessage"`
+	IsSidechain    bool    `json:"isSidechain"` // a sub-agent line — excluded from context sizing (#279)
 	APIErrorStatus int     `json:"apiErrorStatus"`
 	Message        message `json:"message"`
 }
@@ -132,6 +138,14 @@ func (info *Info) applyAssistant(l line, seen map[string]bool) {
 	}
 	if l.Effort != "" {
 		info.Effort = l.Effort // keep the last reported effort; a line without it does not clear it
+	}
+	// Context size: the real prompt of the latest main-thread request. Skip
+	// sub-agent (sidechain) lines and lines with no usage (e.g. API errors), so the
+	// value tracks the main conversation and never dips to a partial number (#279).
+	if !l.IsSidechain {
+		if ctx := m.Usage.InputTokens + m.Usage.CacheReadInputTokens + m.Usage.CacheCreationInputTokens; ctx > 0 {
+			info.ContextTokens = ctx
+		}
 	}
 	if m.ID != "" {
 		if seen[m.ID] {

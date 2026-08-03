@@ -108,6 +108,12 @@ var columns = []column{
 	{"BRANCH", 16, 7, false, func(s api.SessionView) string { return orDash(s.GitBranch) }, func(api.SessionView) lipgloss.Style { return dimStyle }},
 	{"MODEL", 12, 5, false, func(s api.SessionView) string { return orDash(shortModel(s.Model)) }, func(api.SessionView) lipgloss.Style { return dimStyle }},
 	{"EFFORT", 8, 11, false, func(s api.SessionView) string { return orDash(s.Effort) }, func(api.SessionView) lipgloss.Style { return dimStyle }},
+	{"CTX", 6, 12, true, contextCell, func(s api.SessionView) lipgloss.Style {
+		if s.ContextTokens <= 0 {
+			return dimStyle
+		}
+		return lipgloss.NewStyle().Foreground(contextColor(contextPct(s)))
+	}},
 	{"OUT", 8, 3, true, func(s api.SessionView) string { return humanizeTokens(s.Usage.OutputTokens) }, nil},
 	{"TOTAL", 9, 2, true, func(s api.SessionView) string { return humanizeTokens(totalTokens(s)) }, nil},
 	{"SEEN", 6, 6, true, func(s api.SessionView) string { return relativeAge(s.LastSeenAt, clock.Now()) }, func(api.SessionView) lipgloss.Style { return dimStyle }},
@@ -314,6 +320,7 @@ func renderDetail(s api.SessionView) string {
 		detailField("Branch", orDash(s.GitBranch)),
 		detailField("Model", orDash(s.Model)),
 		detailField("Effort", orDash(s.Effort)),
+		detailField("Context", contextGauge(s)),
 		detailField("Status", statusDetail(s)),
 		detailField("Doing", orDash(s.Activity)),
 		detailField("Remote control", rcLabel(s.RemoteControl)),

@@ -147,6 +147,35 @@ func TestParseEffort(t *testing.T) {
 	}
 }
 
+func TestParseContextTokens(t *testing.T) {
+	dir := t.TempDir()
+
+	// Context = input + cache_read + cache_creation of the last main-thread line;
+	// a sidechain (sub-agent) line must not override it (#279).
+	p := filepath.Join(dir, "ctx.jsonl")
+	writeJSONL(t, p,
+		`{"type":"assistant","timestamp":"2026-07-26T10:00:00Z","message":{"id":"m1","usage":{"input_tokens":1000,"cache_read_input_tokens":2000,"cache_creation_input_tokens":500}}}`,
+		`{"type":"assistant","isSidechain":true,"timestamp":"2026-07-26T10:00:01Z","message":{"id":"m2","usage":{"input_tokens":10}}}`,
+	)
+	if info, err := Parse(p); err != nil {
+		t.Fatal(err)
+	} else if info.ContextTokens != 3500 {
+		t.Errorf("ContextTokens = %d, want 3500 (main line, sidechain ignored)", info.ContextTokens)
+	}
+
+	// A later line with no usage (e.g. an API error) does not zero the last value.
+	p2 := filepath.Join(dir, "ctx2.jsonl")
+	writeJSONL(t, p2,
+		`{"type":"assistant","timestamp":"2026-07-26T10:00:00Z","message":{"id":"m1","usage":{"input_tokens":5000}}}`,
+		`{"type":"assistant","timestamp":"2026-07-26T10:00:02Z","message":{"id":"m2","stop_reason":"end_turn"}}`,
+	)
+	if info, err := Parse(p2); err != nil {
+		t.Fatal(err)
+	} else if info.ContextTokens != 5000 {
+		t.Errorf("ContextTokens = %d, want 5000 (kept; a no-usage line does not zero it)", info.ContextTokens)
+	}
+}
+
 func TestToolActivity(t *testing.T) {
 	cases := []struct{ tool, input, want string }{
 		{"Bash", `{"description":"run the tests","command":"go test"}`, "Bash: run the tests"},

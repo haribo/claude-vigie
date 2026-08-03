@@ -80,6 +80,7 @@ func Run(event string, stdin io.Reader) error {
 			req.Usage = &info.Usage
 			req.Model = info.Model
 			req.Effort = info.Effort
+			req.ContextTokens = info.ContextTokens
 			req.Title = info.Title
 		}
 	}
