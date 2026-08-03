@@ -62,7 +62,7 @@ func TestRenderTableWide(t *testing.T) {
 		Model: "claude-opus-4-8", Status: "working",
 		Usage:      api.Usage{OutputTokens: 1500, InputTokens: 500},
 		LastSeenAt: "2026-07-26T17:01:32Z",
-	}}, 200, -1, sortState{}, nil)
+	}}, 200, -1, sortState{})
 	// SEEN is relative (time.Now()) and SESSION moved to the detail panel, so
 	// neither is asserted here.
 	for _, want := range []string{"NAME", "my-session", "DIR", "proj", "main", "opus-4-8", "1.5k", "STATUS", "working"} {
@@ -89,7 +89,7 @@ func TestRenderTableNarrowHidesColumns(t *testing.T) {
 		ID: "5c483c16", Title: "my-session", Machine: "laptop",
 		ProjectDir: "/home/x/proj", GitBranch: "main", Status: "working",
 		LastSeenAt: "2026-07-26T17:01:32Z",
-	}}, 60, -1, sortState{}, nil)
+	}}, 60, -1, sortState{})
 	for _, want := range []string{"NAME", "DIR", "STATUS"} {
 		if !strings.Contains(out, want) {
 			t.Errorf("narrow table dropped mandatory column %q:\n%s", want, out)
@@ -113,23 +113,9 @@ func TestRCCellAndSummary(t *testing.T) {
 		{Status: "working", RemoteControl: true},
 		{Status: "idle", RemoteControl: true},
 		{Status: "idle"},
-	}, nil, 0)
+	}, nil)
 	if !strings.Contains(out, "rc ") || !strings.Contains(out, "◉ 2") {
 		t.Errorf("summary missing rc counter (want ◉ 2):\n%s", out)
-	}
-}
-
-func TestRenderRowSelectedKeepsUnreadDot(t *testing.T) {
-	// The unread dot must survive selection: on a selected row it shares the 2-char
-	// gutter with the cursor and used to be overwritten (#281). Assert the unread
-	// row carries exactly one more ● than the same row when read (the gutter dot),
-	// so the check is independent of any ● the STATUS cell itself draws.
-	cols := visibleColumns(200)
-	s := api.SessionView{ID: "s1", Title: "sess", Machine: "laptop", Status: "waiting"}
-	read := strings.Count(renderRow(cols, s, true /*selected*/, false /*unread*/, 200), "●")
-	unread := strings.Count(renderRow(cols, s, true /*selected*/, true /*unread*/, 200), "●")
-	if unread != read+1 {
-		t.Errorf("selected+unread should add the gutter dot: read=%d, unread=%d ●", read, unread)
 	}
 }
 

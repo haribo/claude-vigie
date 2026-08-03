@@ -35,7 +35,6 @@ func Run(cfg *config.Config) error {
 		conn:          conn,
 		clock:         clock.Now,
 		prevStatus:    map[string]string{},
-		seen:          map[string]string{},
 		focused:       true, // assume focused at start; blur/focus events correct it
 	}
 	// WithReportFocus lets the terminal tell us focus/blur, so desktop

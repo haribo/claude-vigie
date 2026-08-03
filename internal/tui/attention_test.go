@@ -71,32 +71,3 @@ func TestNotifyTransitions(t *testing.T) {
 	}
 	_ = m
 }
-
-func TestUnread(t *testing.T) {
-	m := model{seen: map[string]string{}}
-	wait := api.SessionView{ID: "w", Status: "waiting", StatusChangedAt: "2026-08-02T10:00:00Z"}
-	work := api.SessionView{ID: "x", Status: "working", StatusChangedAt: "2026-08-02T10:00:00Z"}
-	m.sessions = []api.SessionView{wait, work}
-
-	if !m.unread(wait) {
-		t.Error("a fresh waiting session should be unread")
-	}
-	if m.unread(work) {
-		t.Error("a working session is never unread")
-	}
-	if m.unreadCount() != 1 || !m.unreadSet()["w"] {
-		t.Errorf("unread bookkeeping wrong: count=%d set=%v", m.unreadCount(), m.unreadSet())
-	}
-
-	// Opening the detail (ack) marks it read.
-	m = m.ack("w")
-	if m.unread(wait) || m.unreadCount() != 0 {
-		t.Errorf("should be read after ack: unread=%v count=%d", m.unread(wait), m.unreadCount())
-	}
-
-	// It re-marks unread only when the status changes again (StatusChangedAt moves),
-	// not on the watcher's per-tick LastSeenAt bump.
-	if !m.unread(api.SessionView{ID: "w", Status: "waiting", StatusChangedAt: "2026-08-02T11:00:00Z"}) {
-		t.Error("a new transition should re-mark it unread")
-	}
-}
