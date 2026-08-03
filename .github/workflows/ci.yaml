@@ -21,7 +21,6 @@ concurrency:
 jobs:
   lint:
     name: Lint
-    if: github.event_name != 'push' || github.ref != 'refs/heads/develop'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
@@ -90,7 +89,6 @@ jobs:
 
   build-and-test:
     name: Build & test
-    if: github.event_name != 'push' || github.ref != 'refs/heads/develop'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
@@ -115,7 +113,6 @@ jobs:
 
   vulncheck:
     name: Vulnerability check
-    if: github.event_name != 'push' || github.ref != 'refs/heads/develop'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
