@@ -197,6 +197,7 @@ func (s *scanner) scan(root, machine string, maxAge time.Duration, now time.Time
 			Model:          info.Model,
 			Effort:         info.Effort,
 			ContextTokens:  info.ContextTokens,
+			PermissionMode: info.PermissionMode,
 			Title:          info.Title,
 			Status:         status,
 			RemoteControl:  &rc,

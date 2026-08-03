@@ -339,6 +339,27 @@ func TestReportContextTokens(t *testing.T) {
 	}
 }
 
+func TestReportPermissionMode(t *testing.T) {
+	srv := newTestServer(t)
+
+	body, _ := json.Marshal(api.ReportRequest{
+		Event: "watch", SessionID: "s1", Machine: "m", ProjectDir: "/p",
+		Status: "working", PermissionMode: "plan", Timestamp: "2026-07-26T10:00:00Z",
+	})
+	if rec := do(t, srv, http.MethodPost, "/api/report", body, true); rec.Code != http.StatusNoContent {
+		t.Fatalf("report = %d", rec.Code)
+	}
+
+	rec := do(t, srv, http.MethodGet, "/api/sessions", nil, true)
+	var views []api.SessionView
+	if err := json.Unmarshal(rec.Body.Bytes(), &views); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if len(views) != 1 || views[0].PermissionMode != "plan" {
+		t.Errorf("permission_mode did not round-trip: %+v", views)
+	}
+}
+
 func TestReportValidation(t *testing.T) {
 	srv := newTestServer(t)
 	if rec := do(t, srv, http.MethodPost, "/api/report", []byte(`{"event":"Stop"}`), true); rec.Code != http.StatusBadRequest {

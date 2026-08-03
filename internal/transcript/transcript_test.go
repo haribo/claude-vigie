@@ -176,6 +176,23 @@ func TestParseContextTokens(t *testing.T) {
 	}
 }
 
+func TestParsePermissionMode(t *testing.T) {
+	dir := t.TempDir()
+	// Keep the last non-empty `permissionMode`; the `type:"mode"` line's `normal` is
+	// ignored (we read permissionMode, not mode) (#303/#304).
+	p := filepath.Join(dir, "mode.jsonl")
+	writeJSONL(t, p,
+		`{"type":"user","permissionMode":"default"}`,
+		`{"type":"mode","mode":"normal"}`,
+		`{"type":"permission-mode","permissionMode":"plan"}`,
+	)
+	if info, err := Parse(p); err != nil {
+		t.Fatal(err)
+	} else if info.PermissionMode != "plan" {
+		t.Errorf("PermissionMode = %q, want plan (last permissionMode, mode-line ignored)", info.PermissionMode)
+	}
+}
+
 func TestToolActivity(t *testing.T) {
 	cases := []struct{ tool, input, want string }{
 		{"Bash", `{"description":"run the tests","command":"go test"}`, "Bash: run the tests"},

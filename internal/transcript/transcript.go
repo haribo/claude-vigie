@@ -29,7 +29,12 @@ type Info struct {
 	// last non-sidechain assistant line's input + cache-read + cache-creation
 	// tokens. Compared against the model's window to show how full the context is
 	// (#279). 0 when unknown.
-	ContextTokens  int64
+	ContextTokens int64
+	// PermissionMode is the session's last-seen permission mode — the canonical
+	// `permissionMode` field (default/acceptEdits/plan/auto/bypassPermissions), kept
+	// from the last line that carried it. The redundant type:"mode" line (whose
+	// `normal` == `default`) is ignored. Empty when unknown (#303/#304).
+	PermissionMode string
 	Usage          api.Usage
 	LastStopReason string // stop_reason of the last assistant message
 	LastActivity   string // RFC3339 timestamp of the last line
@@ -78,7 +83,8 @@ type line struct {
 	CustomTitle    string  `json:"customTitle"`
 	AiTitle        string  `json:"aiTitle"`
 	Timestamp      string  `json:"timestamp"`
-	Effort         string  `json:"effort"` // reasoning effort, root-level on assistant lines
+	Effort         string  `json:"effort"`         // reasoning effort, root-level on assistant lines
+	PermissionMode string  `json:"permissionMode"` // permission mode, on user / permission-mode lines (#304)
 	IsAPIError     bool    `json:"isApiErrorMessage"`
 	IsSidechain    bool    `json:"isSidechain"` // a sub-agent line — excluded from context sizing (#279)
 	APIErrorStatus int     `json:"apiErrorStatus"`
@@ -116,6 +122,9 @@ func (info *Info) applyMeta(l line, titles *titleTracker) {
 	}
 	if l.Timestamp != "" {
 		info.LastActivity = l.Timestamp
+	}
+	if l.PermissionMode != "" {
+		info.PermissionMode = l.PermissionMode // keep the last non-empty (#304)
 	}
 	titles.observe(l.CustomTitle, l.AiTitle)
 }

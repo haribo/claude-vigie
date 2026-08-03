@@ -16,15 +16,18 @@ type Session struct {
 	// ContextTokens is the real prompt size of the latest request (input +
 	// cache-read + cache-creation tokens), 0 when unknown — for the context-fill %.
 	ContextTokens int64
-	Status        string
-	LastTool      string
-	Usage         Usage
-	StartedAt     string // RFC3339
-	LastSeenAt    string // RFC3339
-	EndedAt       string // RFC3339, empty while the session is active
-	RemoteControl bool   // operator-toggled remote-control flag
-	RemoteURL     string // /rc resume URL (https://claude.ai/code/session_…) while active
-	ReportedAt    string // RFC3339 server time of the last report (heartbeat)
+	// PermissionMode is the session's permission mode
+	// (default/acceptEdits/plan/auto/bypassPermissions), empty when unknown (#304).
+	PermissionMode string
+	Status         string
+	LastTool       string
+	Usage          Usage
+	StartedAt      string // RFC3339
+	LastSeenAt     string // RFC3339
+	EndedAt        string // RFC3339, empty while the session is active
+	RemoteControl  bool   // operator-toggled remote-control flag
+	RemoteURL      string // /rc resume URL (https://claude.ai/code/session_…) while active
+	ReportedAt     string // RFC3339 server time of the last report (heartbeat)
 	// APIErrorStatus is the HTTP code of a live API error the session hit
 	// (500/529/429…), else 0. Set by the watcher; transient — cleared when the
 	// session recovers.
