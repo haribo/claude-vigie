@@ -9,7 +9,7 @@ vigie, status is **detected**, never operator-set
 
 ---
 
-## 1. The seven statuses
+## 1. The eight statuses
 
 Every session shows exactly one status. What each tells the operator:
 
@@ -21,6 +21,7 @@ Every session shows exactly one status. What each tells the operator:
 | `stalled`  | A turn is **parked on a hung tool** — a `tool_use` never got its `tool_result` and the session has gone quiet. Distinct from idle: the turn is unfinished, not between turns. |
 | `idle`     | The session is open and alive but between turns — nobody is acting.     |
 | `error`    | The session hit a live Claude API error (500 / 529 / 429). Transient — clears when it recovers. |
+| `stale`    | No recent report **and the machine has no watcher**, so the true state is unknown. Shown (grey, dotted `◌`) instead of a false `ended`: *no news* ≠ *dead*. Resolves once a watcher runs there (#284/#285). |
 | `ended`    | The session is over (closed, or its process is gone).                   |
 
 `waiting` and `stalled` are the two statuses that call the operator: `waiting`

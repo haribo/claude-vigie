@@ -394,6 +394,9 @@ func renderSummary(sessions []api.SessionView, history []int, unread int) string
 	if n := counts["error"]; n > 0 { // an alert: shown only when present
 		parts = append(parts, statusStyle("error").Render(fmt.Sprintf("● error %d", n)))
 	}
+	if n := counts["stale"]; n > 0 { // unobserved machine: shown only when present (#285)
+		parts = append(parts, dimStyle.Render(fmt.Sprintf("◌ stale %d", n)))
+	}
 	parts = append(parts, dimStyle.Render(fmt.Sprintf("● ended %d", counts["ended"])))
 	line := strings.Join(parts, "   ") + "    " + labelStyle.Render("out ") + humanizeTokens(totalOut) +
 		"    " + labelStyle.Render("rc ") + rcOnStyle.Render(fmt.Sprintf("◉ %d", rcActive))
@@ -548,6 +551,9 @@ func statusStyle(status string) lipgloss.Style {
 func statusCell(s api.SessionView) string {
 	if s.Status == "error" && s.APIErrorStatus != 0 {
 		return fmt.Sprintf("● error %d", s.APIErrorStatus)
+	}
+	if s.Status == "stale" { // dotted: no fresh signal, state unknown (#285)
+		return "◌ " + s.Status
 	}
 	return "● " + s.Status
 }

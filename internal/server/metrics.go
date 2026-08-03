@@ -189,7 +189,7 @@ var (
 
 // statusOrder is every status the gauge reports, so each series exists (=0) even
 // when no session currently holds it.
-var statusOrder = []string{"working", "thinking", "waiting", "idle", "stalled", "error", "ended"}
+var statusOrder = []string{"working", "thinking", "waiting", "idle", "stalled", "error", "stale", "ended"}
 
 func (c *stateCollector) Describe(ch chan<- *prometheus.Desc) {
 	ch <- descSessions
@@ -210,8 +210,9 @@ func (c *stateCollector) Collect(ch chan<- prometheus.Metric) {
 
 	counts := map[string]int{}
 	if sessions, err := store.ListSessions(ctx); err == nil {
+		watched := watchedMachines(ctx, store, sessions, now)
 		for _, s := range sessions {
-			counts[toView(s, nil, now).Status]++ // reconciled status, matching the API/TUI
+			counts[toView(s, nil, now, watched[s.Machine]).Status]++ // reconciled status, matching the API/TUI
 		}
 	}
 	for _, status := range statusOrder {
