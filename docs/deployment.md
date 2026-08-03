@@ -41,6 +41,57 @@ A ready-made Grafana dashboard ships in [`dashboards/vigie.json`](../dashboards/
 — import it and pick your Prometheus datasource (the dashboard uses a datasource
 variable, so it is not tied to any instance).
 
+## Running under systemd (optional)
+
+vigie does **not** install or manage systemd for you — driving the host's service
+manager is the deployer's call, not the repo's. Here are copy-paste `--user` units
+to run the daemon and the watcher yourself. Adjust the binary and db paths.
+
+The server — `~/.config/systemd/user/vigied.service`:
+
+```ini
+[Unit]
+Description=Claude Vigie server
+After=network.target
+
+[Service]
+ExecStart=%h/.local/bin/vigied serve --addr 127.0.0.1:8080 --db %h/.local/share/vigie/vigie.db
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=default.target
+```
+
+Each machine's watcher — `~/.config/systemd/user/vigie-watch.service`:
+
+```ini
+[Unit]
+Description=Claude Vigie watcher
+After=network.target
+
+[Service]
+ExecStart=%h/.local/bin/vigie watch
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=default.target
+```
+
+Enable and start:
+
+```bash
+systemctl --user daemon-reload
+systemctl --user enable --now vigied.service      # on the host
+systemctl --user enable --now vigie-watch.service # on each machine
+```
+
+> **Make `--user` services survive logout.** A `--user` service is stopped when you
+> log out unless lingering is enabled: `sudo loginctl enable-linger "$USER"`.
+> Without it, a headless box's watcher (or daemon) dies at the end of your SSH
+> session.
+
 ## Local / trusted-LAN use
 
 The daemon binds `127.0.0.1` by default. For cross-machine clients, bind a
