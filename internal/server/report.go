@@ -200,6 +200,9 @@ func applyReport(sess store.Session, isNew bool, req api.ReportRequest) store.Se
 	if req.Effort != "" {
 		sess.Effort = req.Effort
 	}
+	if req.ContextTokens > 0 { // keep the last known size when a report carries none
+		sess.ContextTokens = req.ContextTokens
+	}
 	if req.Title != "" {
 		sess.Title = req.Title
 	}

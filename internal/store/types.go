@@ -12,7 +12,10 @@ type Session struct {
 	Model      string
 	// Effort is the reasoning effort of the last assistant turn (low/medium/high/
 	// xhigh/max), or empty when unknown. Derived from the transcript, best-effort.
-	Effort        string
+	Effort string
+	// ContextTokens is the real prompt size of the latest request (input +
+	// cache-read + cache-creation tokens), 0 when unknown — for the context-fill %.
+	ContextTokens int64
 	Status        string
 	LastTool      string
 	Usage         Usage
