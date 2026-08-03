@@ -119,6 +119,7 @@ var columns = []column{
 	{"ACT", 10, 9, false, func(s api.SessionView) string { return activitySpark(s.Samples) }, nil},
 	{"RC", 4, 1, false, rcCell, rcStyle},
 	{"STATUS", 12, 0, false, statusCell, func(s api.SessionView) lipgloss.Style { return statusStyle(s.Status) }},
+	{"MODE", 7, 8, false, modeCell, modeStyle},
 	{"DOING", 36, 10, false, activityCell, activityStyle},
 }
 
@@ -310,6 +311,7 @@ func renderDetail(s api.SessionView) string {
 		detailField("Effort", orDash(s.Effort)),
 		detailField("Context", contextGauge(s)),
 		detailField("Status", statusDetail(s)),
+		detailField("Mode", modeDetail(s)),
 		detailField("Doing", orDash(s.Activity)),
 		detailField("Remote control", rcLabel(s.RemoteControl)),
 	}

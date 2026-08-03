@@ -203,6 +203,9 @@ func applyReport(sess store.Session, isNew bool, req api.ReportRequest) store.Se
 	if req.ContextTokens > 0 { // keep the last known size when a report carries none
 		sess.ContextTokens = req.ContextTokens
 	}
+	if req.PermissionMode != "" { // keep the last known mode when a report carries none
+		sess.PermissionMode = req.PermissionMode
+	}
 	if req.Title != "" {
 		sess.Title = req.Title
 	}
