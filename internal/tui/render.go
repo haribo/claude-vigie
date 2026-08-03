@@ -249,7 +249,11 @@ func renderRow(cols []column, s api.SessionView, selected, unread bool, termWidt
 		}
 		return gutter + body
 	}
-	line := cursorStyle.Render("▎") + bg.Render(" ") + body
+	afterCursor := bg.Render(" ")
+	if unread { // keep the unread dot visible on the selected row (#281): it shares
+		afterCursor = unreadDot.Background(cSel).Render("●") // the gutter with the cursor
+	}
+	line := cursorStyle.Render("▎") + afterCursor + body
 	if used := rowWidth(cols); termWidth > used {
 		line += bg.Render(strings.Repeat(" ", termWidth-used)) // fill to the edge
 	}
