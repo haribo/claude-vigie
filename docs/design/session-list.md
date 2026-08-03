@@ -6,6 +6,13 @@ Source of truth for how the operator shapes the sessions table — **sorting,
 filtering, grouping, and visibility** — the user-observable behavior, not the
 code. Status semantics live in [session-status.md](session-status.md).
 
+Everything here shapes your **view** and may be persisted. vigie holds no
+*handling* state about a session (unread/ack, dismiss, snooze, resolve, pin) —
+that belongs in the session itself. vigie is **read-only to the operator**
+([ADR-0007](../adr/0007-read-only-to-operator.md)); being alerted to a session that
+needs you is an outbound signal (desktop notifications, the `n` jump), not a stored
+state.
+
 ---
 
 ## 1. Visibility — what shows by default
