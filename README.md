@@ -47,7 +47,7 @@ full design.
 vigied serve     # server: HTTP + SSE API, SQLite — runs on the host
 vigied token     # server: print/generate the shared auth token
 vigie  init      # client: install hooks + write the config
-vigie  hooks     # client: add/remove reporting hooks (one leg per FLEET_CONFIG)
+vigie  hooks     # client: add/remove reporting hooks (one leg per VIGIE_CONFIG)
 vigie  report    # client: reporter invoked by Claude Code hooks
 vigie  watch     # client: watcher — scans transcripts, covers all sessions
 vigie  tui       # client: terminal dashboard
@@ -97,7 +97,7 @@ vigie tui
 Hooks cover sessions started *after* `init`; the watcher guarantees coverage by
 scanning `~/.claude/projects/`. `vigie init --uninstall` removes the hooks.
 The client reads `~/.config/vigie/config.toml` (override the path with
-`FLEET_CONFIG`).
+`VIGIE_CONFIG`, or the deprecated `FLEET_CONFIG`).
 
 ## Development
 
@@ -110,7 +110,7 @@ just code-check     # fmt + lint + build + test (run before every PR)
 ```
 
 Run the current source against a throwaway local server, fully isolated from any
-installed production client via `FLEET_CONFIG` (never touches `~/.config`):
+installed production client via `VIGIE_CONFIG` (never touches `~/.config`):
 
 ```bash
 just dev-server     # background: builds & runs vigied on :8099 (dev db + token)
