@@ -7,6 +7,27 @@ import (
 	"github.com/haribo/claude-vigie/internal/store"
 )
 
+func TestActivityShellSurvivesIdle(t *testing.T) {
+	var sess store.Session
+
+	// The watcher reports a session that dropped to a shell: idle, but DOING = "shell".
+	// The #236 rule blanks Activity on idle — shell is the deliberate exception (#280).
+	sess = applyReport(sess, true, api.ReportRequest{
+		SessionID: "s", Event: "watch", Status: "idle", Activity: "shell", Timestamp: "t1",
+	})
+	if sess.Activity != "shell" {
+		t.Fatalf("activity = %q, want shell to survive idle (#280)", sess.Activity)
+	}
+
+	// The shell ends: idle with no shell message → it clears, no stale "shell".
+	sess = applyReport(sess, false, api.ReportRequest{
+		SessionID: "s", Event: "watch", Status: "idle", Timestamp: "t2",
+	})
+	if sess.Activity != "" {
+		t.Errorf("activity = %q, want cleared once the shell ends (#280)", sess.Activity)
+	}
+}
+
 func TestActivityClearedOnStatusChange(t *testing.T) {
 	var sess store.Session
 

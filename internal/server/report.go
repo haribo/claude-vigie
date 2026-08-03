@@ -250,8 +250,10 @@ func applyStatus(sess store.Session, req api.ReportRequest) store.Session {
 	// drop a stale one on any status change so a new episode never shows the old
 	// "doing".
 	switch {
+	case sess.Status == "idle" && req.Activity == "shell":
+		sess.Activity = "shell" // a shell session is idle but not free: keep it in DOING (#280)
 	case sess.Status == "idle" || sess.Status == "ended":
-		sess.Activity = ""
+		sess.Activity = "" // clears once the shell ends (the report no longer carries "shell")
 	case req.Activity != "":
 		sess.Activity = req.Activity
 	case sess.Status != prev:
