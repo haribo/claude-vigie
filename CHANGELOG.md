@@ -17,6 +17,9 @@ file is the single source of truth, not a second narrative.
 
 ### Fixed
 
+- TUI: the "N columns hidden" overflow banner now wraps to the terminal width
+  instead of running past the edge and being cut off on a narrow terminal — the
+  message that explains the narrowness is no longer itself unreadable.
 - Column picker: hiding a column now keeps its position instead of jumping it to
   the bottom, and reordering works on any column — hidden or visible (TUI + web).
 - TUI column picker is now width-aware: it shows the width budget, flags every

@@ -6,9 +6,29 @@ import (
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/lipgloss"
 
 	"github.com/haribo/claude-vigie/internal/api"
 )
+
+// TestOverflowBannerWrapsToWidth is the #325 regression: the "N columns hidden"
+// banner must wrap to the terminal width instead of running past the edge and
+// being cut off. At width 120 the banner is the only line that would overflow.
+func TestOverflowBannerWrapsToWidth(t *testing.T) {
+	const w = 120
+	m := model{width: w, sessions: []api.SessionView{
+		{Title: "a", Status: "working", LastSeenAt: "2026-07-26T10:00:00Z"},
+	}}
+	out := m.viewSessions()
+	if !strings.Contains(out, "hidden") {
+		t.Fatal("expected the column-overflow banner at this width")
+	}
+	for _, ln := range strings.Split(out, "\n") {
+		if lw := lipgloss.Width(ln); lw > w {
+			t.Errorf("line exceeds width %d (got %d): %q", w, lw, ln)
+		}
+	}
+}
 
 func TestRenderTabBar(t *testing.T) {
 	out := renderTabBar(tabMachines, 80)
