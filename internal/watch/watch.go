@@ -195,6 +195,9 @@ func (s *scanner) scan(root, machine string, maxAge time.Duration, now time.Time
 			ProjectDir:     info.Cwd,
 			GitBranch:      info.GitBranch,
 			Model:          info.Model,
+			Effort:         info.Effort,
+			ContextTokens:  info.ContextTokens,
+			PermissionMode: info.PermissionMode,
 			Title:          info.Title,
 			Status:         status,
 			RemoteControl:  &rc,
@@ -227,7 +230,10 @@ func resolveStatus(reg map[string]sessionRecord, id string, info *transcript.Inf
 		return "ended", activity, reportAt // the backing process is gone
 	case known:
 		base = withError(mapRegistryStatus(rec.Status), info.LastAPIError)
-		if base == "waiting" && activity == "" && rec.WaitingFor != "" {
+		switch {
+		case rec.Status == "shell":
+			activity = "shell" // dropped to a shell: status stays idle, DOING says so (#280)
+		case base == "waiting" && activity == "" && rec.WaitingFor != "":
 			activity = capText(rec.WaitingFor, 80) // surface the ask in DOING
 		}
 	default:

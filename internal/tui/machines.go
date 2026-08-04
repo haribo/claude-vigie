@@ -4,6 +4,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/haribo/claude-vigie/internal/api"
 	"github.com/haribo/claude-vigie/internal/clock"
@@ -63,8 +64,10 @@ func aggregateMachines(sessions []api.SessionView) []machineStat {
 	return out
 }
 
-// renderMachines renders the per-machine fleet overview (read-only).
-func renderMachines(sessions []api.SessionView, width int) string {
+// renderMachines renders the per-machine fleet overview (read-only). watcherSeen
+// maps each machine to the RFC3339 time of its last watch report, so machines
+// running on hooks alone are flagged (#284).
+func renderMachines(sessions []api.SessionView, watcherSeen map[string]string, width int) string {
 	if len(sessions) == 0 {
 		return dimStyle.Render("no sessions yet")
 	}
@@ -74,9 +77,14 @@ func renderMachines(sessions []api.SessionView, width int) string {
 	b.WriteString("  " + headerStyle.Render(
 		pad("MACHINE", 16)+padLeft("SESS", 6)+padLeft("WORK", 7)+padLeft("WAIT", 7)+
 			padLeft("IDLE", 6)+padLeft("ENDED", 7)+padLeft("OUT", 10)+"   "+
-			pad("USER", 12)+padLeft("SEEN", 6)) + "\n")
+			pad("USER", 12)+padLeft("SEEN", 6)+"   "+pad("WATCH", 8)) + "\n")
 	b.WriteString(rule(width) + "\n")
+	var noWatcher []string
 	for _, a := range aggregateMachines(sessions) {
+		fresh := watcherFresh(watcherSeen[a.name], now)
+		if !fresh {
+			noWatcher = append(noWatcher, a.name)
+		}
 		b.WriteString("  " +
 			pad(a.name, 16) +
 			padLeft(strconv.Itoa(a.sessions), 6) +
@@ -86,9 +94,38 @@ func renderMachines(sessions []api.SessionView, width int) string {
 			countCell(a.ended, "ended", 7) +
 			padLeft(humanizeTokens(a.out), 10) + "   " +
 			userStyle.Render(pad(orDash(a.user), 12)) +
-			dimStyle.Render(padLeft(relativeAge(a.lastSeen, now), 6)) + "\n")
+			dimStyle.Render(padLeft(relativeAge(a.lastSeen, now), 6)) + "   " +
+			watchCell(fresh) + "\n")
+	}
+	// Only surface the banner when something is actually wrong — no watcher on at
+	// least one machine — so a healthy fleet stays quiet.
+	if len(noWatcher) > 0 {
+		b.WriteString("\n" + warnStyle.Render("⚠ no watcher on "+strings.Join(noWatcher, ", ")) + "\n")
+		b.WriteString(dimStyle.Render("  run `vigie watch` there (or enable its service) — statuses can go stale without it") + "\n")
 	}
 	return b.String()
+}
+
+// watcherFresh reports whether a machine's last watch report is recent enough to
+// trust its statuses. Empty or unparseable → stale (#284).
+func watcherFresh(seen string, now time.Time) bool {
+	if seen == "" {
+		return false
+	}
+	t, err := time.Parse(time.RFC3339, seen)
+	if err != nil {
+		return false
+	}
+	return now.Sub(t) <= watcherStaleAfter
+}
+
+// watchCell renders the per-machine watcher indicator: green "● live" when a
+// fresh watcher reports, amber "⚠ none" otherwise.
+func watchCell(fresh bool) string {
+	if fresh {
+		return watchLiveStyle.Render(pad("● live", 8))
+	}
+	return warnStyle.Render(pad("⚠ none", 8))
 }
 
 // countCell renders a status count right-aligned to w, dimmed when zero, else

@@ -54,8 +54,16 @@ func (s *Server) handleReport(w http.ResponseWriter, r *http.Request) {
 	// The watcher polls frequently; keep its scans out of the event log, but
 	// record a heartbeat so clients can detect an absent watcher.
 	if req.Event == "watch" {
-		if err := s.store.SetMeta(ctx, watchSeenKey, s.now().UTC().Format(time.RFC3339)); err != nil {
+		now := s.now().UTC().Format(time.RFC3339)
+		if err := s.store.SetMeta(ctx, watchSeenKey, now); err != nil {
 			s.log.Error("recording watch heartbeat", "error", err)
+		}
+		// Per-machine heartbeat too, so the client can tell which machines run a
+		// watcher and which report on hooks alone (#284).
+		if req.Machine != "" {
+			if err := s.store.SetMeta(ctx, machineWatchKey(req.Machine), now); err != nil {
+				s.log.Error("recording per-machine watch heartbeat", "error", err, "machine", req.Machine)
+			}
 		}
 	} else {
 		// A hook event closes the previous status interval; roll up its
@@ -189,6 +197,15 @@ func applyReport(sess store.Session, isNew bool, req api.ReportRequest) store.Se
 	if req.Model != "" {
 		sess.Model = req.Model
 	}
+	if req.Effort != "" {
+		sess.Effort = req.Effort
+	}
+	if req.ContextTokens > 0 { // keep the last known size when a report carries none
+		sess.ContextTokens = req.ContextTokens
+	}
+	if req.PermissionMode != "" { // keep the last known mode when a report carries none
+		sess.PermissionMode = req.PermissionMode
+	}
 	if req.Title != "" {
 		sess.Title = req.Title
 	}
@@ -239,8 +256,10 @@ func applyStatus(sess store.Session, req api.ReportRequest) store.Session {
 	// drop a stale one on any status change so a new episode never shows the old
 	// "doing".
 	switch {
+	case sess.Status == "idle" && req.Activity == "shell":
+		sess.Activity = "shell" // a shell session is idle but not free: keep it in DOING (#280)
 	case sess.Status == "idle" || sess.Status == "ended":
-		sess.Activity = ""
+		sess.Activity = "" // clears once the shell ends (the report no longer carries "shell")
 	case req.Activity != "":
 		sess.Activity = req.Activity
 	case sess.Status != prev:

@@ -16,12 +16,12 @@ var (
 	dimStyle         = lipgloss.NewStyle().Foreground(cMuted)
 	errStyle         = lipgloss.NewStyle().Foreground(cRed)
 	warnStyle        = lipgloss.NewStyle().Bold(true).Foreground(cAmber)
+	watchLiveStyle   = lipgloss.NewStyle().Foreground(cGreen) // "● live" watcher indicator (#284)
 	labelStyle       = lipgloss.NewStyle().Foreground(cMuted)
 	cursorStyle      = lipgloss.NewStyle().Bold(true).Foreground(cAccent)
 	tabActiveStyle   = lipgloss.NewStyle().Bold(true).Foreground(cAccent)
 	tabRuleStyle     = lipgloss.NewStyle().Foreground(cAccent)
 	groupHeaderStyle = lipgloss.NewStyle().Bold(true).Foreground(cAccent2)
-	unreadDot        = lipgloss.NewStyle().Bold(true).Foreground(cAccent) // new-attention marker (#259)
 	keycapStyle      = lipgloss.NewStyle().Foreground(cText).Background(cSurface)
 )
 
@@ -106,12 +106,20 @@ var columns = []column{
 	{"DIR", 16, 0, false, func(s api.SessionView) string { return projectName(s.ProjectDir) }, nil},
 	{"BRANCH", 16, 7, false, func(s api.SessionView) string { return orDash(s.GitBranch) }, func(api.SessionView) lipgloss.Style { return dimStyle }},
 	{"MODEL", 12, 5, false, func(s api.SessionView) string { return orDash(shortModel(s.Model)) }, func(api.SessionView) lipgloss.Style { return dimStyle }},
+	{"EFFORT", 8, 11, false, func(s api.SessionView) string { return orDash(s.Effort) }, func(api.SessionView) lipgloss.Style { return dimStyle }},
+	{"CTX", 6, 12, true, contextCell, func(s api.SessionView) lipgloss.Style {
+		if s.ContextTokens <= 0 {
+			return dimStyle
+		}
+		return lipgloss.NewStyle().Foreground(contextColor(contextPct(s)))
+	}},
 	{"OUT", 8, 3, true, func(s api.SessionView) string { return humanizeTokens(s.Usage.OutputTokens) }, nil},
 	{"TOTAL", 9, 2, true, func(s api.SessionView) string { return humanizeTokens(totalTokens(s)) }, nil},
 	{"SEEN", 6, 6, true, func(s api.SessionView) string { return relativeAge(s.LastSeenAt, clock.Now()) }, func(api.SessionView) lipgloss.Style { return dimStyle }},
 	{"ACT", 10, 9, false, func(s api.SessionView) string { return activitySpark(s.Samples) }, nil},
 	{"RC", 4, 1, false, rcCell, rcStyle},
 	{"STATUS", 12, 0, false, statusCell, func(s api.SessionView) lipgloss.Style { return statusStyle(s.Status) }},
+	{"MODE", 7, 8, false, modeCell, modeStyle},
 	{"DOING", 36, 10, false, activityCell, activityStyle},
 }
 
@@ -180,13 +188,13 @@ func sortArrow(reversed bool) string {
 // renderTable renders the sessions, dropping low-priority columns to fit width
 // (width <= 0 means unknown: show everything). The row at index selected is
 // marked with a cursor (selected < 0 for none).
-func renderTable(sessions []api.SessionView, width, selected int, st sortState, unread map[string]bool) string {
-	cols := visibleColumns(width)
+func renderTable(sessions []api.SessionView, base []column, width, selected int, st sortState) string {
+	cols := visibleColumns(base, width)
 	var b strings.Builder
 	b.WriteString(renderHeaderRow(cols, st) + "\n")
 	b.WriteString(rule(width) + "\n")
 	for idx, s := range sessions {
-		b.WriteString(renderRow(cols, s, idx == selected, unread[s.ID], width) + "\n")
+		b.WriteString(renderRow(cols, s, idx == selected, width) + "\n")
 	}
 	return b.String()
 }
@@ -208,7 +216,7 @@ func renderHeaderRow(cols []column, st sortState) string {
 	return "  " + headerStyle.Render(strings.Join(headers, colSep))
 }
 
-func renderRow(cols []column, s api.SessionView, selected, unread bool, termWidth int) string {
+func renderRow(cols []column, s api.SessionView, selected bool, termWidth int) string {
 	// When selected, the background is applied to every segment (each cell and
 	// separator) individually: applying it once over the whole line fails
 	// because the cells' own ANSI reset sequences cut it off.
@@ -231,9 +239,6 @@ func renderRow(cols []column, s api.SessionView, selected, unread bool, termWidt
 				style = style.Background(cSel)
 			}
 		}
-		if unread && c.header == "NAME" { // an unacknowledged attention session (#259)
-			style = style.Bold(true)
-		}
 		cells[i] = style.Render(txt)
 	}
 	sep := colSep
@@ -242,11 +247,7 @@ func renderRow(cols []column, s api.SessionView, selected, unread bool, termWidt
 	}
 	body := strings.Join(cells, sep)
 	if !selected {
-		gutter := "  "
-		if unread { // a blue dot marks the new attention event in the left margin
-			gutter = unreadDot.Render("●") + " "
-		}
-		return gutter + body
+		return "  " + body
 	}
 	line := cursorStyle.Render("▎") + bg.Render(" ") + body
 	if used := rowWidth(cols); termWidth > used {
@@ -257,9 +258,9 @@ func renderRow(cols []column, s api.SessionView, selected, unread bool, termWidt
 
 // renderGroupedTable renders sessions grouped by gb, with a header and token
 // subtotal per group. gb == groupNone falls back to a flat table.
-func renderGroupedTable(sessions []api.SessionView, width, selected int, gb groupBy, st sortState, unread map[string]bool) string {
+func renderGroupedTable(sessions []api.SessionView, base []column, width, selected int, gb groupBy, st sortState) string {
 	if gb == groupNone {
-		return renderTable(sessions, width, selected, st, unread)
+		return renderTable(sessions, base, width, selected, st)
 	}
 
 	subtotal := map[string]int64{}
@@ -270,7 +271,7 @@ func renderGroupedTable(sessions []api.SessionView, width, selected int, gb grou
 		count[k]++
 	}
 
-	cols := visibleColumns(width)
+	cols := visibleColumns(base, width)
 	var b strings.Builder
 	b.WriteString(renderHeaderRow(cols, st) + "\n")
 	b.WriteString(rule(width) + "\n")
@@ -281,7 +282,7 @@ func renderGroupedTable(sessions []api.SessionView, width, selected int, gb grou
 			b.WriteString(groupHeaderStyle.Render(fmt.Sprintf("▸ %s  (%d · %s)", orDash(k), count[k], humanizeTokens(subtotal[k]))) + "\n")
 			lastKey, first = k, false
 		}
-		b.WriteString(renderRow(cols, s, idx == selected, unread[s.ID], width) + "\n")
+		b.WriteString(renderRow(cols, s, idx == selected, width) + "\n")
 	}
 	return b.String()
 }
@@ -307,7 +308,10 @@ func renderDetail(s api.SessionView) string {
 		detailField("Directory", s.ProjectDir),
 		detailField("Branch", orDash(s.GitBranch)),
 		detailField("Model", orDash(s.Model)),
+		detailField("Effort", orDash(s.Effort)),
+		detailField("Context", contextGauge(s)),
 		detailField("Status", statusDetail(s)),
+		detailField("Mode", modeDetail(s)),
 		detailField("Doing", orDash(s.Activity)),
 		detailField("Remote control", rcLabel(s.RemoteControl)),
 	}
@@ -359,7 +363,7 @@ var (
 // renderSummary renders the fleet summary strip: status counts, total output
 // tokens across the fleet, and an activity sparkline (working sessions over the
 // recent polls held in history).
-func renderSummary(sessions []api.SessionView, history []int, unread int) string {
+func renderSummary(sessions []api.SessionView, history []int) string {
 	counts := map[string]int{}
 	var totalOut int64
 	rcActive := 0
@@ -387,14 +391,14 @@ func renderSummary(sessions []api.SessionView, history []int, unread int) string
 	if n := counts["error"]; n > 0 { // an alert: shown only when present
 		parts = append(parts, statusStyle("error").Render(fmt.Sprintf("● error %d", n)))
 	}
+	if n := counts["stale"]; n > 0 { // unobserved machine: shown only when present (#285)
+		parts = append(parts, dimStyle.Render(fmt.Sprintf("◌ stale %d", n)))
+	}
 	parts = append(parts, dimStyle.Render(fmt.Sprintf("● ended %d", counts["ended"])))
 	line := strings.Join(parts, "   ") + "    " + labelStyle.Render("out ") + humanizeTokens(totalOut) +
 		"    " + labelStyle.Render("rc ") + rcOnStyle.Render(fmt.Sprintf("◉ %d", rcActive))
 	if s := sparkline(history); s != "" {
 		line += "    " + labelStyle.Render("activity ") + s
-	}
-	if unread > 0 { // sessions needing a human that the operator hasn't looked at (#259)
-		line += "    " + unreadDot.Render(fmt.Sprintf("● %d unread", unread))
 	}
 	return line
 }
@@ -463,8 +467,8 @@ func countByStatus(sessions []api.SessionView, status string) int {
 
 // visibleColumns returns the columns that fit in width, dropping the
 // highest-drop columns first. Columns with drop == 0 are always kept.
-func visibleColumns(width int) []column {
-	cols := append([]column(nil), columns...)
+func visibleColumns(base []column, width int) []column {
+	cols := append([]column(nil), base...)
 	if width <= 0 {
 		return cols
 	}
@@ -541,6 +545,9 @@ func statusStyle(status string) lipgloss.Style {
 func statusCell(s api.SessionView) string {
 	if s.Status == "error" && s.APIErrorStatus != 0 {
 		return fmt.Sprintf("● error %d", s.APIErrorStatus)
+	}
+	if s.Status == "stale" { // dotted: no fresh signal, state unknown (#285)
+		return "◌ " + s.Status
 	}
 	return "● " + s.Status
 }

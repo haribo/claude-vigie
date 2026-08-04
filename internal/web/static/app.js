@@ -7,8 +7,8 @@
 // via CSSOM (element.style), never inline attributes, to keep the strict CSP.
 
 const TOKEN_KEY = "cf_token";
-const STATUSES = ["working", "thinking", "waiting", "idle", "stalled", "error", "ended"];
-const RANK = { stalled: 0, working: 1, thinking: 2, waiting: 3, idle: 4, error: 5, ended: 6 };
+const STATUSES = ["working", "thinking", "waiting", "idle", "stalled", "error", "stale", "ended"];
+const RANK = { stalled: 0, working: 1, thinking: 2, waiting: 3, idle: 4, error: 5, stale: 6, ended: 7 };
 
 let token = localStorage.getItem(TOKEN_KEY) || "";
 let sessions = [], byId = new Map();
@@ -86,20 +86,85 @@ function switchTab(id) {
 }
 
 // ---------- Sessions ----------
+// Each column carries how to render its cell, so the header and the rows are both
+// driven by the (operator-ordered, filtered) column list — see activeCols (#309).
 const COLS = [
-  { key: "name", label: "Session", cmp: (a, b) => (a.title || a.id).localeCompare(b.title || b.id) },
-  { key: "machine", label: "Machine", cmp: (a, b) => a.machine.localeCompare(b.machine) },
-  { key: "project", label: "Project", cmp: (a, b) => projectName(a.project_dir).localeCompare(projectName(b.project_dir)) },
-  { key: "branch", label: "Branch", cmp: (a, b) => (a.git_branch || "").localeCompare(b.git_branch || "") },
-  { key: "model", label: "Model", cmp: (a, b) => (a.model || "").localeCompare(b.model || "") },
-  { key: "tokens", label: "Tokens", num: true, cmp: (a, b) => totalTokens(a.usage || {}) - totalTokens(b.usage || {}) },
-  { key: "seen", label: "Seen", num: true, cmp: (a, b) => ageSec(b.last_seen_at) - ageSec(a.last_seen_at) },
-  { key: "activity", label: "Activity", nosort: true },
-  { key: "rc", label: "RC", cmp: (a, b) => (a.remote_control === b.remote_control ? 0 : a.remote_control ? -1 : 1) },
-  { key: "status", label: "Status", cmp: (a, b) => RANK[a.status] - RANK[b.status] },
-  { key: "doing", label: "Doing", nosort: true },
-  { key: "act", label: "", nosort: true },
+  { key: "name", label: "Session", cmp: (a, b) => (a.title || a.id).localeCompare(b.title || b.id),
+    cell: (s) => { const n = esc(s.title || s.id); return `<td class="name" title="${n}"><span class="nm">${n}</span></td>`; } },
+  { key: "machine", label: "Machine", cmp: (a, b) => a.machine.localeCompare(b.machine),
+    cell: (s) => `<td class="dim">${esc(s.machine)}</td>` },
+  { key: "project", label: "Project", cmp: (a, b) => projectName(a.project_dir).localeCompare(projectName(b.project_dir)),
+    cell: (s) => { const p = esc(projectName(s.project_dir)); return `<td class="proj" title="${p}">${p}</td>`; } },
+  { key: "branch", label: "Branch", cmp: (a, b) => (a.git_branch || "").localeCompare(b.git_branch || ""),
+    cell: (s) => { const b = esc(dash(s.git_branch)); return `<td class="branch dim" title="${b}">${b}</td>`; } },
+  { key: "model", label: "Model", cmp: (a, b) => (a.model || "").localeCompare(b.model || ""),
+    cell: (s) => `<td class="${s.model ? "dim" : "faint"}">${esc(dash(shortModel(s.model)))}</td>` },
+  { key: "effort", label: "Effort", cmp: (a, b) => (a.effort || "").localeCompare(b.effort || ""),
+    cell: (s) => `<td class="${s.effort ? "dim" : "faint"}">${esc(dash(s.effort))}</td>` },
+  { key: "tokens", label: "Tokens", num: true, cmp: (a, b) => totalTokens(a.usage || {}) - totalTokens(b.usage || {}),
+    cell: (s) => `<td class="num">${humanTokens(totalTokens(s.usage || {}))}</td>` },
+  { key: "seen", label: "Seen", num: true, cmp: (a, b) => ageSec(b.last_seen_at) - ageSec(a.last_seen_at),
+    cell: (s) => `<td class="num dim">${relAge(s.last_seen_at)}</td>` },
+  { key: "activity", label: "Activity", nosort: true,
+    cell: (s) => `<td>${sparkSVG(s.samples)}</td>` },
+  { key: "rc", label: "RC", cmp: (a, b) => (a.remote_control === b.remote_control ? 0 : a.remote_control ? -1 : 1),
+    cell: (s) => `<td>${s.remote_control ? '<span class="rc-on" title="Remote control on">◉</span>' : '<span class="rc-off" title="Remote control off">○</span>'}</td>` },
+  { key: "status", label: "Status", cmp: (a, b) => RANK[a.status] - RANK[b.status],
+    cell: (s) => { const st = STATUSES.includes(s.status) ? s.status : "idle"; const code = (s.status === "error" && s.api_error_status) ? ` <span class="code">${s.api_error_status}</span>` : ""; return `<td><span class="pill st-${st}"><span class="dot"></span>${st}${code}</span></td>`; } },
+  { key: "doing", label: "Doing", nosort: true,
+    cell: (s) => { const d = s.activity ? esc(s.activity) : "-"; return `<td class="${s.status === "waiting" ? "doing wait" : "doing"}" title="${d}">${d}</td>`; } },
+  { key: "act", label: "", nosort: true,
+    cell: () => `<td><button class="det-btn" aria-label="Open detail" title="Open detail"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg></button></td>` },
 ];
+
+// COLS_KEY holds the operator's column layout for this browser (ordered list of
+// visible keys); like the token, it is client-local (#309).
+const COLS_KEY = "cf_columns";
+const MANDATORY_COLS = new Set(["name", "status"]);
+
+// columnOrderStored reads the saved ordered visible keys, or [] when unset.
+function columnOrderStored() {
+  try { const v = JSON.parse(localStorage.getItem(COLS_KEY) || "[]"); return Array.isArray(v) ? v : []; } catch (e) { return []; }
+}
+function saveColumnOrder(keys) { localStorage.setItem(COLS_KEY, JSON.stringify(keys)); }
+
+// effectiveColKeys is the ordered visible keys: the saved order (unknown dropped,
+// mandatory forced in), or every column in the built-in order when none is saved.
+function effectiveColKeys() {
+  const known = new Map(COLS.map((c) => [c.key, c]));
+  const saved = columnOrderStored();
+  if (!saved.length) return COLS.map((c) => c.key);
+  const seen = new Set(), out = [];
+  saved.forEach((k) => { if (known.has(k) && !seen.has(k)) { out.push(k); seen.add(k); } });
+  COLS.forEach((c) => { if (MANDATORY_COLS.has(c.key) && !seen.has(c.key)) { out.push(c.key); seen.add(c.key); } });
+  return out;
+}
+
+// activeCols is the visible columns in display order — the base for the table.
+function activeCols() {
+  const byKey = new Map(COLS.map((c) => [c.key, c]));
+  return effectiveColKeys().map((k) => byKey.get(k));
+}
+
+// pickerCols is every column in picker order: visible first, then hidden.
+function pickerCols() {
+  const vis = effectiveColKeys(), seen = new Set(vis), byKey = new Map(COLS.map((c) => [c.key, c]));
+  return vis.map((k) => byKey.get(k)).concat(COLS.filter((c) => !seen.has(c.key)));
+}
+function colVisible(key) { return effectiveColKeys().includes(key); }
+
+function toggleCol(key) {
+  if (MANDATORY_COLS.has(key)) return;
+  const cur = effectiveColKeys(), i = cur.indexOf(key);
+  if (i >= 0) cur.splice(i, 1); else cur.push(key);
+  saveColumnOrder(cur);
+}
+function moveCol(key, dir) {
+  const cur = effectiveColKeys(), i = cur.indexOf(key), j = i + dir;
+  if (i < 0 || j < 0 || j >= cur.length) return;
+  [cur[i], cur[j]] = [cur[j], cur[i]];
+  saveColumnOrder(cur);
+}
 function visibleSessions() {
   const list = showEnded ? sessions : sessions.filter((s) => s.status !== "ended");
   const col = COLS.find((c) => c.key === sortKey);
@@ -126,7 +191,8 @@ function renderSummary() {
 }
 
 function renderSessions() {
-  const heads = COLS.map((c) => {
+  const cols = activeCols();
+  const heads = cols.map((c) => {
     const sorted = c.key === sortKey;
     const arrow = sorted ? `<span class="arrow">${sortDir === 1 ? "▼" : "▲"}</span>` : "";
     const cls = [c.num ? "num" : "", c.nosort ? "nosort" : "", sorted ? "sorted" : ""].filter(Boolean).join(" ");
@@ -135,24 +201,8 @@ function renderSessions() {
   const rows = visibleSessions().map((s) => {
     const st = STATUSES.includes(s.status) ? s.status : "idle";
     const attn = (s.status === "waiting" || s.status === "stalled") ? " attn" : "";
-    const rc = s.remote_control ? '<span class="rc-on" title="Remote control on">◉</span>' : '<span class="rc-off" title="Remote control off">○</span>';
-    const code = (s.status === "error" && s.api_error_status) ? ` <span class="code">${s.api_error_status}</span>` : "";
-    const name = esc(s.title || s.id), proj = esc(projectName(s.project_dir)), branch = esc(dash(s.git_branch));
-    const doing = s.activity ? esc(s.activity) : "-", doingCls = s.status === "waiting" ? "doing wait" : "doing";
-    return `<tr class="st-${st}${attn}" data-id="${esc(s.id)}" tabindex="0">
-      <td class="name" title="${name}"><span class="nm">${name}</span></td>
-      <td class="dim">${esc(s.machine)}</td>
-      <td class="proj" title="${proj}">${proj}</td>
-      <td class="branch dim" title="${branch}">${branch}</td>
-      <td class="${s.model ? "dim" : "faint"}">${esc(dash(shortModel(s.model)))}</td>
-      <td class="num">${humanTokens(totalTokens(s.usage || {}))}</td>
-      <td class="num dim">${relAge(s.last_seen_at)}</td>
-      <td>${sparkSVG(s.samples)}</td>
-      <td>${rc}</td>
-      <td><span class="pill st-${st}"><span class="dot"></span>${st}${code}</span></td>
-      <td class="${doingCls}" title="${doing}">${doing}</td>
-      <td><button class="det-btn" aria-label="Open detail" title="Open detail"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg></button></td>
-    </tr>`;
+    const cells = cols.map((c) => c.cell(s)).join("");
+    return `<tr class="st-${st}${attn}" data-id="${esc(s.id)}" tabindex="0">${cells}</tr>`;
   }).join("");
   const empty = visibleSessions().length ? "" : '<div class="empty">No sessions in view.</div>';
   $("tab-sessions").innerHTML = renderSummary() +
@@ -243,15 +293,27 @@ function platformClass(p) {
 function renderSettings() {
   const retention = settings && settings.session_retention ? settings.session_retention : "kept forever";
   const [pcls, ptxt] = platformClass(platform);
+  const colRows = pickerCols().map((c) => {
+    const on = colVisible(c.key), req = MANDATORY_COLS.has(c.key), label = esc(c.label || c.key);
+    return `<div class="col-row">
+      <label class="col-tog"><input type="checkbox" data-col="${c.key}" ${on ? "checked" : ""} ${req ? "disabled" : ""}> ${label}${req ? " <small>required</small>" : ""}</label>
+      <span class="col-move"><button data-mv-up="${c.key}" title="Move up" aria-label="Move up">↑</button><button data-mv-down="${c.key}" title="Move down" aria-label="Move down">↓</button></span>
+    </div>`;
+  }).join("");
   $("tab-settings").innerHTML = `
     <div class="settings">
-      <div class="set-note"><span>ℹ</span><span>Settings are <b>read-only</b> from the web client — claude-vigie is observe-only. Change them on the daemon.</span></div>
+      <div class="set-note"><span>ℹ</span><span><b>Server</b> settings are read-only here — claude-vigie is observe-only; change them on the daemon. Your <b>column layout</b> and sort are saved in this browser.</span></div>
       <div class="set-row"><span class="k">Server<small>the daemon this dashboard is served by</small></span><span class="v">${esc(location.origin)}</span></div>
       <div class="set-row"><span class="k">Session retention<small>how long closed sessions are kept</small></span><span class="v">${esc(retention)}</span></div>
       <div class="set-row"><span class="k">Platform status<small>polled from status.claude.com</small></span><span class="v ${pcls === "ok" ? "ok" : ""}">● ${esc(ptxt)}</span></div>
       <div class="set-row"><span class="k">Token<small>stored in this browser, sent as a bearer token</small></span><span class="v">connected <button class="signout2" id="signout2">sign out</button></span></div>
+      <div class="set-row col-picker"><span class="k">Columns<small>which columns show, and their order — saved in this browser</small></span><span class="v col-list">${colRows}</span></div>
     </div>`;
   $("signout2").addEventListener("click", signOut);
+  const refresh = () => { renderSettings(); renderSessions(); };
+  $("tab-settings").querySelectorAll("input[data-col]").forEach((el) => el.addEventListener("change", () => { toggleCol(el.dataset.col); refresh(); }));
+  $("tab-settings").querySelectorAll("[data-mv-up]").forEach((b) => b.addEventListener("click", () => { moveCol(b.dataset.mvUp, -1); refresh(); }));
+  $("tab-settings").querySelectorAll("[data-mv-down]").forEach((b) => b.addEventListener("click", () => { moveCol(b.dataset.mvDown, 1); refresh(); }));
 }
 
 // ---------- bottom bar: usage + platform ----------
@@ -280,7 +342,8 @@ function openDetail(id) {
   const ctx = [
     field("Session id", esc(s.id), "mut"), field("User", esc(dash(s.user)), "mut"), field("Machine", esc(s.machine)),
     field("Directory", esc(dash(s.project_dir)), "mut"), field("Branch", s.git_branch ? esc(s.git_branch) : "—"),
-    field("Model", esc(dash(shortModel(s.model))), s.model ? "" : "mut"), field("Doing", esc(dash(s.activity)), doingWait ? "wait" : "mut"),
+    field("Model", esc(dash(shortModel(s.model))), s.model ? "" : "mut"), field("Effort", esc(dash(s.effort)), s.effort ? "" : "mut"),
+    field("Doing", esc(dash(s.activity)), doingWait ? "wait" : "mut"),
     field("Remote control", s.remote_control ? "on ◉" : "off ○", "mut"),
     s.remote_url ? field("Remote", `<a href="${esc(s.remote_url)}" target="_blank" rel="noopener noreferrer">${esc(s.remote_url)}</a>`) : "",
     field("Last tool", esc(dash(s.last_tool)), "mut"),

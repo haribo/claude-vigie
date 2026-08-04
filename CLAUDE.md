@@ -16,6 +16,7 @@ Rules must be concise. One rule per line when possible.
 - Commit conventions: follow `docs/git-commits.md` strictly
 - Issue conventions: follow `docs/git-issues.md` strictly
 - Git workflow: follow `docs/git-workflow.md` strictly
+- Releases: `CHANGELOG.md` is the source of truth; use `/release` (stops for approval before the develop→main merge and the tag) — never release autonomously
 - Never use `git commit` directly, only `/git-commit` command
 - Never merge a PR directly (`gh pr merge`, etc.), only `/gh-merge-develop` command
 - Never use `gh issue create` directly, only `/gh-issue` command

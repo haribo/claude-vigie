@@ -100,7 +100,7 @@ func TestRemoveHooks(t *testing.T) {
 	}
 }
 
-// TestDualLegs installs a production leg and a dev leg (distinct FLEET_CONFIG)
+// TestDualLegs installs a production leg and a dev leg (distinct VIGIE_CONFIG)
 // side by side, and checks that removing one leaves the other intact.
 func TestDualLegs(t *testing.T) {
 	events := []string{"Notification"}
@@ -127,8 +127,8 @@ func TestDualLegs(t *testing.T) {
 	if countLeg(hooks["Notification"], "/tmp/dev.toml") != 1 {
 		t.Error("dev leg missing")
 	}
-	if !strings.Contains(string(out), "FLEET_CONFIG=/tmp/dev.toml") {
-		t.Errorf("dev leg command missing FLEET_CONFIG:\n%s", out)
+	if !strings.Contains(string(out), "VIGIE_CONFIG=/tmp/dev.toml") {
+		t.Errorf("dev leg command missing VIGIE_CONFIG:\n%s", out)
 	}
 
 	// Removing the dev leg leaves production intact.
@@ -146,7 +146,7 @@ func TestDualLegs(t *testing.T) {
 	if countLeg(hooks["Notification"], "") != 1 {
 		t.Error("production leg removed by mistake")
 	}
-	if strings.Contains(string(out), "FLEET_CONFIG=") {
+	if strings.Contains(string(out), "VIGIE_CONFIG=") {
 		t.Errorf("dev leg command still present:\n%s", out)
 	}
 }
@@ -175,5 +175,37 @@ func TestInstallUninstallRoundtrip(t *testing.T) {
 	}
 	if strings.Contains(string(data), "report --event=") {
 		t.Errorf("hook not removed:\n%s", data)
+	}
+}
+
+// TestLegacyFleetConfigLeg checks backward compatibility with legs installed
+// before the rename: a FLEET_CONFIG= dev leg is still recognized, and a reinstall
+// migrates it to the VIGIE_CONFIG= form instead of leaving a duplicate (#289).
+func TestLegacyFleetConfigLeg(t *testing.T) {
+	legacy := "FLEET_CONFIG=/tmp/dev.toml /bin/vigie report --event=Stop"
+	if !owns(legacy, "/tmp/dev.toml") {
+		t.Error("legacy FLEET_CONFIG dev leg not recognized")
+	}
+	if owns(legacy, "") {
+		t.Error("legacy dev leg wrongly matched the production leg")
+	}
+
+	base := []byte(`{"hooks":{"Stop":[{"matcher":"","hooks":[{"type":"command","command":"` + legacy + `"}]}]}}`)
+	out, err := mergeHooks(base, []string{"Stop"}, "/bin/vigie", "/tmp/dev.toml", 5)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, hooks, err := parseSettings(out)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := countLeg(hooks["Stop"], "/tmp/dev.toml"); got != 1 {
+		t.Errorf("dev leg count = %d, want 1 (legacy replaced, not duplicated)", got)
+	}
+	if strings.Contains(string(out), "FLEET_CONFIG=") {
+		t.Errorf("legacy leg not migrated to VIGIE_CONFIG:\n%s", out)
+	}
+	if !strings.Contains(string(out), "VIGIE_CONFIG=/tmp/dev.toml") {
+		t.Errorf("reinstalled leg missing VIGIE_CONFIG:\n%s", out)
 	}
 }

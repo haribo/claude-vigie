@@ -64,6 +64,30 @@ func TestFleetConfigOverride(t *testing.T) {
 	}
 }
 
+func TestVigieConfigOverride(t *testing.T) {
+	custom := filepath.Join(t.TempDir(), "custom.toml")
+	t.Setenv("VIGIE_CONFIG", custom)
+
+	if p, err := Path(); err != nil || p != custom {
+		t.Fatalf("Path() = %q, %v; want %q", p, err, custom)
+	}
+}
+
+// TestVigieConfigTakesPrecedence: when both are set, VIGIE_CONFIG wins and
+// FLEET_CONFIG is only a fallback (#289).
+func TestVigieConfigTakesPrecedence(t *testing.T) {
+	vigie := filepath.Join(t.TempDir(), "vigie.toml")
+	t.Setenv("FLEET_CONFIG", filepath.Join(t.TempDir(), "fleet.toml"))
+	t.Setenv("VIGIE_CONFIG", vigie)
+
+	if p, err := Path(); err != nil || p != vigie {
+		t.Fatalf("Path() = %q, %v; want VIGIE_CONFIG to win (%q)", p, err, vigie)
+	}
+	if got := EnvConfigPath(); got != vigie {
+		t.Fatalf("EnvConfigPath() = %q, want %q", got, vigie)
+	}
+}
+
 func TestMigratesLegacyJSON(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("XDG_CONFIG_HOME", home)

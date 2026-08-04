@@ -53,18 +53,30 @@ gh pr checks
 
 ## Release workflow
 
+`CHANGELOG.md` is the **single source of truth** for release notes
+([Keep a Changelog](https://keepachangelog.com/)). Every user-facing PR adds a
+line under `## [Unreleased]`. On release, that section is rolled into a versioned
+one, and the GitHub Release body is a **mirror** of it — never a second narrative,
+never goreleaser's commit dump (its `changelog:` is disabled for this reason).
+
+Use the **`/release`** skill: it runs the flow below and **stops for explicit
+human approval before the `develop`→`main` merge, and again before the tag push**
+— a release is never autonomous.
+
 ```bash
-# 1. Open PR develop → main (only when develop is validated)
+# 1. develop is green, and CHANGELOG.md has entries under [Unreleased]
+# 2. Roll [Unreleased] → [X.Y.Z] - YYYY-MM-DD in CHANGELOG.md; commit to develop
+# 3. Open PR develop → main (only when develop is validated)
 gh pr create --base main --head develop
-
-# 2. Wait for CI to pass
-gh pr checks
-
-# 3. Merge commit — NEVER squash release PRs
+# 4. Wait for CI                            gh pr checks
+#    ⛔ STOP — explicit human approval before merging
+# 5. Merge commit — NEVER squash a release PR
 gh pr merge --merge
-
-# 4. Tag the release
+#    ⛔ STOP — explicit human approval before tagging
+# 6. Tag → goreleaser publishes the binaries
 git tag vX.Y.Z && git push origin vX.Y.Z
+# 7. Set the Release body from the CHANGELOG [X.Y.Z] section (the mirror)
+gh release edit vX.Y.Z --notes-file <section>
 ```
 
 ## Merge strategy

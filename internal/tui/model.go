@@ -115,6 +115,7 @@ type model struct {
 	usage           api.UsageReport
 	platform        api.PlatformStatus
 	watcherSeen     string
+	watcherMachines map[string]string // per-machine last watch report, RFC3339 (#284)
 	gotWatcher      bool
 	err             error
 	width           int
@@ -139,7 +140,6 @@ type model struct {
 	clock           func() time.Time  // injected wall clock; defaults to clock.Now
 	prevStatus      map[string]string // last status per session, for notify transitions (#260)
 	focused         bool              // terminal has focus → suppress desktop notifications
-	seen            map[string]string // per-session acked StatusChangedAt, for unread (#259)
 }
 
 // now reads the injected clock, falling back to the system clock so a model
@@ -191,8 +191,9 @@ type eventMsg struct{}
 type connMsg struct{ live bool }
 
 type watcherMsg struct {
-	seen string
-	err  error
+	seen     string
+	machines map[string]string
+	err      error
 }
 
 type settingsMsg struct {
@@ -281,7 +282,7 @@ func (m model) watcherCmd() tea.Cmd {
 	}
 	return func() tea.Msg {
 		s, err := m.fetchWatcher()
-		return watcherMsg{seen: s.LastSeen, err: err}
+		return watcherMsg{seen: s.LastSeen, machines: s.Machines, err: err}
 	}
 }
 
@@ -374,6 +375,7 @@ func (m model) applyDataMsg(msg tea.Msg) model {
 	case watcherMsg:
 		if msg.err == nil {
 			m.watcherSeen = msg.seen
+			m.watcherMachines = msg.machines
 			m.gotWatcher = true
 		}
 	case statsMsg:
@@ -448,12 +450,12 @@ func (m model) handleSessionsKey(msg tea.KeyMsg) model {
 	case "a":
 		m.showAll = !m.showAll
 		m.cursor = 0
-	case "n": // jump to the oldest session waiting on the operator (#261)
+	case "n": // jump to the oldest session waiting on the operator (#261) — pure
+		// navigation: looking is done in the session, not acknowledged in vigie (ADR-0007)
 		if id := nextAttention(m.sessions); id != "" {
 			m.selectedID = id
 			m.cursor = m.cursorForSelection()
 			m.detail = true
-			m = m.ack(id) // jumping to it counts as viewing it (#259)
 		}
 	default:
 		return m.handleNavKey(msg)
@@ -471,22 +473,71 @@ func (m model) saveViewPrefs() model {
 	return m
 }
 
+// totalSettingsRows is the base preference rows plus one row per column in the
+// column picker (#308).
+func totalSettingsRows() int { return settingsCount + len(columns) }
+
 func (m model) handleSettingsKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	onColumn := m.settingsCursor >= settingsCount // a column-picker row
 	switch msg.String() {
 	case "down", "j":
-		if m.settingsCursor < settingsCount-1 {
+		if m.settingsCursor < totalSettingsRows()-1 {
 			m.settingsCursor++
 		}
 	case "up", "k":
 		if m.settingsCursor > 0 {
 			m.settingsCursor--
 		}
-	case " ", "enter", "right", "l":
+	case " ", "enter":
+		if onColumn {
+			return m.toggleColumnRow(), nil
+		}
 		return m.editSetting(1)
+	case "right", "l":
+		if !onColumn {
+			return m.editSetting(1)
+		}
 	case "left", "h":
-		return m.editSetting(-1)
+		if !onColumn {
+			return m.editSetting(-1)
+		}
+	case "[": // reorder a visible column up
+		if onColumn {
+			return m.moveColumnRow(-1), nil
+		}
+	case "]": // reorder a visible column down
+		if onColumn {
+			return m.moveColumnRow(1), nil
+		}
 	}
 	return m, nil
+}
+
+// columnAtCursor returns the picker column under the settings cursor.
+func (m model) columnAtCursor() column {
+	return pickerColumns(m.prefs.columnOrder)[m.settingsCursor-settingsCount]
+}
+
+// toggleColumnRow shows/hides the column under the cursor (mandatory ones can't
+// be hidden) and persists (#308).
+func (m model) toggleColumnRow() model {
+	m.prefs.columnOrder = toggleColumn(m.prefs.columnOrder, m.columnAtCursor().key())
+	savePrefs(m.prefs)
+	return m
+}
+
+// moveColumnRow reorders the column under the cursor, keeping the cursor on it.
+func (m model) moveColumnRow(dir int) model {
+	key := m.columnAtCursor().key()
+	m.prefs.columnOrder = moveColumn(m.prefs.columnOrder, key, dir)
+	for i, c := range pickerColumns(m.prefs.columnOrder) {
+		if c.key() == key {
+			m.settingsCursor = settingsCount + i
+			break
+		}
+	}
+	savePrefs(m.prefs)
+	return m
 }
 
 // editSetting changes the selected preference. Local prefs (rows 0-1) are saved
@@ -523,7 +574,6 @@ func (m model) handleNavKey(msg tea.KeyMsg) model {
 	case "enter":
 		if len(vis) > 0 {
 			m.detail = true
-			m = m.ack(idAt(vis, m.cursor)) // opening the detail marks it read (#259)
 		}
 	case "esc":
 		if m.detail {
@@ -611,7 +661,7 @@ func (m model) View() string {
 	case tabStats:
 		b.WriteString(m.renderStats())
 	case tabMachines:
-		b.WriteString(renderMachines(m.sessions, m.width))
+		b.WriteString(renderMachines(m.sessions, m.watcherMachines, m.width))
 	case tabSettings:
 		b.WriteString(m.renderSettings())
 	}
@@ -655,6 +705,26 @@ func (m model) renderSettings() string {
 		}
 		b.WriteString(line + "\n")
 	}
+
+	// Column picker: every column, visible ones first, toggled with space and
+	// reordered with [ ] (#308).
+	b.WriteString("\n" + dimStyle.Render("Columns") +
+		dimStyle.Render("   (space: show/hide    [ ]: reorder)") + "\n\n")
+	for i, c := range pickerColumns(m.prefs.columnOrder) {
+		gutter := "  "
+		if settingsCount+i == m.settingsCursor {
+			gutter = cursorStyle.Render("❯ ")
+		}
+		box := dimStyle.Render("[ ]")
+		if columnVisible(m.prefs.columnOrder, c.key()) {
+			box = statusStyle("working").Render("[x]")
+		}
+		name := c.header
+		if mandatoryColumns[c.key()] {
+			name += dimStyle.Render("  (required)")
+		}
+		b.WriteString(gutter + box + " " + name + "\n")
+	}
 	return b.String()
 }
 
@@ -696,7 +766,7 @@ func (m model) viewSessions() string {
 	var b strings.Builder
 	// The tab-bar separator frames the summary strip above; a rule below
 	// separates it from the table.
-	b.WriteString(joinLR(renderSummary(m.sessions, m.history, m.unreadCount()), m.summaryRight(), m.width) + "\n")
+	b.WriteString(joinLR(renderSummary(m.sessions, m.history), m.summaryRight(), m.width) + "\n")
 	b.WriteString(rule(m.width) + "\n")
 	if m.filtering || m.filter != "" {
 		b.WriteString(m.filterLine() + "\n")
@@ -704,7 +774,7 @@ func (m model) viewSessions() string {
 	if len(vis) == 0 {
 		b.WriteString(dimStyle.Render("no sessions match the filter"))
 	} else {
-		b.WriteString(renderGroupedTable(vis, m.width, cursor, m.groupBy, sortState{m.sortKey, m.sortReversed}, m.unreadSet()))
+		b.WriteString(renderGroupedTable(vis, activeColumns(m.prefs.columnOrder), m.width, cursor, m.groupBy, sortState{m.sortKey, m.sortReversed}))
 	}
 	b.WriteString(rule(m.width) + "\n" + renderUsageStrip(m.usage) + platformStrip(m.platform))
 	return b.String()

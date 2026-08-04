@@ -14,11 +14,27 @@ import (
 
 // Info is what we extract from a transcript.
 type Info struct {
-	SessionID      string
-	Cwd            string
-	GitBranch      string
-	Title          string
-	Model          string
+	SessionID string
+	Cwd       string
+	GitBranch string
+	Title     string
+	Model     string
+	// Effort is the reasoning effort of the last assistant line that carried one
+	// (low/medium/high/xhigh/max). Claude Code writes it at the root of assistant
+	// lines, but not on every line (older sessions and some message types omit it),
+	// so the last non-empty value is kept rather than cleared — best-effort, same
+	// caveat as the "thinking" status.
+	Effort string
+	// ContextTokens is the real prompt size of the latest main-thread request — the
+	// last non-sidechain assistant line's input + cache-read + cache-creation
+	// tokens. Compared against the model's window to show how full the context is
+	// (#279). 0 when unknown.
+	ContextTokens int64
+	// PermissionMode is the session's last-seen permission mode — the canonical
+	// `permissionMode` field (default/acceptEdits/plan/auto/bypassPermissions), kept
+	// from the last line that carried it. The redundant type:"mode" line (whose
+	// `normal` == `default`) is ignored. Empty when unknown (#303/#304).
+	PermissionMode string
 	Usage          api.Usage
 	LastStopReason string // stop_reason of the last assistant message
 	LastActivity   string // RFC3339 timestamp of the last line
@@ -67,7 +83,10 @@ type line struct {
 	CustomTitle    string  `json:"customTitle"`
 	AiTitle        string  `json:"aiTitle"`
 	Timestamp      string  `json:"timestamp"`
+	Effort         string  `json:"effort"`         // reasoning effort, root-level on assistant lines
+	PermissionMode string  `json:"permissionMode"` // permission mode, on user / permission-mode lines (#304)
 	IsAPIError     bool    `json:"isApiErrorMessage"`
+	IsSidechain    bool    `json:"isSidechain"` // a sub-agent line — excluded from context sizing (#279)
 	APIErrorStatus int     `json:"apiErrorStatus"`
 	Message        message `json:"message"`
 }
@@ -104,6 +123,9 @@ func (info *Info) applyMeta(l line, titles *titleTracker) {
 	if l.Timestamp != "" {
 		info.LastActivity = l.Timestamp
 	}
+	if l.PermissionMode != "" {
+		info.PermissionMode = l.PermissionMode // keep the last non-empty (#304)
+	}
 	titles.observe(l.CustomTitle, l.AiTitle)
 }
 
@@ -122,6 +144,17 @@ func (info *Info) applyAssistant(l line, seen map[string]bool) {
 	info.Activity = lastToolActivity(m.Content)
 	if m.Model != "" {
 		info.Model = m.Model
+	}
+	if l.Effort != "" {
+		info.Effort = l.Effort // keep the last reported effort; a line without it does not clear it
+	}
+	// Context size: the real prompt of the latest main-thread request. Skip
+	// sub-agent (sidechain) lines and lines with no usage (e.g. API errors), so the
+	// value tracks the main conversation and never dips to a partial number (#279).
+	if !l.IsSidechain {
+		if ctx := m.Usage.InputTokens + m.Usage.CacheReadInputTokens + m.Usage.CacheCreationInputTokens; ctx > 0 {
+			info.ContextTokens = ctx
+		}
 	}
 	if m.ID != "" {
 		if seen[m.ID] {

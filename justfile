@@ -20,7 +20,7 @@ tool-install:
 
 # =============================================================================
 # DEV RUN — run the current source against a throwaway local server, isolated
-# from any installed production client via FLEET_CONFIG (never touches
+# from any installed production client via VIGIE_CONFIG (never touches
 # ~/.config). The background recipes track their pid in .dev/ and kill only that
 # pid on restart — never by binary name, so a production watcher is never hit.
 # =============================================================================
@@ -63,13 +63,13 @@ dev-watcher: dev-config
     go build -o "{{dev_bin}}/vigie" ./cmd/vigie
     pidf="{{dev_dir}}/watcher.pid"
     [ -f "$pidf" ] && kill "$(cat "$pidf")" 2>/dev/null || true
-    FLEET_CONFIG="{{dev_config}}" nohup "{{dev_bin}}/vigie" watch > "{{dev_dir}}/watcher.log" 2>&1 &
+    VIGIE_CONFIG="{{dev_config}}" nohup "{{dev_bin}}/vigie" watch > "{{dev_dir}}/watcher.log" 2>&1 &
     echo $! > "$pidf"
     echo "dev watcher → {{dev_url}} (pid $(cat "$pidf"), logs {{dev_dir}}/watcher.log)"
 
 # Run the current-source TUI in the foreground, pointed at the dev server.
 dev-tui: dev-config
-    FLEET_CONFIG="{{dev_config}}" go run ./cmd/vigie tui
+    VIGIE_CONFIG="{{dev_config}}" go run ./cmd/vigie tui
 
 # Stop the background dev server and watcher.
 dev-down:
@@ -89,7 +89,7 @@ dev-hooks-install: dev-config
     set -euo pipefail
     mkdir -p "{{dev_bin}}"
     go build -o "{{dev_bin}}/vigie" ./cmd/vigie
-    FLEET_CONFIG="{{dev_config}}" "{{dev_bin}}/vigie" hooks install
+    VIGIE_CONFIG="{{dev_config}}" "{{dev_bin}}/vigie" hooks install
 
 # Remove the dev hook leg (production hooks are never touched).
 dev-hooks-uninstall:
@@ -97,7 +97,7 @@ dev-hooks-uninstall:
     set -euo pipefail
     mkdir -p "{{dev_bin}}"
     [ -x "{{dev_bin}}/vigie" ] || go build -o "{{dev_bin}}/vigie" ./cmd/vigie
-    FLEET_CONFIG="{{dev_config}}" "{{dev_bin}}/vigie" hooks uninstall
+    VIGIE_CONFIG="{{dev_config}}" "{{dev_bin}}/vigie" hooks uninstall
 
 # =============================================================================
 # CODE

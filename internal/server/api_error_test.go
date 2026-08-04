@@ -13,7 +13,7 @@ import (
 func TestToViewAPIError(t *testing.T) {
 	now := time.Date(2026, 7, 27, 12, 0, 0, 0, time.UTC)
 	fresh := now.Add(-2 * time.Second).Format(time.RFC3339)
-	v := toView(store.Session{Status: "error", APIErrorStatus: 529, ReportedAt: fresh}, nil, now)
+	v := toView(store.Session{Status: "error", APIErrorStatus: 529, ReportedAt: fresh}, nil, now, true)
 	if v.Status != "error" || v.APIErrorStatus != 529 {
 		t.Errorf("view = {%q, %d}, want {error, 529}", v.Status, v.APIErrorStatus)
 	}

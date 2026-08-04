@@ -30,6 +30,9 @@ type hookPayload struct {
 	Cwd            string `json:"cwd"`
 	HookEventName  string `json:"hook_event_name"`
 	ToolName       string `json:"tool_name"`
+	// PermissionMode is the instant source for the session's permission mode; it
+	// rides UserPromptSubmit / PreToolUse payloads (absent on Notification) (#304).
+	PermissionMode string `json:"permission_mode"`
 	// NotificationType is set on Notification events (permission_prompt,
 	// idle_prompt, …); it lets the server tell "waiting on a human" from "idle".
 	NotificationType string `json:"notification_type"`
@@ -71,6 +74,7 @@ func Run(event string, stdin io.Reader) error {
 		GitBranch:        gitBranch(p.Cwd),
 		LastTool:         p.ToolName,
 		NotificationType: p.NotificationType,
+		PermissionMode:   p.PermissionMode, // "" when the event doesn't carry it
 		Activity:         hookActivity(event, p),
 		Timestamp:        clock.Now().UTC().Format(time.RFC3339),
 	}
@@ -79,6 +83,11 @@ func Run(event string, stdin io.Reader) error {
 		if info, err := transcript.Parse(p.TranscriptPath); err == nil {
 			req.Usage = &info.Usage
 			req.Model = info.Model
+			req.Effort = info.Effort
+			req.ContextTokens = info.ContextTokens
+			if info.PermissionMode != "" {
+				req.PermissionMode = info.PermissionMode
+			}
 			req.Title = info.Title
 		}
 	}
