@@ -16,6 +16,40 @@ func TestHumanizeTokens(t *testing.T) {
 	}
 }
 
+// TestColumnWidthsFitContent guards the #319 tightening: no column is narrower
+// than its header (plus the sort arrow, if sortable), and the resnugged
+// fixed-format columns still hold their widest real cell.
+func TestColumnWidthsFitContent(t *testing.T) {
+	sortable := map[string]bool{}
+	for _, h := range sortColumn {
+		sortable[h] = true
+	}
+	byHeader := map[string]int{}
+	for _, c := range columns {
+		byHeader[c.header] = c.width
+		need := len([]rune(c.header))
+		if sortable[c.header] {
+			need++ // the header carries a 1-rune sort arrow when it is the active key
+		}
+		if c.width < need {
+			t.Errorf("%s: width %d < header need %d", c.header, c.width, need)
+		}
+	}
+
+	// widest humanizeTokens output over the whole range is "999.9k"/"999.9M" (6).
+	maxTok := 0
+	for _, n := range []int64{0, 999, 9_999, 999_900, 9_999_000, 999_900_000} {
+		if l := len(humanizeTokens(n)); l > maxTok {
+			maxTok = l
+		}
+	}
+	for h, need := range map[string]int{"OUT": maxTok, "TOTAL": maxTok, "EFFORT": len("medium")} {
+		if byHeader[h] < need {
+			t.Errorf("%s: width %d < content need %d", h, byHeader[h], need)
+		}
+	}
+}
+
 func TestShortModel(t *testing.T) {
 	if got := shortModel("claude-opus-4-8"); got != "opus-4-8" {
 		t.Errorf("shortModel = %q, want opus-4-8", got)
