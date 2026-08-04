@@ -29,7 +29,7 @@ var (
 func footer(t tab) string {
 	hints := [][2]string{
 		{"⇥", "switch"}, {"↑↓", "select"}, {"enter", "detail"}, {"n", "next"},
-		{"/", "filter"}, {"s", "sort"}, {"S", "reverse"}, {"g", "group"}, {"a", "all"},
+		{"/", "filter"}, {"s", "sort"}, {"S", "reverse"}, {"g", "group"}, {"a", "hide ended"},
 		{"r", "refresh"}, {"q", "quit"},
 	}
 	switch t {

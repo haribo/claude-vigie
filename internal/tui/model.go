@@ -132,7 +132,6 @@ type model struct {
 	groupBy         groupBy
 	fetchSeq        int // generation of the last issued sessions fetch
 	appliedSeq      int // generation of the last applied sessions result
-	showAll         bool
 	prefs           prefs
 	settingsCursor  int
 	events          <-chan struct{}
@@ -448,8 +447,10 @@ func (m model) handleSessionsKey(msg tea.KeyMsg) model {
 	case "g":
 		m.groupBy = (m.groupBy + 1) % groupByCount
 		return m.saveViewPrefs()
-	case "a":
-		m.showAll = !m.showAll
+	case "a": // toggle the persistent hide-ended setting (#320); best-effort save,
+		// like the sort/group prefs (#237) — shaping one's view, allowed by ADR-0007
+		m.prefs.hideEnded = !m.prefs.hideEnded
+		savePrefs(m.prefs)
 		m.cursor = 0
 	case "n": // jump to the oldest session waiting on the operator (#261) — pure
 		// navigation: looking is done in the session, not acknowledged in vigie (ADR-0007)
@@ -624,12 +625,13 @@ func (m model) handleFilterKey(msg tea.KeyMsg) model {
 }
 
 // visibleSessions returns the sessions after filtering and sorting. Ended and
-// stale sessions are hidden unless showAll is set.
+// idle-aged sessions are hidden per the persistent view prefs (toggled live by
+// the `a` key and Settings).
 func (m model) visibleSessions() []api.SessionView {
 	now := m.now()
 	out := make([]api.SessionView, 0, len(m.sessions))
 	for _, s := range m.sessions {
-		if !m.showAll && !m.prefs.visible(s, now) {
+		if !m.prefs.visible(s, now) {
 			continue
 		}
 		if m.matchesFilter(s) {
@@ -823,9 +825,7 @@ func (m model) summaryRight() string {
 	if m.groupBy != groupNone {
 		parts = append(parts, labelStyle.Render("group ")+groupNames[m.groupBy])
 	}
-	if m.showAll {
-		parts = append(parts, labelStyle.Render("showing ")+"all")
-	} else if h := m.hiddenCount(); h > 0 {
+	if h := m.hiddenCount(); h > 0 {
 		parts = append(parts, labelStyle.Render("hidden ")+strconv.Itoa(h))
 	}
 	parts = append(parts, m.connGlyph())
@@ -867,9 +867,6 @@ func joinLR(left, right string, width int) string {
 
 // hiddenCount is how many sessions the default filter is currently hiding.
 func (m model) hiddenCount() int {
-	if m.showAll {
-		return 0
-	}
 	now := m.now()
 	n := 0
 	for _, s := range m.sessions {
