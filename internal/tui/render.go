@@ -472,7 +472,7 @@ func visibleColumns(base []column, width int) []column {
 	if width <= 0 {
 		return cols
 	}
-	for tableWidth(cols) > width {
+	for rowWidth(cols) > width { // rowWidth includes the 2-col left gutter
 		idx, maxDrop := -1, 0
 		for i, c := range cols {
 			if c.drop > maxDrop {

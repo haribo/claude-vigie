@@ -669,7 +669,11 @@ func (m model) View() string {
 		b.WriteString(m.renderSettings())
 	}
 
-	b.WriteString("\n" + rule(m.width) + "\n" + footer(m.tab))
+	foot := footer(m.tab)
+	if m.width > 0 {
+		foot = lipgloss.NewStyle().Width(m.width).Render(foot) // wrap, don't overflow (#328)
+	}
+	b.WriteString("\n" + rule(m.width) + "\n" + foot)
 	return b.String()
 }
 
@@ -715,7 +719,7 @@ func (m model) renderSettings() string {
 	// much the selected columns cost against the available width, and flag the ones
 	// the auto-drop cuts off — the drop is never silent (#317).
 	active := activeColumns(m.prefs.columnOrder, m.prefs.columnHidden)
-	used, avail := tableWidth(active), m.width
+	used, avail := rowWidth(active), m.width // rowWidth includes the 2-col gutter
 	over := map[string]bool{}
 	for _, c := range overflowColumns(active, avail) {
 		over[c.key()] = true
@@ -873,10 +877,15 @@ func (m model) filterLine() string {
 }
 
 // joinLR places left and right on one line, right-aligned to width when known.
+// When both cannot fit, it keeps the primary left side (clamped to width) and
+// drops the secondary right side rather than overflowing the terminal (#328).
 func joinLR(left, right string, width int) string {
-	lw, rw := lipgloss.Width(left), lipgloss.Width(right)
-	if width <= 0 || lw+rw+3 > width {
+	if width <= 0 {
 		return left + "   " + right
+	}
+	lw, rw := lipgloss.Width(left), lipgloss.Width(right)
+	if lw+rw+3 > width {
+		return lipgloss.NewStyle().MaxWidth(width).Render(left)
 	}
 	return left + strings.Repeat(" ", width-lw-rw) + right
 }
