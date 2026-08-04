@@ -160,6 +160,18 @@ td.dim { color: var(--muted); } td.faint { color: var(--faint); }
 .set-row .v.ok { color: var(--working); }
 .set-row .v .signout2 { background: var(--surface); border: 1px solid var(--border); color: var(--muted); padding: 5px 12px; border-radius: 8px; margin-left: 8px; }
 .set-row .v .signout2:hover { color: var(--error); border-color: color-mix(in srgb, var(--error) 40%, var(--border)); }
+/* Column picker (#309) */
+.set-row.col-picker { align-items: flex-start; }
+.col-list { display: flex; flex-direction: column; gap: 2px; min-width: 264px; }
+.col-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 3px 6px; border-radius: 6px; }
+.col-row:hover { background: var(--surface-2); }
+.col-tog { display: flex; align-items: center; gap: 8px; color: var(--text); cursor: pointer; font-size: 13px; }
+.col-tog input { accent-color: var(--accent); }
+.col-tog input:disabled { opacity: 0.55; cursor: default; }
+.col-tog small { color: var(--faint); font-size: 10px; text-transform: uppercase; letter-spacing: 0.06em; }
+.col-move { display: flex; gap: 3px; }
+.col-move button { background: var(--surface); border: 1px solid var(--border); color: var(--muted); width: 24px; height: 22px; border-radius: 6px; cursor: pointer; line-height: 1; }
+.col-move button:hover { color: var(--accent); border-color: color-mix(in srgb, var(--accent) 40%, var(--border)); }
 
 /* ---------- detail page ---------- */
 .back { display: inline-flex; align-items: center; gap: 7px; margin-bottom: 14px; padding: 6px 12px 6px 9px; border-radius: 8px; background: var(--surface); border: 1px solid var(--border); color: var(--muted); transition: all 0.12s ease; }
