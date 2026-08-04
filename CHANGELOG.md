@@ -17,6 +17,10 @@ file is the single source of truth, not a second narrative.
 
 ### Fixed
 
+- TUI Machines and Settings tabs no longer overflow the terminal width on a
+  narrow terminal: the machines overview table clamps each row to width, its
+  no-watcher help text wraps, and the column-picker header wraps. The width-sweep
+  scaling guard now covers all three interactive tabs.
 - TUI Sessions view no longer overflows the terminal width on resize: the
   summary strip keeps its status counts and drops the secondary sort/connection
   side when space is tight, the key-hint footer wraps, and the column auto-drop

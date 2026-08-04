@@ -498,6 +498,16 @@ func tableWidth(cols []column) int {
 	return w
 }
 
+// clampWidth truncates a rendered line to width (ANSI-aware) so it never spills
+// past the terminal edge. width <= 0 (unknown) leaves it unchanged. Use for
+// tabular rows that have no column-drop of their own; wrap prose instead (#329).
+func clampWidth(s string, width int) string {
+	if width <= 0 {
+		return s
+	}
+	return lipgloss.NewStyle().MaxWidth(width).Render(s)
+}
+
 // rowWidth is the table width including the 2-column left gutter.
 func rowWidth(cols []column) int {
 	return 2 + tableWidth(cols)

@@ -728,8 +728,12 @@ func (m model) renderSettings() string {
 	if used > avail {
 		budget = warnStyle.Render(fmt.Sprintf("   width %d/%d — over by %d", used, avail, used-avail))
 	}
-	b.WriteString("\n" + dimStyle.Render("Columns") +
-		dimStyle.Render("   (space: show/hide    [ ] or shift+↑↓: reorder)") + budget + "\n\n")
+	header := dimStyle.Render("Columns") +
+		dimStyle.Render("   (space: show/hide    [ ] or shift+↑↓: reorder)") + budget
+	if m.width > 0 {
+		header = lipgloss.NewStyle().Width(m.width).Render(header) // wrap, don't overflow (#329)
+	}
+	b.WriteString("\n" + header + "\n\n")
 	for i, c := range pickerColumns(m.prefs.columnOrder) {
 		gutter := "  "
 		if settingsCount+i == m.settingsCursor {
