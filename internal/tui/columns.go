@@ -107,6 +107,24 @@ func toggleColumn(hidden []string, key string) []string {
 	return append(append([]string(nil), hidden...), key) // show → hide
 }
 
+// overflowColumns returns the visible columns that the width auto-drop removes to
+// fit width — base minus what visibleColumns keeps, in base order. Empty when the
+// whole selection fits. The TUI never scrolls sideways, so these are surfaced (a
+// banner + a picker flag) rather than dropped silently (#317).
+func overflowColumns(base []column, width int) []column {
+	kept := map[string]bool{}
+	for _, c := range visibleColumns(base, width) {
+		kept[c.key()] = true
+	}
+	var out []column
+	for _, c := range base {
+		if !kept[c.key()] {
+			out = append(out, c)
+		}
+	}
+	return out
+}
+
 // moveColumn reorders a column one slot in the full display order (dir -1 up, +1
 // down), materialized from the default the first time; no-op at the edges. Works
 // for a hidden column too.

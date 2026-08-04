@@ -13,6 +13,10 @@ file is the single source of truth, not a second narrative.
 
 - Column picker: hiding a column now keeps its position instead of jumping it to
   the bottom, and reordering works on any column — hidden or visible (TUI + web).
+- TUI column picker is now width-aware: it shows the width budget, flags every
+  selected column the terminal is too narrow to fit, and a banner names the
+  columns dropped instead of hiding them silently (the TUI never scrolls
+  sideways).
 
 ## [0.1.0] - 2026-08-04
 

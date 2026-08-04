@@ -1,6 +1,7 @@
 package tui
 
 import (
+	"fmt"
 	"sort"
 	"strconv"
 	"strings"
@@ -708,8 +709,21 @@ func (m model) renderSettings() string {
 
 	// Column picker: every column, visible ones first, toggled with space and
 	// reordered with [ ] (#308).
+	// Width budget: the terminal is width-bound (no horizontal scroll), so show how
+	// much the selected columns cost against the available width, and flag the ones
+	// the auto-drop cuts off — the drop is never silent (#317).
+	active := activeColumns(m.prefs.columnOrder, m.prefs.columnHidden)
+	used, avail := tableWidth(active), m.width
+	over := map[string]bool{}
+	for _, c := range overflowColumns(active, avail) {
+		over[c.key()] = true
+	}
+	budget := dimStyle.Render(fmt.Sprintf("   width %d/%d", used, avail))
+	if used > avail {
+		budget = warnStyle.Render(fmt.Sprintf("   width %d/%d — over by %d", used, avail, used-avail))
+	}
 	b.WriteString("\n" + dimStyle.Render("Columns") +
-		dimStyle.Render("   (space: show/hide    [ ] or shift+↑↓: reorder)") + "\n\n")
+		dimStyle.Render("   (space: show/hide    [ ] or shift+↑↓: reorder)") + budget + "\n\n")
 	for i, c := range pickerColumns(m.prefs.columnOrder) {
 		gutter := "  "
 		if settingsCount+i == m.settingsCursor {
@@ -719,11 +733,20 @@ func (m model) renderSettings() string {
 		if !columnHidden(m.prefs.columnHidden, c.key()) {
 			box = statusStyle("working").Render("[x]")
 		}
-		name := c.header
+		label := c.header
+		suffix := ""
 		if mandatoryColumns[c.key()] {
-			name += dimStyle.Render("  (required)")
+			suffix = " (required)"
 		}
-		b.WriteString(gutter + box + " " + name + "\n")
+		gap := 18 - len(label) - len(suffix)
+		if gap < 1 {
+			gap = 1
+		}
+		cost := dimStyle.Render(fmt.Sprintf("w%d", c.width))
+		if over[c.key()] {
+			cost = warnStyle.Render(fmt.Sprintf("w%d ⚠ cut off", c.width))
+		}
+		b.WriteString(gutter + box + " " + label + dimStyle.Render(suffix) + strings.Repeat(" ", gap) + cost + "\n")
 	}
 	return b.String()
 }
@@ -771,10 +794,23 @@ func (m model) viewSessions() string {
 	if m.filtering || m.filter != "" {
 		b.WriteString(m.filterLine() + "\n")
 	}
+	active := activeColumns(m.prefs.columnOrder, m.prefs.columnHidden)
+	if over := overflowColumns(active, m.width); len(over) > 0 {
+		names := make([]string, len(over))
+		for i, c := range over {
+			names[i] = c.header
+		}
+		word := "column"
+		if len(over) > 1 {
+			word = "columns"
+		}
+		b.WriteString(warnStyle.Render(fmt.Sprintf("⚠ %d %s hidden — terminal too narrow; widen, or deselect in Settings → Columns: %s",
+			len(over), word, strings.Join(names, ", "))) + "\n")
+	}
 	if len(vis) == 0 {
 		b.WriteString(dimStyle.Render("no sessions match the filter"))
 	} else {
-		b.WriteString(renderGroupedTable(vis, activeColumns(m.prefs.columnOrder, m.prefs.columnHidden), m.width, cursor, m.groupBy, sortState{m.sortKey, m.sortReversed}))
+		b.WriteString(renderGroupedTable(vis, active, m.width, cursor, m.groupBy, sortState{m.sortKey, m.sortReversed}))
 	}
 	b.WriteString(rule(m.width) + "\n" + renderUsageStrip(m.usage) + platformStrip(m.platform))
 	return b.String()
