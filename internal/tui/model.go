@@ -774,6 +774,31 @@ func idleLabel(d time.Duration) string {
 	return humanizeDuration(d)
 }
 
+// overflowBanner is the warning naming the columns the width auto-drop removed
+// (the TUI never scrolls sideways). It is wrapped to width so it never runs past
+// the edge and gets cut off on a narrow terminal (#325). Empty when all fit.
+func overflowBanner(active []column, width int) string {
+	over := overflowColumns(active, width)
+	if len(over) == 0 {
+		return ""
+	}
+	names := make([]string, len(over))
+	for i, c := range over {
+		names[i] = c.header
+	}
+	word := "column"
+	if len(over) > 1 {
+		word = "columns"
+	}
+	msg := fmt.Sprintf("⚠ %d %s hidden — terminal too narrow; widen, or deselect in Settings → Columns: %s",
+		len(over), word, strings.Join(names, ", "))
+	style := warnStyle
+	if width > 0 {
+		style = style.Width(width) // word-wrap to the terminal width
+	}
+	return style.Render(msg)
+}
+
 func (m model) viewSessions() string {
 	if m.err != nil {
 		return errStyle.Render("error: " + m.err.Error())
@@ -797,17 +822,8 @@ func (m model) viewSessions() string {
 		b.WriteString(m.filterLine() + "\n")
 	}
 	active := activeColumns(m.prefs.columnOrder, m.prefs.columnHidden)
-	if over := overflowColumns(active, m.width); len(over) > 0 {
-		names := make([]string, len(over))
-		for i, c := range over {
-			names[i] = c.header
-		}
-		word := "column"
-		if len(over) > 1 {
-			word = "columns"
-		}
-		b.WriteString(warnStyle.Render(fmt.Sprintf("⚠ %d %s hidden — terminal too narrow; widen, or deselect in Settings → Columns: %s",
-			len(over), word, strings.Join(names, ", "))) + "\n")
+	if banner := overflowBanner(active, m.width); banner != "" {
+		b.WriteString(banner + "\n")
 	}
 	if len(vis) == 0 {
 		b.WriteString(dimStyle.Render("no sessions match the filter"))
