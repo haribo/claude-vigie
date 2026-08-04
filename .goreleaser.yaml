@@ -51,25 +51,12 @@ archives:
 checksum:
   name_template: checksums.txt
 
+# The release body is set from CHANGELOG.md — the single source of truth (#312).
+# goreleaser must not generate its own commit-dump changelog (the Keep a Changelog
+# anti-pattern); the /release skill mirrors the version's CHANGELOG section into
+# the GitHub Release notes.
 changelog:
-  sort: asc
-  use: github
-  filters:
-    exclude:
-      - "^docs:"
-      - "^test:"
-      - "^chore:"
-      - "^ci:"
-      - "^style:"
-  groups:
-    - title: Features
-      regexp: "^feat"
-      order: 0
-    - title: Bug fixes
-      regexp: "^fix"
-      order: 1
-    - title: Others
-      order: 999
+  disable: true
 
 release:
   draft: false
