@@ -15,15 +15,39 @@ import (
 // mandatory NAME/DIR/STATUS columns cannot fit, a distinct extreme not in scope.
 const scaleFloor, scaleCeil = 72, 200
 
-// sampleModel is a small, representative model for a given tab.
+// sampleModel is a realistic, fully-populated model for a given tab: enough
+// sessions for a wide summary, plus history/usage/platform so the strips that
+// only render with data (the activity sparkline, the bottom usage/platform
+// strip) are actually exercised by the sweep (#332).
 func sampleModel(t tab) model {
+	var sessions []api.SessionView
+	add := func(title, dir, status string, out int64, rc bool) {
+		sessions = append(sessions, api.SessionView{
+			Title: title, Machine: "minet-dev", User: "nico", ProjectDir: "/home/nico/" + dir,
+			Status: status, RemoteControl: rc, Activity: "editing " + dir,
+			LastSeenAt: "2026-08-04T15:00:00Z", Usage: api.Usage{OutputTokens: out},
+		})
+	}
+	add("plain-note", "note", "working", 1_280_100_000, true)
+	add("melonia", "nomsters", "working", 2_821_800_000, true)
+	add("shellf", "shellf", "working", 1_421_500_000, true)
+	for i := 0; i < 7; i++ {
+		add("idle-"+string(rune('a'+i)), "raccoon", "idle", int64(i)*1000, i < 4)
+	}
+	for i := 0; i < 12; i++ {
+		add("ended-"+string(rune('a'+i)), "claude", "ended", int64(i)*1_000_000, false)
+	}
 	return model{
-		tab:   t,
-		prefs: defaultPrefs(),
-		sessions: []api.SessionView{
-			{Title: "alpha", Machine: "minet", User: "nico", Status: "working", Activity: "editing render.go", LastSeenAt: "2026-07-26T10:00:00Z", Usage: api.Usage{OutputTokens: 1234}},
-			{Title: "beta", Machine: "srv", User: "nico", Status: "waiting", Activity: "waiting on approval", LastSeenAt: "2026-07-26T11:00:00Z"},
+		tab:      t,
+		prefs:    defaultPrefs(),
+		sessions: sessions,
+		history:  []int{0, 1, 2, 1, 3, 2, 4, 3, 2, 1, 2, 3}, // populates the "activity" sparkline
+		usage: api.UsageReport{
+			FiveHourPct: 28, FiveHourReset: "2026-08-04T16:00:00Z",
+			SevenDayPct: 69, SevenDayReset: "2026-08-07T15:00:00Z",
+			FetchedAt: "2026-08-04T15:00:00Z",
 		},
+		platform: api.PlatformStatus{Indicator: "none", Description: "All Systems Operational", FetchedAt: "2026-08-04T15:00:00Z"},
 	}
 }
 

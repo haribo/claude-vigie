@@ -17,6 +17,11 @@ file is the single source of truth, not a second narrative.
 
 ### Fixed
 
+- TUI bottom usage/platform strip no longer overflows a narrow terminal: it now
+  drops the secondary platform indicator when the two don't fit and clamps the
+  usage side as a last resort. The width-sweep scaling guard's fixture is now
+  fully populated (usage, platform, activity history), so it actually exercises —
+  and would catch — this class of overflow.
 - TUI Machines and Settings tabs no longer overflow the terminal width on a
   narrow terminal: the machines overview table clamps each row to width, its
   no-watcher help text wraps, and the column-picker header wraps. The width-sweep
