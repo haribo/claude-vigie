@@ -363,44 +363,81 @@ var (
 // renderSummary renders the fleet summary strip: status counts, total output
 // tokens across the fleet, and an activity sparkline (working sessions over the
 // recent polls held in history).
-func renderSummary(sessions []api.SessionView, history []int) string {
-	counts := map[string]int{}
+// summaryParts splits the summary into its always-shown status counts and its
+// optional trailing extras (out, rc, activity), so the strip can drop whole
+// extras — activity first — to fit a narrow terminal (#334).
+func summaryParts(sessions []api.SessionView, history []int) (counts, extras []string) {
+	c := map[string]int{}
 	var totalOut int64
 	rcActive := 0
 	for _, s := range sessions {
-		counts[s.Status]++
+		c[s.Status]++
 		totalOut += s.Usage.OutputTokens
 		if s.RemoteControl {
 			rcActive++
 		}
 	}
 
-	parts := []string{
-		statusStyle("working").Render(fmt.Sprintf("● working %d", counts["working"])),
+	counts = []string{
+		statusStyle("working").Render(fmt.Sprintf("● working %d", c["working"])),
 	}
-	if n := counts["thinking"]; n > 0 { // a sub-state of active work: shown only when present
-		parts = append(parts, statusStyle("thinking").Render(fmt.Sprintf("● thinking %d", n)))
+	if n := c["thinking"]; n > 0 { // a sub-state of active work: shown only when present
+		counts = append(counts, statusStyle("thinking").Render(fmt.Sprintf("● thinking %d", n)))
 	}
-	parts = append(parts,
-		statusStyle("waiting").Render(fmt.Sprintf("● waiting %d", counts["waiting"])),
-		statusStyle("idle").Render(fmt.Sprintf("● idle %d", counts["idle"])),
+	counts = append(counts,
+		statusStyle("waiting").Render(fmt.Sprintf("● waiting %d", c["waiting"])),
+		statusStyle("idle").Render(fmt.Sprintf("● idle %d", c["idle"])),
 	)
-	if n := counts["stalled"]; n > 0 { // a hung tool: shown only when present
-		parts = append(parts, statusStyle("stalled").Render(fmt.Sprintf("● stalled %d", n)))
+	if n := c["stalled"]; n > 0 { // a hung tool: shown only when present
+		counts = append(counts, statusStyle("stalled").Render(fmt.Sprintf("● stalled %d", n)))
 	}
-	if n := counts["error"]; n > 0 { // an alert: shown only when present
-		parts = append(parts, statusStyle("error").Render(fmt.Sprintf("● error %d", n)))
+	if n := c["error"]; n > 0 { // an alert: shown only when present
+		counts = append(counts, statusStyle("error").Render(fmt.Sprintf("● error %d", n)))
 	}
-	if n := counts["stale"]; n > 0 { // unobserved machine: shown only when present (#285)
-		parts = append(parts, dimStyle.Render(fmt.Sprintf("◌ stale %d", n)))
+	if n := c["stale"]; n > 0 { // unobserved machine: shown only when present (#285)
+		counts = append(counts, dimStyle.Render(fmt.Sprintf("◌ stale %d", n)))
 	}
-	parts = append(parts, dimStyle.Render(fmt.Sprintf("● ended %d", counts["ended"])))
-	line := strings.Join(parts, "   ") + "    " + labelStyle.Render("out ") + humanizeTokens(totalOut) +
-		"    " + labelStyle.Render("rc ") + rcOnStyle.Render(fmt.Sprintf("◉ %d", rcActive))
+	counts = append(counts, dimStyle.Render(fmt.Sprintf("● ended %d", c["ended"])))
+
+	// extras are ordered most- to least-important; the fit logic drops from the end.
+	extras = []string{
+		labelStyle.Render("out ") + humanizeTokens(totalOut),
+		labelStyle.Render("rc ") + rcOnStyle.Render(fmt.Sprintf("◉ %d", rcActive)),
+	}
 	if s := sparkline(history); s != "" {
-		line += "    " + labelStyle.Render("activity ") + s
+		extras = append(extras, labelStyle.Render("activity ")+s)
+	}
+	return counts, extras
+}
+
+// assembleSummary joins the counts and the first n extras with the summary's
+// spacing (three spaces between counts, four before each extra).
+func assembleSummary(counts, extras []string, n int) string {
+	line := strings.Join(counts, "   ")
+	for _, e := range extras[:n] {
+		line += "    " + e
 	}
 	return line
+}
+
+func renderSummary(sessions []api.SessionView, history []int) string {
+	counts, extras := summaryParts(sessions, history)
+	return assembleSummary(counts, extras, len(extras))
+}
+
+// renderSummaryFit is renderSummary constrained to width: it drops the trailing
+// extras (activity, then rc, then out) when the line does not fit, so a narrow
+// terminal shows whole elements instead of a mid-glyph cut. The status counts
+// are always kept; if even they exceed width, they are clamped as a last resort.
+func renderSummaryFit(sessions []api.SessionView, history []int, width int) string {
+	counts, extras := summaryParts(sessions, history)
+	for n := len(extras); n >= 0; n-- {
+		line := assembleSummary(counts, extras, n)
+		if width <= 0 || lipgloss.Width(line) <= width {
+			return line
+		}
+	}
+	return clampWidth(assembleSummary(counts, extras, 0), width)
 }
 
 // sparkline renders values as a braille graph: two samples per glyph (2 columns

@@ -824,7 +824,7 @@ func (m model) viewSessions() string {
 	var b strings.Builder
 	// The tab-bar separator frames the summary strip above; a rule below
 	// separates it from the table.
-	b.WriteString(joinLR(renderSummary(m.sessions, m.history), m.summaryRight(), m.width) + "\n")
+	b.WriteString(joinLR(renderSummaryFit(m.sessions, m.history, m.width), m.summaryRight(), m.width) + "\n")
 	b.WriteString(rule(m.width) + "\n")
 	if m.filtering || m.filter != "" {
 		b.WriteString(m.filterLine() + "\n")
