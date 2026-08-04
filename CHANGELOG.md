@@ -9,6 +9,11 @@ file is the single source of truth, not a second narrative.
 
 ## [Unreleased]
 
+### Fixed
+
+- Column picker: hiding a column now keeps its position instead of jumping it to
+  the bottom, and reordering works on any column — hidden or visible (TUI + web).
+
 ## [0.1.0] - 2026-08-04
 
 First release. claude-vigie is an observe-only monitor for Claude Code sessions

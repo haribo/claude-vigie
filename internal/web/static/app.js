@@ -117,53 +117,59 @@ const COLS = [
     cell: () => `<td><button class="det-btn" aria-label="Open detail" title="Open detail"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg></button></td>` },
 ];
 
-// COLS_KEY holds the operator's column layout for this browser (ordered list of
-// visible keys); like the token, it is client-local (#309).
+// COLS_KEY holds the operator's column layout for this browser, {order, hidden}:
+// the display order of ALL columns plus the hidden set. Client-local like the
+// token. Hiding a column keeps its position — only its visibility changes (#315).
 const COLS_KEY = "cf_columns";
 const MANDATORY_COLS = new Set(["name", "status"]);
+const COL_KEYS = COLS.map((c) => c.key);
 
-// columnOrderStored reads the saved ordered visible keys, or [] when unset.
-function columnOrderStored() {
-  try { const v = JSON.parse(localStorage.getItem(COLS_KEY) || "[]"); return Array.isArray(v) ? v : []; } catch (e) { return []; }
+function loadLayout() {
+  try {
+    const v = JSON.parse(localStorage.getItem(COLS_KEY) || "null");
+    // Migrate the old visible-only array form to {order, hidden}.
+    if (Array.isArray(v)) return { order: v.slice(), hidden: COL_KEYS.filter((k) => !v.includes(k) && !MANDATORY_COLS.has(k)) };
+    if (v && Array.isArray(v.order)) return { order: v.order, hidden: Array.isArray(v.hidden) ? v.hidden : [] };
+  } catch (e) { /* fall through to default */ }
+  return { order: [], hidden: [] };
 }
-function saveColumnOrder(keys) { localStorage.setItem(COLS_KEY, JSON.stringify(keys)); }
+function saveLayout(l) { localStorage.setItem(COLS_KEY, JSON.stringify(l)); }
 
-// effectiveColKeys is the ordered visible keys: the saved order (unknown dropped,
-// mandatory forced in), or every column in the built-in order when none is saved.
-function effectiveColKeys() {
-  const known = new Map(COLS.map((c) => [c.key, c]));
-  const saved = columnOrderStored();
-  if (!saved.length) return COLS.map((c) => c.key);
-  const seen = new Set(), out = [];
-  saved.forEach((k) => { if (known.has(k) && !seen.has(k)) { out.push(k); seen.add(k); } });
-  COLS.forEach((c) => { if (MANDATORY_COLS.has(c.key) && !seen.has(c.key)) { out.push(c.key); seen.add(c.key); } });
+// fullColOrder is every column key in display order: the saved order (unknown
+// dropped), with any column missing from it appended in the built-in order.
+function fullColOrder(order) {
+  const known = new Set(COL_KEYS), seen = new Set(), out = [];
+  (order || []).forEach((k) => { if (known.has(k) && !seen.has(k)) { out.push(k); seen.add(k); } });
+  COL_KEYS.forEach((k) => { if (!seen.has(k)) { out.push(k); seen.add(k); } });
   return out;
 }
+function colHidden(hidden, key) { return !MANDATORY_COLS.has(key) && hidden.includes(key); }
 
 // activeCols is the visible columns in display order — the base for the table.
 function activeCols() {
-  const byKey = new Map(COLS.map((c) => [c.key, c]));
-  return effectiveColKeys().map((k) => byKey.get(k));
+  const l = loadLayout(), byKey = new Map(COLS.map((c) => [c.key, c]));
+  return fullColOrder(l.order).filter((k) => !colHidden(l.hidden, k)).map((k) => byKey.get(k));
 }
 
-// pickerCols is every column in picker order: visible first, then hidden.
+// pickerCols is every column in display order (stable — hiding never moves one).
 function pickerCols() {
-  const vis = effectiveColKeys(), seen = new Set(vis), byKey = new Map(COLS.map((c) => [c.key, c]));
-  return vis.map((k) => byKey.get(k)).concat(COLS.filter((c) => !seen.has(c.key)));
+  const l = loadLayout(), byKey = new Map(COLS.map((c) => [c.key, c]));
+  return fullColOrder(l.order).map((k) => byKey.get(k));
 }
-function colVisible(key) { return effectiveColKeys().includes(key); }
+function colVisible(key) { return !colHidden(loadLayout().hidden, key); }
 
 function toggleCol(key) {
   if (MANDATORY_COLS.has(key)) return;
-  const cur = effectiveColKeys(), i = cur.indexOf(key);
-  if (i >= 0) cur.splice(i, 1); else cur.push(key);
-  saveColumnOrder(cur);
+  const l = loadLayout(), i = l.hidden.indexOf(key);
+  if (i >= 0) l.hidden.splice(i, 1); else l.hidden.push(key);
+  saveLayout(l);
 }
 function moveCol(key, dir) {
-  const cur = effectiveColKeys(), i = cur.indexOf(key), j = i + dir;
-  if (i < 0 || j < 0 || j >= cur.length) return;
-  [cur[i], cur[j]] = [cur[j], cur[i]];
-  saveColumnOrder(cur);
+  const l = loadLayout(); l.order = fullColOrder(l.order);
+  const i = l.order.indexOf(key), j = i + dir;
+  if (i < 0 || j < 0 || j >= l.order.length) return;
+  [l.order[i], l.order[j]] = [l.order[j], l.order[i]];
+  saveLayout(l);
 }
 function visibleSessions() {
   const list = showEnded ? sessions : sessions.filter((s) => s.status !== "ended");
