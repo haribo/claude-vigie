@@ -17,6 +17,11 @@ file is the single source of truth, not a second narrative.
 
 ### Fixed
 
+- TUI Sessions view no longer overflows the terminal width on resize: the
+  summary strip keeps its status counts and drops the secondary sort/connection
+  side when space is tight, the key-hint footer wraps, and the column auto-drop
+  now accounts for the row's left gutter so the table never spills over by a
+  column or two.
 - TUI: the "N columns hidden" overflow banner now wraps to the terminal width
   instead of running past the edge and being cut off on a narrow terminal — the
   message that explains the narrowness is no longer itself unreadable.
