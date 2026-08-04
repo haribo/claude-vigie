@@ -10,6 +10,18 @@ import (
 	"github.com/haribo/claude-vigie/internal/api"
 )
 
+// usageStrip is the bottom line — subscription usage plus the platform health
+// indicator — kept within width: the TUI never scrolls sideways, so when the two
+// do not fit, the secondary platform side is dropped and the usage side is
+// clamped as a last resort (#332).
+func usageStrip(u api.UsageReport, ps api.PlatformStatus, width int) string {
+	usage, plat := renderUsageStrip(u), platformStrip(ps)
+	if width <= 0 || lipgloss.Width(usage+plat) <= width {
+		return usage + plat
+	}
+	return clampWidth(usage, width)
+}
+
 // renderUsageStrip renders subscription usage as one compact, dim line for the
 // bottom of the Sessions body: short 5h and 7d gauges with % and time-to-reset.
 func renderUsageStrip(u api.UsageReport) string {

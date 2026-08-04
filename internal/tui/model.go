@@ -838,7 +838,7 @@ func (m model) viewSessions() string {
 	} else {
 		b.WriteString(renderGroupedTable(vis, active, m.width, cursor, m.groupBy, sortState{m.sortKey, m.sortReversed}))
 	}
-	b.WriteString(rule(m.width) + "\n" + renderUsageStrip(m.usage) + platformStrip(m.platform))
+	b.WriteString(rule(m.width) + "\n" + usageStrip(m.usage, m.platform, m.width))
 	return b.String()
 }
 
