@@ -2,6 +2,7 @@ package tui
 
 import (
 	"slices"
+	"strings"
 	"testing"
 
 	"github.com/pelletier/go-toml/v2"
@@ -73,6 +74,41 @@ func TestFullOrderDropsUnknownAppendsMissing(t *testing.T) {
 	}
 	if got[0] != "status" || got[1] != "name" {
 		t.Errorf("saved order not honored first: %v", got[:2])
+	}
+}
+
+func TestOverflowColumns(t *testing.T) {
+	base := activeColumns(nil, nil) // all columns
+	if got := overflowColumns(base, 1000); len(got) != 0 {
+		t.Errorf("a wide terminal should drop nothing, got %v", colKeys(got))
+	}
+	over := overflowColumns(base, 60)
+	vis := visibleColumns(base, 60)
+	if len(over) == 0 {
+		t.Fatal("a narrow terminal should drop some columns")
+	}
+	if len(over)+len(vis) != len(base) {
+		t.Errorf("dropped(%d) + visible(%d) != base(%d)", len(over), len(vis), len(base))
+	}
+	for _, c := range over {
+		if mandatoryColumns[c.key()] {
+			t.Errorf("a mandatory column (%q) must never overflow", c.key())
+		}
+	}
+}
+
+func TestPickerWidthBudget(t *testing.T) {
+	// Narrow: the picker shows the budget and flags the columns that don't fit (#317).
+	out := (model{prefs: defaultPrefs(), width: 50}).renderSettings()
+	if !strings.Contains(out, "width ") {
+		t.Errorf("picker missing the width budget:\n%s", out)
+	}
+	if !strings.Contains(out, "cut off") || !strings.Contains(out, "over by") {
+		t.Errorf("narrow terminal should flag over-budget columns:\n%s", out)
+	}
+	// Wide: everything fits, nothing flagged.
+	if out := (model{prefs: defaultPrefs(), width: 4000}).renderSettings(); strings.Contains(out, "cut off") || strings.Contains(out, "over by") {
+		t.Errorf("a wide terminal should flag nothing:\n%s", out)
 	}
 }
 
