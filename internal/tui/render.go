@@ -106,18 +106,18 @@ var columns = []column{
 	{"DIR", 16, 0, false, func(s api.SessionView) string { return projectName(s.ProjectDir) }, nil},
 	{"BRANCH", 16, 7, false, func(s api.SessionView) string { return orDash(s.GitBranch) }, func(api.SessionView) lipgloss.Style { return dimStyle }},
 	{"MODEL", 12, 5, false, func(s api.SessionView) string { return orDash(shortModel(s.Model)) }, func(api.SessionView) lipgloss.Style { return dimStyle }},
-	{"EFFORT", 8, 11, false, func(s api.SessionView) string { return orDash(s.Effort) }, func(api.SessionView) lipgloss.Style { return dimStyle }},
-	{"CTX", 6, 12, true, contextCell, func(s api.SessionView) lipgloss.Style {
+	{"EFFORT", 6, 11, false, func(s api.SessionView) string { return orDash(s.Effort) }, func(api.SessionView) lipgloss.Style { return dimStyle }},
+	{"CTX", 5, 12, true, contextCell, func(s api.SessionView) lipgloss.Style {
 		if s.ContextTokens <= 0 {
 			return dimStyle
 		}
 		return lipgloss.NewStyle().Foreground(contextColor(contextPct(s)))
 	}},
-	{"OUT", 8, 3, true, func(s api.SessionView) string { return humanizeTokens(s.Usage.OutputTokens) }, nil},
-	{"TOTAL", 9, 2, true, func(s api.SessionView) string { return humanizeTokens(totalTokens(s)) }, nil},
+	{"OUT", 6, 3, true, func(s api.SessionView) string { return humanizeTokens(s.Usage.OutputTokens) }, nil},
+	{"TOTAL", 7, 2, true, func(s api.SessionView) string { return humanizeTokens(totalTokens(s)) }, nil},
 	{"SEEN", 6, 6, true, func(s api.SessionView) string { return relativeAge(s.LastSeenAt, clock.Now()) }, func(api.SessionView) lipgloss.Style { return dimStyle }},
 	{"ACT", 10, 9, false, func(s api.SessionView) string { return activitySpark(s.Samples) }, nil},
-	{"RC", 4, 1, false, rcCell, rcStyle},
+	{"RC", 3, 1, false, rcCell, rcStyle},
 	{"STATUS", 12, 0, false, statusCell, func(s api.SessionView) lipgloss.Style { return statusStyle(s.Status) }},
 	{"MODE", 7, 8, false, modeCell, modeStyle},
 	{"DOING", 36, 10, false, activityCell, activityStyle},

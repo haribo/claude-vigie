@@ -9,6 +9,12 @@ file is the single source of truth, not a second narrative.
 
 ## [Unreleased]
 
+### Changed
+
+- TUI: tightened the fixed-width columns (`TOTAL`, `EFFORT`, `OUT`, `CTX`, `RC`)
+  to their real content, reclaiming ~8 columns of width so more fit before the
+  table overflows on a narrow terminal. No content is truncated.
+
 ### Fixed
 
 - Column picker: hiding a column now keeps its position instead of jumping it to
