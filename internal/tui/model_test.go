@@ -137,9 +137,9 @@ func TestFuzzyMatch(t *testing.T) {
 }
 
 func TestVisibleSessionsFilterAndSort(t *testing.T) {
-	// showAll isolates sort/filter from the default hide-stale behavior, which
-	// is covered separately by TestIsActive.
-	m := model{showAll: true, sessions: []api.SessionView{
+	// Default (zero-value) prefs hide nothing, isolating sort/filter from the
+	// hide-ended/idle behavior, which is covered separately by TestIsActive.
+	m := model{sessions: []api.SessionView{
 		{Title: "alpha", Machine: "m1", Status: "idle", Usage: api.Usage{OutputTokens: 100}, LastSeenAt: "2026-07-26T10:00:00Z"},
 		{Title: "beta", Machine: "m2", Status: "working", Usage: api.Usage{OutputTokens: 900}, LastSeenAt: "2026-07-26T11:00:00Z"},
 		{Title: "gamma", Machine: "m1", Status: "idle", Usage: api.Usage{OutputTokens: 500}, LastSeenAt: "2026-07-26T09:00:00Z"},
@@ -193,7 +193,7 @@ func TestFilterInput(t *testing.T) {
 func TestGroupingClustersByKey(t *testing.T) {
 	m := model{
 		groupBy: groupMachine,
-		showAll: true, // isolate grouping from the default hide-stale behavior
+		// zero-value prefs hide nothing, isolating grouping from hide-ended/idle
 		sessions: []api.SessionView{
 			{Title: "a", Machine: "m2", LastSeenAt: "2026-07-26T12:00:00Z"},
 			{Title: "b", Machine: "m1", LastSeenAt: "2026-07-26T11:00:00Z"},
@@ -280,7 +280,7 @@ func TestRCSortAndFilter(t *testing.T) {
 	m := model{sessions: []api.SessionView{
 		{Title: "a", Status: "idle", LastSeenAt: "2026-07-27T10:00:00Z"},
 		{Title: "b", Status: "idle", RemoteControl: true, LastSeenAt: "2026-07-27T09:00:00Z"},
-	}, showAll: true, sortKey: sortRC}
+	}, sortKey: sortRC}
 	vis := m.visibleSessions()
 	if !vis[0].RemoteControl {
 		t.Errorf("rc sort: first = %q, want the rc-active one", vis[0].Title)
@@ -311,8 +311,33 @@ func TestSettingsEdit(t *testing.T) {
 	}
 }
 
+// TestAKeyTogglesHideEnded is the #320 regression: the `a` key is a direct
+// toggle of the persistent hide_ended setting (no transient showAll override),
+// and the flip is persisted so it survives a restart.
+func TestAKeyTogglesHideEnded(t *testing.T) {
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+	a := tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("a")}
+	var m tea.Model = model{prefs: defaultPrefs()} // hideEnded starts true
+
+	m, _ = m.Update(a)
+	if m.(model).prefs.hideEnded {
+		t.Fatal("a did not toggle hide_ended off")
+	}
+	if loadPrefs().hideEnded {
+		t.Error("toggled hide_ended off was not persisted")
+	}
+
+	m, _ = m.Update(a)
+	if !m.(model).prefs.hideEnded {
+		t.Error("a did not toggle hide_ended back on")
+	}
+	if !loadPrefs().hideEnded {
+		t.Error("toggled hide_ended on was not persisted")
+	}
+}
+
 func TestCursorTracksSessionOnReorder(t *testing.T) {
-	m := model{showAll: true, selectedID: "b", cursor: 1, sessions: []api.SessionView{
+	m := model{selectedID: "b", cursor: 1, sessions: []api.SessionView{
 		{ID: "a", LastSeenAt: "2026-07-28T10:00:00Z"},
 		{ID: "b", LastSeenAt: "2026-07-28T09:00:00Z"},
 		{ID: "c", LastSeenAt: "2026-07-28T08:00:00Z"},

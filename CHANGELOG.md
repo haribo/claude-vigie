@@ -17,6 +17,9 @@ file is the single source of truth, not a second narrative.
   selected column the terminal is too narrow to fit, and a banner names the
   columns dropped instead of hiding them silently (the TUI never scrolls
   sideways).
+- TUI `a` key now toggles the persistent "hide ended" setting directly (saved,
+  shared with Settings) instead of a separate transient override that could
+  diverge from it and appear broken.
 
 ## [0.1.0] - 2026-08-04
 
