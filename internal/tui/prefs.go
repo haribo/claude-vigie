@@ -20,7 +20,8 @@ type prefs struct {
 	sortReversed  bool          // reverse the sort direction
 	groupBy       groupBy       // grouping of the sessions table
 	notify        bool          // desktop notifications on working→attention (#260)
-	columnOrder   []string      // visible table columns, in order; empty = built-in default (#308)
+	columnOrder   []string      // display order of ALL table columns; empty = built-in default (#308)
+	columnHidden  []string      // hidden table columns (#315)
 }
 
 // defaultPrefs are used when no preferences file exists: hide only ended
@@ -48,9 +49,10 @@ type prefsFile struct {
 	IdleHideAfter string   `toml:"idle_hide_after"` // Go duration; "" = never
 	SortKey       string   `toml:"sort_key"`        // stable name (see sortNames); "" = default
 	SortReversed  bool     `toml:"sort_reversed"`
-	GroupBy       string   `toml:"group_by"`     // stable name (see groupNames); "" = off
-	Notify        *bool    `toml:"notify"`       // pointer: absent = default (on)
-	ColumnOrder   []string `toml:"column_order"` // visible table columns in order; empty = default (#308)
+	GroupBy       string   `toml:"group_by"`      // stable name (see groupNames); "" = off
+	Notify        *bool    `toml:"notify"`        // pointer: absent = default (on)
+	ColumnOrder   []string `toml:"column_order"`  // display order of all columns; empty = default (#308)
+	ColumnHidden  []string `toml:"column_hidden"` // hidden columns (#315)
 }
 
 func prefsPath() (string, error) {
@@ -68,13 +70,15 @@ func renderPrefsTOML(p prefs) string {
 	if p.idleHideAfter > 0 {
 		idle = p.idleHideAfter.String()
 	}
-	cols := "[]"
-	if len(p.columnOrder) > 0 {
-		quoted := make([]string, len(p.columnOrder))
-		for i, k := range p.columnOrder {
-			quoted[i] = fmt.Sprintf("%q", k)
+	list := func(ks []string) string {
+		if len(ks) == 0 {
+			return "[]"
 		}
-		cols = "[" + strings.Join(quoted, ", ") + "]"
+		q := make([]string, len(ks))
+		for i, k := range ks {
+			q[i] = fmt.Sprintf("%q", k)
+		}
+		return "[" + strings.Join(q, ", ") + "]"
 	}
 	return fmt.Sprintf(`# vigie TUI preferences
 
@@ -97,10 +101,12 @@ sort_reversed = %t
 # Group the sessions table: off, machine, project.
 group_by = %q
 
-# Sessions table columns: the visible columns, in display order. Empty = the
-# built-in default. Edit from the Settings tab (space toggles, [ ] reorder).
+# Sessions table columns: the display order of all columns, and which are hidden.
+# Empty order = the built-in default. Edit from the Settings tab (space toggles
+# visibility, [ ] reorder).
 column_order = %s
-`, p.notify, p.hideEnded, idle, sortNames[p.sortKey], p.sortReversed, groupNames[p.groupBy], cols)
+column_hidden = %s
+`, p.notify, p.hideEnded, idle, sortNames[p.sortKey], p.sortReversed, groupNames[p.groupBy], list(p.columnOrder), list(p.columnHidden))
 }
 
 // savePrefs writes the preferences file (best-effort; the UI must not block).
@@ -185,5 +191,6 @@ func loadPrefs() prefs {
 		p.notify = *f.Notify
 	}
 	p.columnOrder = f.ColumnOrder
+	p.columnHidden = f.ColumnHidden
 	return p
 }

@@ -501,11 +501,11 @@ func (m model) handleSettingsKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		if !onColumn {
 			return m.editSetting(-1)
 		}
-	case "[": // reorder a visible column up
+	case "[", "shift+up": // reorder the column up
 		if onColumn {
 			return m.moveColumnRow(-1), nil
 		}
-	case "]": // reorder a visible column down
+	case "]", "shift+down": // reorder the column down
 		if onColumn {
 			return m.moveColumnRow(1), nil
 		}
@@ -521,7 +521,7 @@ func (m model) columnAtCursor() column {
 // toggleColumnRow shows/hides the column under the cursor (mandatory ones can't
 // be hidden) and persists (#308).
 func (m model) toggleColumnRow() model {
-	m.prefs.columnOrder = toggleColumn(m.prefs.columnOrder, m.columnAtCursor().key())
+	m.prefs.columnHidden = toggleColumn(m.prefs.columnHidden, m.columnAtCursor().key())
 	savePrefs(m.prefs)
 	return m
 }
@@ -709,14 +709,14 @@ func (m model) renderSettings() string {
 	// Column picker: every column, visible ones first, toggled with space and
 	// reordered with [ ] (#308).
 	b.WriteString("\n" + dimStyle.Render("Columns") +
-		dimStyle.Render("   (space: show/hide    [ ]: reorder)") + "\n\n")
+		dimStyle.Render("   (space: show/hide    [ ] or shift+↑↓: reorder)") + "\n\n")
 	for i, c := range pickerColumns(m.prefs.columnOrder) {
 		gutter := "  "
 		if settingsCount+i == m.settingsCursor {
 			gutter = cursorStyle.Render("❯ ")
 		}
 		box := dimStyle.Render("[ ]")
-		if columnVisible(m.prefs.columnOrder, c.key()) {
+		if !columnHidden(m.prefs.columnHidden, c.key()) {
 			box = statusStyle("working").Render("[x]")
 		}
 		name := c.header
@@ -774,7 +774,7 @@ func (m model) viewSessions() string {
 	if len(vis) == 0 {
 		b.WriteString(dimStyle.Render("no sessions match the filter"))
 	} else {
-		b.WriteString(renderGroupedTable(vis, activeColumns(m.prefs.columnOrder), m.width, cursor, m.groupBy, sortState{m.sortKey, m.sortReversed}))
+		b.WriteString(renderGroupedTable(vis, activeColumns(m.prefs.columnOrder, m.prefs.columnHidden), m.width, cursor, m.groupBy, sortState{m.sortKey, m.sortReversed}))
 	}
 	b.WriteString(rule(m.width) + "\n" + renderUsageStrip(m.usage) + platformStrip(m.platform))
 	return b.String()
