@@ -47,3 +47,15 @@ func assertNoOverflow(t *testing.T, m model) {
 func TestSessionsTabNeverOverflowsWidth(t *testing.T) {
 	assertNoOverflow(t, sampleModel(tabSessions))
 }
+
+// TestMachinesTabNeverOverflowsWidth and TestSettingsTabNeverOverflowsWidth
+// extend the scaling guard to the remaining tabs (#329).
+func TestMachinesTabNeverOverflowsWidth(t *testing.T) {
+	m := sampleModel(tabMachines)
+	m.watcherMachines = map[string]string{"minet": "2026-07-26T10:00:00Z"}
+	assertNoOverflow(t, m)
+}
+
+func TestSettingsTabNeverOverflowsWidth(t *testing.T) {
+	assertNoOverflow(t, sampleModel(tabSettings))
+}
