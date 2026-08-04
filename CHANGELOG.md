@@ -17,6 +17,9 @@ file is the single source of truth, not a second narrative.
 
 ### Fixed
 
+- TUI summary strip now drops its trailing elements whole — activity first, then
+  rc, then out — when the terminal is too narrow, instead of clamping and cutting
+  the activity sparkline mid-glyph. The status counts are always kept.
 - TUI bottom usage/platform strip no longer overflows a narrow terminal: it now
   drops the secondary platform indicator when the two don't fit and clamps the
   usage side as a last resort. The width-sweep scaling guard's fixture is now
