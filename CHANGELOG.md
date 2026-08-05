@@ -9,6 +9,8 @@ file is the single source of truth, not a second narrative.
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-08-05
+
 ### Changed
 
 - TUI: tightened the fixed-width columns (`TOTAL`, `EFFORT`, `OUT`, `CTX`, `RC`)
@@ -84,5 +86,6 @@ across machines — it reads and reports session state; it never drives a sessio
 - The API binds `127.0.0.1` by default; every `/api/*` route is behind a
   constant-time shared-token check; request bodies are size-capped.
 
-[Unreleased]: https://github.com/haribo/claude-vigie/compare/v0.1.0...HEAD
+[Unreleased]: https://github.com/haribo/claude-vigie/compare/v0.2.0...HEAD
+[0.2.0]: https://github.com/haribo/claude-vigie/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/haribo/claude-vigie/releases/tag/v0.1.0
