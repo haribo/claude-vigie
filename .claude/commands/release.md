@@ -40,7 +40,9 @@ a tag yourself.
 ### 4. ⛔ GATE 1 — human approval before merge
 
 - Present the PR, the CHANGELOG section, and the **exact merge command**:
-  `! gh pr merge <N> --merge --body ""`  *(merge commit — NEVER squash a release PR)*.
+  `! gh pr merge <N> --merge --subject "chore(release): cut vX.Y.Z (#N)" --body ""`
+  *(merge commit — NEVER squash a release PR; `--subject` keeps the merge commit a
+  conventional commit instead of GitHub's default "Merge pull request …")*.
 - **Stop. Do not merge yourself.** Continue only after the human has merged.
 
 ### 5. ⛔ GATE 2 — human approval before tag
