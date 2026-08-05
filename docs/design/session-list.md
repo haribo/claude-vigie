@@ -23,11 +23,14 @@ The table is a live operator view, not an archive. By default it hides the noise
 - **Optionally, long-idle sessions are hidden** after a configurable duration
   (Settings tab; off by default). A session idle longer than that threshold
   disappears until it resumes.
-- **`a` shows everything** — a momentary "show all" that reveals the hidden
-  ended/idle rows without changing the saved preferences.
+- **`a` toggles hiding ended sessions** — a live switch of the persistent
+  `hide_ended` preference (the same one in Settings), saved immediately. One
+  mechanism, one state: the ended rows appear or vanish and the Settings row
+  follows. It does **not** touch `idle_hide_after`, which is a set-and-forget
+  Settings threshold, not a per-glance override.
 
 The summary strip reports how many sessions the default view is hiding, so the
-operator always knows there is more behind `a`.
+operator always knows there is more behind the current filter.
 
 ---
 

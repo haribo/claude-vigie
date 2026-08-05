@@ -6,6 +6,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/charmbracelet/lipgloss"
+
 	"github.com/haribo/claude-vigie/internal/api"
 	"github.com/haribo/claude-vigie/internal/clock"
 )
@@ -74,10 +76,12 @@ func renderMachines(sessions []api.SessionView, watcherSeen map[string]string, w
 	now := clock.Now() // presentation: relative "SEEN" ages
 
 	var b strings.Builder
-	b.WriteString("  " + headerStyle.Render(
+	// The overview table has no column-drop of its own; clamp each row to width so
+	// it never scrolls sideways (#329).
+	b.WriteString(clampWidth("  "+headerStyle.Render(
 		pad("MACHINE", 16)+padLeft("SESS", 6)+padLeft("WORK", 7)+padLeft("WAIT", 7)+
 			padLeft("IDLE", 6)+padLeft("ENDED", 7)+padLeft("OUT", 10)+"   "+
-			pad("USER", 12)+padLeft("SEEN", 6)+"   "+pad("WATCH", 8)) + "\n")
+			pad("USER", 12)+padLeft("SEEN", 6)+"   "+pad("WATCH", 8)), width) + "\n")
 	b.WriteString(rule(width) + "\n")
 	var noWatcher []string
 	for _, a := range aggregateMachines(sessions) {
@@ -85,23 +89,28 @@ func renderMachines(sessions []api.SessionView, watcherSeen map[string]string, w
 		if !fresh {
 			noWatcher = append(noWatcher, a.name)
 		}
-		b.WriteString("  " +
-			pad(a.name, 16) +
-			padLeft(strconv.Itoa(a.sessions), 6) +
-			countCell(a.working, "working", 7) +
-			countCell(a.waiting, "waiting", 7) +
-			countCell(a.idle, "idle", 6) +
-			countCell(a.ended, "ended", 7) +
-			padLeft(humanizeTokens(a.out), 10) + "   " +
-			userStyle.Render(pad(orDash(a.user), 12)) +
-			dimStyle.Render(padLeft(relativeAge(a.lastSeen, now), 6)) + "   " +
-			watchCell(fresh) + "\n")
+		b.WriteString(clampWidth("  "+
+			pad(a.name, 16)+
+			padLeft(strconv.Itoa(a.sessions), 6)+
+			countCell(a.working, "working", 7)+
+			countCell(a.waiting, "waiting", 7)+
+			countCell(a.idle, "idle", 6)+
+			countCell(a.ended, "ended", 7)+
+			padLeft(humanizeTokens(a.out), 10)+"   "+
+			userStyle.Render(pad(orDash(a.user), 12))+
+			dimStyle.Render(padLeft(relativeAge(a.lastSeen, now), 6))+"   "+
+			watchCell(fresh), width) + "\n")
 	}
 	// Only surface the banner when something is actually wrong — no watcher on at
-	// least one machine — so a healthy fleet stays quiet.
+	// least one machine — so a healthy fleet stays quiet. Prose wraps to width.
 	if len(noWatcher) > 0 {
-		b.WriteString("\n" + warnStyle.Render("⚠ no watcher on "+strings.Join(noWatcher, ", ")) + "\n")
-		b.WriteString(dimStyle.Render("  run `vigie watch` there (or enable its service) — statuses can go stale without it") + "\n")
+		warn := warnStyle.Render("⚠ no watcher on " + strings.Join(noWatcher, ", "))
+		help := dimStyle.Render("  run `vigie watch` there (or enable its service) — statuses can go stale without it")
+		if width > 0 {
+			warn = lipgloss.NewStyle().Width(width).Render(warn)
+			help = lipgloss.NewStyle().Width(width).Render(help)
+		}
+		b.WriteString("\n" + warn + "\n" + help + "\n")
 	}
 	return b.String()
 }

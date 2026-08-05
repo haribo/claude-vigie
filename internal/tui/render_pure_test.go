@@ -27,8 +27,9 @@ func TestJoinLR(t *testing.T) {
 	if !strings.Contains(out, "LEFT") || !strings.Contains(out, "RIGHT") {
 		t.Errorf("joinLR dropped a side: %q", out)
 	}
-	// Too narrow → falls back to a fixed gap, never panics.
-	if got := joinLR("LEFT", "RIGHT", 3); !strings.Contains(got, "LEFT") {
+	// Too narrow → clamps to width (no overflow), keeps a prefix of the primary
+	// left side and drops the secondary right (#328).
+	if got := joinLR("LEFT", "RIGHT", 3); len([]rune(got)) > 3 || !strings.HasPrefix("LEFT", got) {
 		t.Errorf("joinLR narrow = %q", got)
 	}
 }

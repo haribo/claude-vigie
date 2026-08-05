@@ -1,6 +1,7 @@
 package tui
 
 import (
+	"fmt"
 	"sort"
 	"strconv"
 	"strings"
@@ -131,7 +132,6 @@ type model struct {
 	groupBy         groupBy
 	fetchSeq        int // generation of the last issued sessions fetch
 	appliedSeq      int // generation of the last applied sessions result
-	showAll         bool
 	prefs           prefs
 	settingsCursor  int
 	events          <-chan struct{}
@@ -447,8 +447,10 @@ func (m model) handleSessionsKey(msg tea.KeyMsg) model {
 	case "g":
 		m.groupBy = (m.groupBy + 1) % groupByCount
 		return m.saveViewPrefs()
-	case "a":
-		m.showAll = !m.showAll
+	case "a": // toggle the persistent hide-ended setting (#320); best-effort save,
+		// like the sort/group prefs (#237) — shaping one's view, allowed by ADR-0007
+		m.prefs.hideEnded = !m.prefs.hideEnded
+		savePrefs(m.prefs)
 		m.cursor = 0
 	case "n": // jump to the oldest session waiting on the operator (#261) — pure
 		// navigation: looking is done in the session, not acknowledged in vigie (ADR-0007)
@@ -501,11 +503,11 @@ func (m model) handleSettingsKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		if !onColumn {
 			return m.editSetting(-1)
 		}
-	case "[": // reorder a visible column up
+	case "[", "shift+up": // reorder the column up
 		if onColumn {
 			return m.moveColumnRow(-1), nil
 		}
-	case "]": // reorder a visible column down
+	case "]", "shift+down": // reorder the column down
 		if onColumn {
 			return m.moveColumnRow(1), nil
 		}
@@ -521,7 +523,7 @@ func (m model) columnAtCursor() column {
 // toggleColumnRow shows/hides the column under the cursor (mandatory ones can't
 // be hidden) and persists (#308).
 func (m model) toggleColumnRow() model {
-	m.prefs.columnOrder = toggleColumn(m.prefs.columnOrder, m.columnAtCursor().key())
+	m.prefs.columnHidden = toggleColumn(m.prefs.columnHidden, m.columnAtCursor().key())
 	savePrefs(m.prefs)
 	return m
 }
@@ -623,12 +625,13 @@ func (m model) handleFilterKey(msg tea.KeyMsg) model {
 }
 
 // visibleSessions returns the sessions after filtering and sorting. Ended and
-// stale sessions are hidden unless showAll is set.
+// idle-aged sessions are hidden per the persistent view prefs (toggled live by
+// the `a` key and Settings).
 func (m model) visibleSessions() []api.SessionView {
 	now := m.now()
 	out := make([]api.SessionView, 0, len(m.sessions))
 	for _, s := range m.sessions {
-		if !m.showAll && !m.prefs.visible(s, now) {
+		if !m.prefs.visible(s, now) {
 			continue
 		}
 		if m.matchesFilter(s) {
@@ -666,7 +669,11 @@ func (m model) View() string {
 		b.WriteString(m.renderSettings())
 	}
 
-	b.WriteString("\n" + rule(m.width) + "\n" + footer(m.tab))
+	foot := footer(m.tab)
+	if m.width > 0 {
+		foot = lipgloss.NewStyle().Width(m.width).Render(foot) // wrap, don't overflow (#328)
+	}
+	b.WriteString("\n" + rule(m.width) + "\n" + foot)
 	return b.String()
 }
 
@@ -708,22 +715,48 @@ func (m model) renderSettings() string {
 
 	// Column picker: every column, visible ones first, toggled with space and
 	// reordered with [ ] (#308).
-	b.WriteString("\n" + dimStyle.Render("Columns") +
-		dimStyle.Render("   (space: show/hide    [ ]: reorder)") + "\n\n")
+	// Width budget: the terminal is width-bound (no horizontal scroll), so show how
+	// much the selected columns cost against the available width, and flag the ones
+	// the auto-drop cuts off — the drop is never silent (#317).
+	active := activeColumns(m.prefs.columnOrder, m.prefs.columnHidden)
+	used, avail := rowWidth(active), m.width // rowWidth includes the 2-col gutter
+	over := map[string]bool{}
+	for _, c := range overflowColumns(active, avail) {
+		over[c.key()] = true
+	}
+	budget := dimStyle.Render(fmt.Sprintf("   width %d/%d", used, avail))
+	if used > avail {
+		budget = warnStyle.Render(fmt.Sprintf("   width %d/%d — over by %d", used, avail, used-avail))
+	}
+	header := dimStyle.Render("Columns") +
+		dimStyle.Render("   (space: show/hide    [ ] or shift+↑↓: reorder)") + budget
+	if m.width > 0 {
+		header = lipgloss.NewStyle().Width(m.width).Render(header) // wrap, don't overflow (#329)
+	}
+	b.WriteString("\n" + header + "\n\n")
 	for i, c := range pickerColumns(m.prefs.columnOrder) {
 		gutter := "  "
 		if settingsCount+i == m.settingsCursor {
 			gutter = cursorStyle.Render("❯ ")
 		}
 		box := dimStyle.Render("[ ]")
-		if columnVisible(m.prefs.columnOrder, c.key()) {
+		if !columnHidden(m.prefs.columnHidden, c.key()) {
 			box = statusStyle("working").Render("[x]")
 		}
-		name := c.header
+		label := c.header
+		suffix := ""
 		if mandatoryColumns[c.key()] {
-			name += dimStyle.Render("  (required)")
+			suffix = " (required)"
 		}
-		b.WriteString(gutter + box + " " + name + "\n")
+		gap := 18 - len(label) - len(suffix)
+		if gap < 1 {
+			gap = 1
+		}
+		cost := dimStyle.Render(fmt.Sprintf("w%d", c.width))
+		if over[c.key()] {
+			cost = warnStyle.Render(fmt.Sprintf("w%d ⚠ cut off", c.width))
+		}
+		b.WriteString(gutter + box + " " + label + dimStyle.Render(suffix) + strings.Repeat(" ", gap) + cost + "\n")
 	}
 	return b.String()
 }
@@ -749,6 +782,31 @@ func idleLabel(d time.Duration) string {
 	return humanizeDuration(d)
 }
 
+// overflowBanner is the warning naming the columns the width auto-drop removed
+// (the TUI never scrolls sideways). It is wrapped to width so it never runs past
+// the edge and gets cut off on a narrow terminal (#325). Empty when all fit.
+func overflowBanner(active []column, width int) string {
+	over := overflowColumns(active, width)
+	if len(over) == 0 {
+		return ""
+	}
+	names := make([]string, len(over))
+	for i, c := range over {
+		names[i] = c.header
+	}
+	word := "column"
+	if len(over) > 1 {
+		word = "columns"
+	}
+	msg := fmt.Sprintf("⚠ %d %s hidden — terminal too narrow; widen, or deselect in Settings → Columns: %s",
+		len(over), word, strings.Join(names, ", "))
+	style := warnStyle
+	if width > 0 {
+		style = style.Width(width) // word-wrap to the terminal width
+	}
+	return style.Render(msg)
+}
+
 func (m model) viewSessions() string {
 	if m.err != nil {
 		return errStyle.Render("error: " + m.err.Error())
@@ -766,17 +824,21 @@ func (m model) viewSessions() string {
 	var b strings.Builder
 	// The tab-bar separator frames the summary strip above; a rule below
 	// separates it from the table.
-	b.WriteString(joinLR(renderSummary(m.sessions, m.history), m.summaryRight(), m.width) + "\n")
+	b.WriteString(joinLR(renderSummaryFit(m.sessions, m.history, m.width), m.summaryRight(), m.width) + "\n")
 	b.WriteString(rule(m.width) + "\n")
 	if m.filtering || m.filter != "" {
 		b.WriteString(m.filterLine() + "\n")
 	}
+	active := activeColumns(m.prefs.columnOrder, m.prefs.columnHidden)
+	if banner := overflowBanner(active, m.width); banner != "" {
+		b.WriteString(banner + "\n")
+	}
 	if len(vis) == 0 {
 		b.WriteString(dimStyle.Render("no sessions match the filter"))
 	} else {
-		b.WriteString(renderGroupedTable(vis, activeColumns(m.prefs.columnOrder), m.width, cursor, m.groupBy, sortState{m.sortKey, m.sortReversed}))
+		b.WriteString(renderGroupedTable(vis, active, m.width, cursor, m.groupBy, sortState{m.sortKey, m.sortReversed}))
 	}
-	b.WriteString(rule(m.width) + "\n" + renderUsageStrip(m.usage) + platformStrip(m.platform))
+	b.WriteString(rule(m.width) + "\n" + usageStrip(m.usage, m.platform, m.width))
 	return b.String()
 }
 
@@ -787,9 +849,7 @@ func (m model) summaryRight() string {
 	if m.groupBy != groupNone {
 		parts = append(parts, labelStyle.Render("group ")+groupNames[m.groupBy])
 	}
-	if m.showAll {
-		parts = append(parts, labelStyle.Render("showing ")+"all")
-	} else if h := m.hiddenCount(); h > 0 {
+	if h := m.hiddenCount(); h > 0 {
 		parts = append(parts, labelStyle.Render("hidden ")+strconv.Itoa(h))
 	}
 	parts = append(parts, m.connGlyph())
@@ -821,19 +881,21 @@ func (m model) filterLine() string {
 }
 
 // joinLR places left and right on one line, right-aligned to width when known.
+// When both cannot fit, it keeps the primary left side (clamped to width) and
+// drops the secondary right side rather than overflowing the terminal (#328).
 func joinLR(left, right string, width int) string {
-	lw, rw := lipgloss.Width(left), lipgloss.Width(right)
-	if width <= 0 || lw+rw+3 > width {
+	if width <= 0 {
 		return left + "   " + right
+	}
+	lw, rw := lipgloss.Width(left), lipgloss.Width(right)
+	if lw+rw+3 > width {
+		return lipgloss.NewStyle().MaxWidth(width).Render(left)
 	}
 	return left + strings.Repeat(" ", width-lw-rw) + right
 }
 
 // hiddenCount is how many sessions the default filter is currently hiding.
 func (m model) hiddenCount() int {
-	if m.showAll {
-		return 0
-	}
 	now := m.now()
 	n := 0
 	for _, s := range m.sessions {
