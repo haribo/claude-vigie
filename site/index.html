@@ -194,23 +194,6 @@
   .pill.ended { color: var(--s-ended); background: color-mix(in srgb, var(--s-ended) 22%, transparent); } .pill.ended i { background: var(--s-ended); }
   @keyframes ping { 0% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--s-waiting) 70%, transparent); } 70%,100% { box-shadow: 0 0 0 6px transparent; } }
 
-  /* features */
-  .feat-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 16px; }
-  .feat { background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); padding: 26px 24px; position: relative; overflow: hidden; }
-  .feat h3 { font-family: var(--font-mono); font-size: 1.02rem; font-weight: 700; letter-spacing: -0.01em; margin-bottom: 10px; }
-  .feat p { color: var(--muted); font-size: 0.94rem; margin: 0; }
-  .feat .ix { font-family: var(--font-mono); font-size: 0.7rem; color: var(--amber); letter-spacing: 0.14em; margin-bottom: 16px; display: block; }
-  .feat::before { content: ""; position: absolute; left: 0; top: 24px; bottom: 24px; width: 2px; background: var(--amber); opacity: 0; transition: opacity .2s; }
-  .feat:hover::before { opacity: 0.7; }
-
-  /* status key */
-  .key-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px 34px; }
-  .key-row { display: flex; align-items: baseline; gap: 14px; padding: 12px 0; border-bottom: 1px solid color-mix(in srgb, var(--line) 60%, transparent); }
-  .key-name { font-family: var(--font-mono); font-weight: 600; min-width: 96px; display: flex; align-items: center; gap: 9px; }
-  .key-name i { width: 8px; height: 8px; border-radius: 50%; }
-  .key-desc { color: var(--muted); font-size: 0.9rem; }
-  .key-tag { font-family: var(--font-mono); font-size: 0.6rem; letter-spacing: 0.12em; text-transform: uppercase; color: var(--s-waiting); border: 1px solid color-mix(in srgb, var(--s-waiting) 40%, transparent); border-radius: 5px; padding: 1px 6px; margin-left: auto; align-self: center; }
-
   /* install */
   .install-grid { display: grid; grid-template-columns: 0.9fr 1.1fr; gap: 34px; align-items: start; }
   ol.steps { list-style: none; counter-reset: s; margin: 0; padding: 0; }
@@ -246,7 +229,7 @@
   @media (max-width: 860px) {
     .hero-grid { grid-template-columns: 1fr; gap: 40px; }
     .lede { max-width: none; }
-    .feat-grid, .key-grid, .install-grid { grid-template-columns: 1fr; }
+    .install-grid { grid-template-columns: 1fr; }
     .scope-frame { max-width: 460px; }
   }
   @media (prefers-reduced-motion: reduce) {
@@ -275,7 +258,6 @@
     <div class="nav-links">
       <a href="#how" class="hide-sm">How it works</a>
       <a href="#watch" class="hide-sm">The board</a>
-      <a href="#features" class="hide-sm">Features</a>
       <a href="#install">Install</a>
       <a href="https://github.com/haribo/claude-vigie" class="nav-cta">GitHub ↗</a>
       <button class="toggle" id="themeBtn" aria-label="Toggle light / dark theme" title="Toggle light / dark">◐</button>
@@ -360,7 +342,7 @@
           </div>
           <span class="flow-ix">03</span>
           <h3>Watch anywhere</h3>
-          <p>Read the live board from your terminal or the read-only web dashboard the daemon serves — same truth on both surfaces.</p>
+          <p>Read the live board from your terminal or the read-only web dashboard the daemon serves — same truth on both surfaces. When a session starts waiting, stalls, or errors, a desktop notification and a next-waiting hotkey take you straight to it.</p>
           <span class="flow-cmd">tui · web</span>
         </div>
       </div>
@@ -427,56 +409,6 @@
     </div>
   </section>
 
-  <section class="block" id="features">
-    <div class="wrap">
-      <div class="sec-head">
-        <p class="eyebrow">What it does</p>
-        <h2>It watches, never steers.</h2>
-      </div>
-      <div class="feat-grid">
-        <div class="feat">
-          <span class="ix">01 — PRINCIPLE</span>
-          <h3>It only ever watches</h3>
-          <p>Observe-only by design. There is no control channel and never will be. vigie reads state from Claude Code's registry and transcripts — it can't start, stop, or steer a session, so it can never get in your way.</p>
-        </div>
-        <div class="feat">
-          <span class="ix">02 — REACH</span>
-          <h3>Many machines, one watch</h3>
-          <p>Point each machine's watcher at your server and every machine lands on one board. Presence and status come from Claude Code itself, so a session shows up the moment it starts — no per-session setup.</p>
-        </div>
-        <div class="feat">
-          <span class="ix">03 — SURFACES</span>
-          <h3>Two ways to keep watch</h3>
-          <p>A Bubble Tea TUI in your terminal, and a read-only web dashboard the daemon serves over HTTP — a browser mirror of the TUI. Same truth, wherever you're looking.</p>
-        </div>
-        <div class="feat">
-          <span class="ix">04 — ATTENTION</span>
-          <h3>Alerts that find you</h3>
-          <p>When a session starts waiting, stalls on a hung tool, or errors, vigie tells you: a desktop notification and a next-waiting hotkey that jumps you straight to whatever needs a human.</p>
-        </div>
-      </div>
-    </div>
-  </section>
-
-  <section class="block" id="states">
-    <div class="wrap">
-      <div class="sec-head">
-        <p class="eyebrow">The status key</p>
-        <h2>Seven states, read at a glance.</h2>
-        <p>Every session sits in exactly one state. Three of them mean a human is needed — those are the ones vigie surfaces and notifies on.</p>
-      </div>
-      <div class="key-grid">
-        <div class="key-row"><span class="key-name"><i style="background:var(--s-working)"></i>working</span><span class="key-desc">running a tool or writing a reply</span></div>
-        <div class="key-row"><span class="key-name"><i style="background:var(--s-thinking)"></i>thinking</span><span class="key-desc">reasoning inside a turn</span></div>
-        <div class="key-row"><span class="key-name"><i style="background:var(--s-waiting)"></i>waiting</span><span class="key-desc">paused on a permission prompt</span><span class="key-tag">attention</span></div>
-        <div class="key-row"><span class="key-name"><i style="background:var(--s-stalled)"></i>stalled</span><span class="key-desc">a turn parked on a tool that never returned</span><span class="key-tag">attention</span></div>
-        <div class="key-row"><span class="key-name"><i style="background:var(--s-idle)"></i>idle</span><span class="key-desc">alive but quiet, awaiting your prompt</span></div>
-        <div class="key-row"><span class="key-name"><i style="background:var(--s-error)"></i>error</span><span class="key-desc">the last turn hit an API error</span><span class="key-tag">attention</span></div>
-        <div class="key-row"><span class="key-name"><i style="background:var(--s-ended)"></i>ended</span><span class="key-desc">the session's process is gone</span></div>
-      </div>
-    </div>
-  </section>
-
   <section class="block" id="install">
     <div class="wrap">
       <div class="sec-head">
@@ -494,9 +426,11 @@
         <div>
           <div class="code">
             <div class="code-bar"><span>install · linux/amd64</span><button class="copy" id="copyBtn">Copy</button></div>
-            <pre class="code-body" id="codeText"><span class="c"># 1 · install the client into ~/.local/bin</span>
-tar xzf vigie_0.1.0_linux_amd64.tar.gz
-install -m755 vigie ~/.local/bin/
+            <pre class="code-body" id="codeText"><span class="c"># 1 · fetch the latest client, verify it, install to ~/.local/bin</span>
+gh release download -R haribo/claude-vigie \
+  -p <span class="k">'vigie_*_linux_amd64.tar.gz'</span> -p checksums.txt
+sha256sum --ignore-missing -c checksums.txt
+tar xzf vigie_*_linux_amd64.tar.gz && install -m755 vigie ~/.local/bin/
 
 <span class="c"># 2 · point the client at YOUR OWN vigied server</span>
 vigie <span class="k">init</span> \
