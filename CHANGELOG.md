@@ -26,6 +26,11 @@ file is the single source of truth, not a second narrative.
 
 ### Added
 
+- The Machines tab now shows each machine's watcher version. The watcher reports
+  its build in the heartbeat, the server stores it per machine and returns it from
+  `GET /api/watcher`, and both the TUI (a VERSION column) and the web dashboard
+  (a per-machine chip) display it — so a watcher that has drifted behind the
+  daemon is visible.
 - Sessions the operator interrupted (Ctrl-C/Esc) now show an `interrupted` marker
   in the activity column instead of a bare `idle`, so a turn killed mid-flight is
   distinguishable from one that finished cleanly. It clears with no timer — the
