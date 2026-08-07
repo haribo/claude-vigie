@@ -23,6 +23,7 @@ import (
 	"github.com/haribo/claude-vigie/internal/presence"
 	"github.com/haribo/claude-vigie/internal/transcript"
 	"github.com/haribo/claude-vigie/internal/usage"
+	"github.com/haribo/claude-vigie/internal/version"
 )
 
 // Options configures the watch loop.
@@ -206,6 +207,8 @@ func (s *scanner) scan(root, machine string, maxAge time.Duration, now time.Time
 			Usage:          &usage,
 			APIErrorStatus: apiErr,
 			Activity:       activity,
+			WatcherVersion: version.Version, // report this watcher's build (#356)
+			WatcherCommit:  version.Commit,
 			Timestamp:      reportAt.UTC().Format(time.RFC3339),
 		})
 	}
@@ -255,6 +258,8 @@ func refineStatus(base, activity, id string, info *transcript.Info, activityAge 
 	switch {
 	case base == "compacting":
 		activity = "compacting context"
+	case base == "idle" && info.Interrupted:
+		activity = "interrupted" // the operator killed the turn; still idle (#351)
 	case base == "stalled" && activity == "":
 		activity = "stopped at " + info.PendingTool
 	case prevBase == "idle" && base == "working" && info.AgentsActive > 0 && activityAge < agentWindow:

@@ -9,6 +9,43 @@ file is the single source of truth, not a second narrative.
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-08-07
+
+### Changed
+
+- `vigie watch` now owns the reporting-hooks lifecycle: it re-installs its own
+  leg into `~/.claude/settings.json` at startup, so the installed hooks always
+  match the running watcher — a service restart after an upgrade self-heals stale
+  hooks (e.g. a missing `PreCompact` or a moved binary). The settings write is now
+  atomic (temp + rename); a refresh failure is logged and never stops the watch
+  ([ADR-0009](docs/adr/0009-watcher-managed-hooks.md)). Manual `vigie init` /
+  `vigie hooks` still work.
+
+### Fixed
+
+- `vigie hooks` no longer advertises the removed `--detailed` flag in its usage,
+  and an unknown flag now prints the real usage instead of a bare "Usage of hooks:".
+
+### Added
+
+- `vigie tui` now runs a startup preflight before entering the alt-screen: it
+  requires a reachable server, a valid token, and a daemon whose build strictly
+  matches the client's (commit-compared when either side is a `dev` build). Any
+  failure prints both versions and the remediation and exits 1 — no more silent
+  degradation behind a full-screen UI, and no bypass flag
+  ([design](docs/design/tui-preflight.md)). When the local machine has vigie hooks
+  installed, the preflight also requires a fresh, version-matching local watcher —
+  a hooks-only machine with a dead or outdated watcher reports stale statuses.
+- The Machines tab now shows each machine's watcher version. The watcher reports
+  its build in the heartbeat, the server stores it per machine and returns it from
+  `GET /api/watcher`, and both the TUI (a VERSION column) and the web dashboard
+  (a per-machine chip) display it — so a watcher that has drifted behind the
+  daemon is visible.
+- Sessions the operator interrupted (Ctrl-C/Esc) now show an `interrupted` marker
+  in the activity column instead of a bare `idle`, so a turn killed mid-flight is
+  distinguishable from one that finished cleanly. It clears with no timer — the
+  next real prompt or reply replaces it. A DOING refinement, not a new status.
+
 ## [0.3.0] - 2026-08-07
 
 ### Added
@@ -109,7 +146,8 @@ across machines — it reads and reports session state; it never drives a sessio
 - The API binds `127.0.0.1` by default; every `/api/*` route is behind a
   constant-time shared-token check; request bodies are size-capped.
 
-[Unreleased]: https://github.com/haribo/claude-vigie/compare/v0.3.0...HEAD
+[Unreleased]: https://github.com/haribo/claude-vigie/compare/v0.4.0...HEAD
+[0.4.0]: https://github.com/haribo/claude-vigie/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/haribo/claude-vigie/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/haribo/claude-vigie/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/haribo/claude-vigie/releases/tag/v0.1.0

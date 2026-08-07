@@ -66,10 +66,19 @@ func aggregateMachines(sessions []api.SessionView) []machineStat {
 	return out
 }
 
+// versionCell renders a machine's watcher build, or a dash when none reported.
+func versionCell(v api.VersionInfo) string {
+	if v.Version == "" {
+		return "—"
+	}
+	return v.Version
+}
+
 // renderMachines renders the per-machine fleet overview (read-only). watcherSeen
 // maps each machine to the RFC3339 time of its last watch report, so machines
-// running on hooks alone are flagged (#284).
-func renderMachines(sessions []api.SessionView, watcherSeen map[string]string, width int) string {
+// running on hooks alone are flagged (#284); versions carries each watcher's
+// build so a drifted watcher is visible (#356).
+func renderMachines(sessions []api.SessionView, watcherSeen map[string]string, versions map[string]api.VersionInfo, width int) string {
 	if len(sessions) == 0 {
 		return dimStyle.Render("no sessions yet")
 	}
@@ -81,7 +90,7 @@ func renderMachines(sessions []api.SessionView, watcherSeen map[string]string, w
 	b.WriteString(clampWidth("  "+headerStyle.Render(
 		pad("MACHINE", 16)+padLeft("SESS", 6)+padLeft("WORK", 7)+padLeft("WAIT", 7)+
 			padLeft("IDLE", 6)+padLeft("ENDED", 7)+padLeft("OUT", 10)+"   "+
-			pad("USER", 12)+padLeft("SEEN", 6)+"   "+pad("WATCH", 8)), width) + "\n")
+			pad("USER", 12)+padLeft("SEEN", 6)+"   "+pad("WATCH", 8)+"   "+pad("VERSION", 12)), width) + "\n")
 	b.WriteString(rule(width) + "\n")
 	var noWatcher []string
 	for _, a := range aggregateMachines(sessions) {
@@ -99,7 +108,8 @@ func renderMachines(sessions []api.SessionView, watcherSeen map[string]string, w
 			padLeft(humanizeTokens(a.out), 10)+"   "+
 			userStyle.Render(pad(orDash(a.user), 12))+
 			dimStyle.Render(padLeft(relativeAge(a.lastSeen, now), 6))+"   "+
-			watchCell(fresh), width) + "\n")
+			watchCell(fresh)+"   "+
+			dimStyle.Render(pad(versionCell(versions[a.name]), 12)), width) + "\n")
 	}
 	// Only surface the banner when something is actually wrong — no watcher on at
 	// least one machine — so a healthy fleet stays quiet. Prose wraps to width.

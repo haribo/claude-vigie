@@ -30,7 +30,11 @@ type ReportRequest struct {
 	RemoteURL      string `json:"remote_url,omitempty"`       // /rc resume URL (watcher); "" clears it, set with RemoteControl
 	Usage          *Usage `json:"usage,omitempty"`            // present on Stop / SessionEnd
 	APIErrorStatus int    `json:"api_error_status,omitempty"` // HTTP code of a live API error (watcher); 0 = none
-	Timestamp      string `json:"timestamp"`                  // RFC3339, event time
+	// WatcherVersion/WatcherCommit are the watcher's build, carried on Event=="watch"
+	// so the server can track each machine's watcher version (#356).
+	WatcherVersion string `json:"watcher_version,omitempty"`
+	WatcherCommit  string `json:"watcher_commit,omitempty"`
+	Timestamp      string `json:"timestamp"` // RFC3339, event time
 }
 
 // Usage holds token counters.
@@ -101,6 +105,10 @@ type WatcherStatus struct {
 	// of its last watch report, or "" when no watcher ever reported for it. Lets
 	// the client flag machines running on hooks alone (#284).
 	Machines map[string]string `json:"machines,omitempty"`
+	// Versions maps each machine to the build its watcher last reported — so an
+	// operator can spot a watcher that has drifted behind the daemon (#356). Absent
+	// for a machine reporting on hooks alone.
+	Versions map[string]VersionInfo `json:"versions,omitempty"`
 }
 
 // PlatformStatus is the Claude platform health the server polls from

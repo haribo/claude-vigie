@@ -79,6 +79,32 @@ func owns(cmd, configPath string) bool {
 	return false
 }
 
+// HooksInstalled reports whether vigie's reporting hooks for the given leg
+// (production when configPath is empty) are present in settings.json — used by
+// the TUI preflight to decide whether a fresh local watcher is required (#359).
+func HooksInstalled(configPath string) (bool, error) {
+	path, err := SettingsPath()
+	if err != nil {
+		return false, err
+	}
+	existing, err := readSettings(path)
+	if err != nil {
+		return false, err
+	}
+	_, hooks, err := parseSettings(existing)
+	if err != nil {
+		return false, err
+	}
+	for _, matchers := range hooks {
+		for _, m := range matchers {
+			if matcherIsLeg(m, configPath) {
+				return true, nil
+			}
+		}
+	}
+	return false, nil
+}
+
 // Install merges the reporting hooks for one leg (binPath, configPath) into the
 // settings file and returns the path written. Other legs are left untouched.
 func Install(events []string, binPath, configPath string, timeout int) (string, error) {
@@ -126,12 +152,33 @@ func readSettings(path string) ([]byte, error) {
 	return data, nil
 }
 
+// writeSettings writes the merged settings atomically: a temp file in the same
+// directory, then rename over the target. Claude Code also writes this file, so
+// a reader must never see a partial write (ADR-0009). The rename is atomic on the
+// same filesystem; it does not serialize against a concurrent writer.
 func writeSettings(path string, data []byte) error {
-	if err := os.MkdirAll(filepath.Dir(path), 0o750); err != nil {
+	dir := filepath.Dir(path)
+	if err := os.MkdirAll(dir, 0o750); err != nil {
 		return fmt.Errorf("creating settings dir: %w", err)
 	}
-	if err := os.WriteFile(path, data, 0o600); err != nil {
-		return fmt.Errorf("writing %s: %w", path, err)
+	tmp, err := os.CreateTemp(dir, ".settings-*.json")
+	if err != nil {
+		return fmt.Errorf("creating temp settings: %w", err)
+	}
+	defer func() { _ = os.Remove(tmp.Name()) }() // no-op once renamed
+	if _, err := tmp.Write(data); err != nil {
+		_ = tmp.Close()
+		return fmt.Errorf("writing temp settings: %w", err)
+	}
+	if err := tmp.Chmod(0o600); err != nil {
+		_ = tmp.Close()
+		return fmt.Errorf("chmod temp settings: %w", err)
+	}
+	if err := tmp.Close(); err != nil {
+		return fmt.Errorf("closing temp settings: %w", err)
+	}
+	if err := os.Rename(tmp.Name(), path); err != nil {
+		return fmt.Errorf("replacing %s: %w", path, err)
 	}
 	return nil
 }
