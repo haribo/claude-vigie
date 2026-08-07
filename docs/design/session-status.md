@@ -58,6 +58,11 @@ hooks aren't installed). It derives status from two signals — is the session's
 **process alive**, and is its **transcript changing**:
 
 - process gone → `ended` (reliable even on a hard kill);
+- process alive but running a **newer** session id (same `{PID, procStart}`, a
+  different id now in the registry) → `ended` for the old id: the session was
+  superseded in place, typically by `/clear`. Without this the old transcript,
+  still fresh and backed by the reused process, would linger as a ghost `idle`
+  row (see [session-lineage.md](session-lineage.md), #367);
 - transcript written just now, or the last turn stopped mid-tool-call and a tool
   may still be running → `working`;
 - process alive but quiet → `idle`, for any idle duration (a long idle session

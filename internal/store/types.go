@@ -14,8 +14,15 @@ type Session struct {
 	// xhigh/max), or empty when unknown. Derived from the transcript, best-effort.
 	Effort string
 	// ContextTokens is the real prompt size of the latest request (input +
-	// cache-read + cache-creation tokens), 0 when unknown — for the context-fill %.
+	// cache-read + cache-creation tokens), for the context-fill %. Read together
+	// with ContextKnown: 0 is known-empty (a just-cleared session, shown 0%) only
+	// when ContextKnown is true, else it is unknown (#367).
 	ContextTokens int64
+	// ContextKnown reports whether ContextTokens is a real reading. False means
+	// vigie has no context reading for the session (rendered "-"); true means the
+	// count is known, including a known 0 (0%). Set by the watcher, which parses
+	// the transcript on every scan (#367).
+	ContextKnown bool
 	// PermissionMode is the session's permission mode
 	// (default/acceptEdits/plan/auto/bypassPermissions), empty when unknown (#304).
 	PermissionMode string

@@ -10,7 +10,7 @@ import (
 // ErrNotFound is returned when a requested session does not exist.
 var ErrNotFound = errors.New("session not found")
 
-const sessionColumns = `id, title, os_user, machine, project_dir, git_branch, model, effort, context_tokens, permission_mode, status, last_tool,
+const sessionColumns = `id, title, os_user, machine, project_dir, git_branch, model, effort, context_tokens, context_known, permission_mode, status, last_tool,
 	input_tokens, output_tokens, cache_creation_tokens, cache_read_tokens,
 	started_at, last_seen_at, ended_at, remote_control, last_report_at, api_error_status, status_source, activity, status_changed_at, remote_url`
 
@@ -22,7 +22,7 @@ type scanner interface {
 func scanSession(sc scanner) (Session, error) {
 	var s Session
 	err := sc.Scan(
-		&s.ID, &s.Title, &s.User, &s.Machine, &s.ProjectDir, &s.GitBranch, &s.Model, &s.Effort, &s.ContextTokens, &s.PermissionMode, &s.Status, &s.LastTool,
+		&s.ID, &s.Title, &s.User, &s.Machine, &s.ProjectDir, &s.GitBranch, &s.Model, &s.Effort, &s.ContextTokens, &s.ContextKnown, &s.PermissionMode, &s.Status, &s.LastTool,
 		&s.Usage.InputTokens, &s.Usage.OutputTokens, &s.Usage.CacheCreationTokens, &s.Usage.CacheReadTokens,
 		&s.StartedAt, &s.LastSeenAt, &s.EndedAt, &s.RemoteControl, &s.ReportedAt, &s.APIErrorStatus, &s.StatusSource, &s.Activity, &s.StatusChangedAt, &s.RemoteURL,
 	)
@@ -34,10 +34,10 @@ func scanSession(sc scanner) (Session, error) {
 func (s *Store) UpsertSession(ctx context.Context, sess Session) error {
 	_, err := s.db.ExecContext(ctx, `
 INSERT INTO sessions (
-	id, title, os_user, machine, project_dir, git_branch, model, effort, context_tokens, permission_mode, status, last_tool,
+	id, title, os_user, machine, project_dir, git_branch, model, effort, context_tokens, context_known, permission_mode, status, last_tool,
 	input_tokens, output_tokens, cache_creation_tokens, cache_read_tokens,
 	started_at, last_seen_at, ended_at, last_report_at, remote_control, api_error_status, status_source, activity, status_changed_at, remote_url
-) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 ON CONFLICT(id) DO UPDATE SET
 	title = excluded.title,
 	os_user = excluded.os_user,
@@ -54,6 +54,7 @@ ON CONFLICT(id) DO UPDATE SET
 	model = excluded.model,
 	effort = excluded.effort,
 	context_tokens = excluded.context_tokens,
+	context_known = excluded.context_known,
 	permission_mode = excluded.permission_mode,
 	status = excluded.status,
 	last_tool = excluded.last_tool,
@@ -63,7 +64,7 @@ ON CONFLICT(id) DO UPDATE SET
 	cache_read_tokens = excluded.cache_read_tokens,
 	last_seen_at = excluded.last_seen_at,
 	ended_at = excluded.ended_at`,
-		sess.ID, sess.Title, sess.User, sess.Machine, sess.ProjectDir, sess.GitBranch, sess.Model, sess.Effort, sess.ContextTokens, sess.PermissionMode, sess.Status, sess.LastTool,
+		sess.ID, sess.Title, sess.User, sess.Machine, sess.ProjectDir, sess.GitBranch, sess.Model, sess.Effort, sess.ContextTokens, sess.ContextKnown, sess.PermissionMode, sess.Status, sess.LastTool,
 		sess.Usage.InputTokens, sess.Usage.OutputTokens, sess.Usage.CacheCreationTokens, sess.Usage.CacheReadTokens,
 		sess.StartedAt, sess.LastSeenAt, sess.EndedAt, sess.ReportedAt, sess.RemoteControl, sess.APIErrorStatus, sess.StatusSource, sess.Activity, sess.StatusChangedAt, sess.RemoteURL,
 	)

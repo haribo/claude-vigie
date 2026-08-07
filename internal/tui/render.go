@@ -108,7 +108,7 @@ var columns = []column{
 	{"MODEL", 12, 5, false, func(s api.SessionView) string { return orDash(shortModel(s.Model)) }, func(api.SessionView) lipgloss.Style { return dimStyle }},
 	{"EFFORT", 6, 11, false, func(s api.SessionView) string { return orDash(s.Effort) }, func(api.SessionView) lipgloss.Style { return dimStyle }},
 	{"CTX", 5, 12, true, contextCell, func(s api.SessionView) lipgloss.Style {
-		if s.ContextTokens <= 0 {
+		if !contextKnown(s) {
 			return dimStyle
 		}
 		return lipgloss.NewStyle().Foreground(contextColor(contextPct(s)))

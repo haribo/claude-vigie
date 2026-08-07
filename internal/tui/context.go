@@ -44,12 +44,18 @@ func modelVersion(short string) (family string, major, minor int) {
 	return family, major, minor
 }
 
-// contextPct is how full a session's context window is, 0 when unknown.
+// contextKnown reports whether the session carries a real context reading (a
+// non-nil count, including a known 0), versus none at all — rendered "-" (#367).
+func contextKnown(s api.SessionView) bool {
+	return s.ContextTokens != nil
+}
+
+// contextPct is how full a session's context window is, 0 when unknown or empty.
 func contextPct(s api.SessionView) float64 {
-	if s.ContextTokens <= 0 {
+	if s.ContextTokens == nil || *s.ContextTokens <= 0 {
 		return 0
 	}
-	return float64(s.ContextTokens) / float64(contextWindow(s.Model)) * 100
+	return float64(*s.ContextTokens) / float64(contextWindow(s.Model)) * 100
 }
 
 // contextColor maps a context-fill % to green / amber / red: green < 60 ≤ amber
@@ -66,9 +72,10 @@ func contextColor(pct float64) lipgloss.AdaptiveColor {
 	}
 }
 
-// contextCell renders the table CTX cell: the fill percentage, or "-" when unknown.
+// contextCell renders the table CTX cell: the fill percentage (0% for a known
+// empty context, e.g. a just-cleared session), or "-" when there is no reading.
 func contextCell(s api.SessionView) string {
-	if s.ContextTokens <= 0 {
+	if !contextKnown(s) {
 		return "-"
 	}
 	return fmt.Sprintf("%.0f%%", contextPct(s))
@@ -76,7 +83,7 @@ func contextCell(s api.SessionView) string {
 
 // contextGauge renders a compact context-fill bar for the detail panel.
 func contextGauge(s api.SessionView) string {
-	if s.ContextTokens <= 0 {
+	if !contextKnown(s) {
 		return dimStyle.Render("unknown")
 	}
 	pct := contextPct(s)
@@ -90,5 +97,5 @@ func contextGauge(s api.SessionView) string {
 	bar := lipgloss.NewStyle().Foreground(contextColor(pct)).Render(strings.Repeat("▓", filled)) +
 		dimStyle.Render(strings.Repeat("░", width-filled))
 	return fmt.Sprintf("%s %3.0f%% ", bar, pct) + dimStyle.Render(fmt.Sprintf("(%s / %s)",
-		humanizeTokens(s.ContextTokens), humanizeTokens(contextWindow(s.Model))))
+		humanizeTokens(*s.ContextTokens), humanizeTokens(contextWindow(s.Model))))
 }
