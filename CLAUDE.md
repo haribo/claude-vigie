@@ -12,7 +12,12 @@ Rules must be concise. One rule per line when possible.
 - Check existing docs before creating new files
 - Write in English, be concise, skip obvious examples
 - Favor rigorous, definitive solutions — no shortcuts, no temporary fixes, no lazy workarounds
-- ADR lifecycle: never delete an ADR; a reversal is a **new** ADR that supersedes the old (marked `Superseded`). In-place edits only for same-decision clarifications.
+- ADR lifecycle: never delete an ADR; a reversal is a **new** ADR, and both sides carry the link — `Superseded by ADR-NNN` on the old, `Supersedes ADR-MMM` on the new. A one-sided link is how the chain rots
+- An ADR whose decision no longer applies, with no replacement, is marked `Deprecated` — never edited away or moved
+- In-place edits only for corrections of form and for clarifications that do not change the decision
+- Code is never source of truth — a code/design disagreement means the code is the bug, or the design needs an explicit amendment, never both silently
+- If the design is silent on a needed behavior, write the design first, then the code
+- Anchor a confirmed non-obvious decision — especially one where an alternative was rejected — in the design docs or an ADR before building on it
 - Never assume a produced artifact matches its request — a generation, a render or a transform routinely ignores or distorts instructions. Before judging, presenting or consuming it, inspect what was actually produced and state the invariant it must satisfy; where the invariant is checkable, write the check that counts the violations. Claiming "it now matches X" without having verified is a defect.
 - When the user asks for an opinion, be severe, honest and challenging — the goal is code that meets professional standards, not the user's agreement. Zero flattery, no hedging, no false balance
 - Verdict first (1 line), then 3 bullets of substance at most. Say plainly when something is wrong, and say so when it is right — an unearned validation is a defect
