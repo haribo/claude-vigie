@@ -9,6 +9,11 @@ file is the single source of truth, not a second narrative.
 
 ## [Unreleased]
 
+### Fixed
+
+- `vigie hooks` no longer advertises the removed `--detailed` flag in its usage,
+  and an unknown flag now prints the real usage instead of a bare "Usage of hooks:".
+
 ### Added
 
 - Sessions the operator interrupted (Ctrl-C/Esc) now show an `interrupted` marker
