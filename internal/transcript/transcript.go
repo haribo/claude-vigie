@@ -68,6 +68,11 @@ type Info struct {
 	// system line — the moment a context compaction finished. The watcher uses it
 	// to close a `compacting` status (#342). Empty when the session never compacted.
 	LastCompactBoundary string
+	// Interrupted is true when the last non-system message is Claude Code's
+	// synthetic "[Request interrupted by user]" line — the operator killed the
+	// turn (Ctrl-C/Esc). The base status is still idle; the watcher only sets the
+	// DOING marker to "interrupted", cleared by the next real message (#351).
+	Interrupted bool
 }
 
 type usage struct {
@@ -193,6 +198,36 @@ func lastBlockIsThinking(raw json.RawMessage) bool {
 		return false
 	}
 	return blocks[len(blocks)-1].Type == "thinking"
+}
+
+// interruptMarkers are Claude Code's synthetic user lines injected when the
+// operator interrupts a turn (Ctrl-C/Esc). Undocumented internals (#351).
+var interruptMarkers = map[string]bool{
+	"[Request interrupted by user]":              true,
+	"[Request interrupted by user for tool use]": true,
+}
+
+// isInterruptLine reports whether a user message's content is a synthetic
+// interrupt marker. The marker's content is a block array with a text block; a
+// real typed prompt is a plain JSON string, which fails this decode — so a user
+// typing the literal marker text does not false-positive (#351).
+func isInterruptLine(raw json.RawMessage) bool {
+	if len(raw) == 0 {
+		return false
+	}
+	var blocks []struct {
+		Type string `json:"type"`
+		Text string `json:"text"`
+	}
+	if json.Unmarshal(raw, &blocks) != nil {
+		return false // not an array (e.g. a plain-string prompt)
+	}
+	for _, b := range blocks {
+		if b.Type == "text" && interruptMarkers[b.Text] {
+			return true
+		}
+	}
+	return false
 }
 
 // lastToolActivity returns a short message for the most recent tool_use block in

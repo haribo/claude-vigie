@@ -78,6 +78,20 @@ hooks aren't installed). It derives status from two signals — is the session's
 The watcher can see `working`, `thinking`, `idle`, `stalled`, `ended`, and
 `error`. It **cannot** see `waiting`.
 
+**DOING refinements (no status change).** A few signals annotate the activity
+column without touching the base status — a lighter touch than a full status when
+the state itself is unchanged:
+
+- a `shell` registry status keeps the session `idle` and sets DOING to `shell`
+  (dropped to a shell prompt) (#280);
+- a synthetic `[Request interrupted by user]` / `[Request interrupted by user for
+  tool use]` `user` line — the last non-system message — keeps the base `idle`
+  but sets DOING to `interrupted`, so a turn the operator killed mid-flight is
+  distinguishable from one that finished cleanly. It clears with no timer: the
+  next real user prompt or assistant message replaces it (#351). The synthetic
+  line carries its `content` as a block array, where a typed prompt is a plain
+  string, so a user typing that literal text does not false-positive.
+
 ---
 
 ## 3. Reconciliation rules
