@@ -25,6 +25,13 @@ func runTUI(args []string) int {
 		cfg.ServerURL = *server
 	}
 
+	// Preflight before the alt-screen: reachable server, valid token, matching
+	// daemon version. Strict, no bypass (#357).
+	if err := preflight(cfg); err != nil {
+		fmt.Fprintf(os.Stderr, "tui: %v\n", err)
+		return 1
+	}
+
 	if err := tui.Run(cfg); err != nil {
 		fmt.Fprintf(os.Stderr, "tui: %v\n", err)
 		return 1
