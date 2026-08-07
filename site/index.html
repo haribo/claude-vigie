@@ -33,6 +33,7 @@
     /* semantic status hues — the product's own key, separate from the accent */
     --s-working: #d9663f;
     --s-thinking: #c084fc;
+    --s-compacting: #22d3ee;
     --s-waiting: #fbbf24;
     --s-stalled: #fb7185;
     --s-idle: #64748b;
@@ -188,6 +189,7 @@
   .pill i { width: 7px; height: 7px; border-radius: 50%; }
   .pill.working { color: var(--s-working); background: color-mix(in srgb, var(--s-working) 14%, transparent); } .pill.working i { background: var(--s-working); }
   .pill.thinking { color: var(--s-thinking); background: color-mix(in srgb, var(--s-thinking) 14%, transparent); } .pill.thinking i { background: var(--s-thinking); }
+  .pill.compacting { color: var(--s-compacting); background: color-mix(in srgb, var(--s-compacting) 14%, transparent); } .pill.compacting i { background: var(--s-compacting); }
   .pill.waiting { color: var(--s-waiting); background: color-mix(in srgb, var(--s-waiting) 15%, transparent); } .pill.waiting i { background: var(--s-waiting); animation: ping 1.8s infinite; }
   .pill.stalled { color: var(--s-stalled); background: color-mix(in srgb, var(--s-stalled) 14%, transparent); } .pill.stalled i { background: var(--s-stalled); }
   .pill.idle { color: var(--s-idle); background: color-mix(in srgb, var(--s-idle) 16%, transparent); } .pill.idle i { background: var(--s-idle); }
@@ -388,9 +390,9 @@
                 <td class="doing">Bash: playwright test</td><td class="seen">51s</td>
               </tr>
               <tr>
-                <td><span class="pill working"><i></i>working</span></td>
+                <td><span class="pill compacting"><i></i>compacting</span></td>
                 <td>docs-pass</td><td>workstation</td><td>haiku-4.5</td>
-                <td class="doing">Read architecture.md</td><td class="seen">4s</td>
+                <td class="doing">compacting context</td><td class="seen">1m</td>
               </tr>
               <tr>
                 <td><span class="pill idle"><i></i>idle</span></td>
