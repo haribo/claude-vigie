@@ -9,6 +9,16 @@ file is the single source of truth, not a second narrative.
 
 ## [Unreleased]
 
+### Changed
+
+- `vigie watch` now owns the reporting-hooks lifecycle: it re-installs its own
+  leg into `~/.claude/settings.json` at startup, so the installed hooks always
+  match the running watcher — a service restart after an upgrade self-heals stale
+  hooks (e.g. a missing `PreCompact` or a moved binary). The settings write is now
+  atomic (temp + rename); a refresh failure is logged and never stops the watch
+  ([ADR-0009](docs/adr/0009-watcher-managed-hooks.md)). Manual `vigie init` /
+  `vigie hooks` still work.
+
 ### Fixed
 
 - `vigie hooks` no longer advertises the removed `--detailed` flag in its usage,

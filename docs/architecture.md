@@ -43,7 +43,7 @@ A fleet is *N* client machines all reporting to one daemon.
 | Token | `vigied` | `token` | Print/generate the shared auth token (to connect clients) |
 | Installer | `vigie` | `init` | Merges hooks into `~/.claude/settings.json`, writes the client config |
 | Reporter | `vigie` | `report` | Invoked by Claude Code hooks; sends one event per hook |
-| Watcher | `vigie` | `watch` | Background service: scans local transcripts, derives status from process presence + activity, reports every session (covering ones the hooks miss), and holds the usage lease to fetch subscription usage |
+| Watcher | `vigie` | `watch` | Background service: refreshes its own hooks at startup ([ADR-0009](adr/0009-watcher-managed-hooks.md)), scans local transcripts, derives status from process presence + activity, reports every session (covering ones the hooks miss), and holds the usage lease to fetch subscription usage |
 | Terminal client | `vigie` | `tui` | Live dashboard in the terminal (Bubble Tea) |
 | Web dashboard | `vigied` | `serve` | Read-only browser mirror of the TUI, served at `GET /` (static assets embedded via `go:embed`) |
 
@@ -77,8 +77,11 @@ The watcher and the daemon run as systemd user services
 ## Hooks
 
 `vigie init` installs these Claude Code hooks; each invokes
-`vigie report` with the event. The resulting status is derived and
-reconciled per [`design/session-status.md`](design/session-status.md).
+`vigie report` with the event. `vigie watch` also **re-installs its own leg at
+startup** ([ADR-0009](adr/0009-watcher-managed-hooks.md)), so the installed hooks
+always match the running watcher — a service restart after an upgrade self-heals
+stale hooks. The resulting status is derived and reconciled per
+[`design/session-status.md`](design/session-status.md).
 
 | Hook | Reports |
 |------|---------|
