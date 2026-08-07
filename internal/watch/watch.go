@@ -240,9 +240,13 @@ func resolveStatus(reg map[string]sessionRecord, id string, info *transcript.Inf
 		base = sessionStatus(id, info.LastStopReason, info.LastAPIError, activityAge)
 	}
 	base = withThinking(base, info.Thinking)
+	prevBase := base
 	base = refineWithTools(base, info, activityAge) // background keeps working; a hung tool stalls (#256)
-	if base == "stalled" && activity == "" {
+	switch {
+	case base == "stalled" && activity == "":
 		activity = "stopped at " + info.PendingTool
+	case prevBase == "idle" && base == "working" && info.AgentsActive > 0 && activityAge < agentWindow:
+		activity = info.AgentActivity // the work is running in a subagent (#344)
 	}
 	return base, activity, reportAt
 }
@@ -250,6 +254,13 @@ func resolveStatus(reg map[string]sessionRecord, id string, info *transcript.Inf
 // stalledAfter is how long a quiet session with an unanswered foreground tool
 // call must sit before it reads as stalled rather than idle.
 const stalledAfter = 45 * time.Second
+
+// agentWindow bounds how long an in-flight subagent keeps its parent working
+// without any parent-transcript activity. It is the liveness cap: past it, a
+// close that never arrived (an undocumented <task-notification> format that
+// drifted) self-heals instead of pinning the session to working forever. Well
+// clear of the observed subagent runtimes (p90 ~8 min, max ~17 min) (#344).
+const agentWindow = 30 * time.Minute
 
 // refineWithTools reclassifies a quiet/idle session using the transcript's
 // unresolved tool calls (#256): a still-running background task keeps it working,
@@ -262,6 +273,9 @@ func refineWithTools(base string, info *transcript.Info, activityAge time.Durati
 	}
 	if info.BackgroundActive {
 		return "working" // a backgrounded tool is still running
+	}
+	if info.AgentsActive > 0 && activityAge < agentWindow {
+		return "working" // an async subagent is still running (#344)
 	}
 	if info.PendingTool != "" && activityAge >= stalledAfter {
 		return "stalled" // a foreground tool hung; the turn is parked

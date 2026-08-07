@@ -9,6 +9,14 @@ file is the single source of truth, not a second narrative.
 
 ## [Unreleased]
 
+### Fixed
+
+- A session whose only work runs inside async subagents (the `Task`/`Agent` tool)
+  now reads `working`, not `idle`. Vigie tracks in-flight subagents from the
+  parent transcript alone — opening on the launch, closing on its
+  `task-notification` — with a liveness cap that self-heals a missed close, and
+  shows `N agents: <description>` in the activity column.
+
 ## [0.2.0] - 2026-08-05
 
 ### Changed
