@@ -58,6 +58,12 @@ type Info struct {
 	// (run_in_background) — a real background task still running, which legitimately
 	// keeps the session working rather than stalling it (#256).
 	BackgroundActive bool
+	// AgentsActive is the number of async subagents (Task/Agent) launched from this
+	// transcript and not yet reported finished by a <task-notification>. A session
+	// whose only work runs in a subagent would otherwise read idle (#344).
+	AgentsActive int
+	// AgentActivity is the "doing" line for those agents, e.g. "2 agents: <desc>".
+	AgentActivity string
 }
 
 type usage struct {

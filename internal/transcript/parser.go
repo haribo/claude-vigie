@@ -17,12 +17,13 @@ type Parser struct {
 	titles  titleTracker
 	seen    map[string]bool
 	pending *pendingTools
+	agents  *pendingAgents
 	offset  int64
 }
 
 // NewParser returns a Parser positioned at the start of a transcript.
 func NewParser() *Parser {
-	return &Parser{seen: map[string]bool{}, pending: newPendingTools()}
+	return &Parser{seen: map[string]bool{}, pending: newPendingTools(), agents: newPendingAgents()}
 }
 
 // Offset is the number of bytes consumed so far — the position the reader passed
@@ -59,8 +60,10 @@ func (p *Parser) foldLine(raw []byte) {
 	case "assistant":
 		p.info.applyAssistant(l, p.seen)
 		p.pending.addToolUses(l.Message.Content)
+		p.agents.addLaunches(l.Message.Content)
 	case "user":
 		p.pending.clearToolResults(l.Message.Content)
+		p.agents.clearNotifications(l.Message.Content) // <task-notification> closes an agent (#344)
 	}
 }
 
@@ -71,5 +74,6 @@ func (p *Parser) Info() *Info {
 	info := p.info
 	info.Title = p.titles.resolve()
 	info.PendingTool, info.BackgroundActive = p.pending.resolve()
+	info.AgentsActive, info.AgentActivity = p.agents.resolve()
 	return &info
 }
