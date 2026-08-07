@@ -7,7 +7,7 @@
 // via CSSOM (element.style), never inline attributes, to keep the strict CSP.
 
 const TOKEN_KEY = "cf_token";
-const STATUSES = ["working", "thinking", "waiting", "idle", "stalled", "error", "stale", "ended"];
+const STATUSES = ["working", "thinking", "compacting", "waiting", "idle", "stalled", "error", "stale", "ended"];
 const RANK = { stalled: 0, working: 1, thinking: 2, waiting: 3, idle: 4, error: 5, stale: 6, ended: 7 };
 
 let token = localStorage.getItem(TOKEN_KEY) || "";

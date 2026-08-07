@@ -87,6 +87,7 @@ reconciled per [`design/session-status.md`](design/session-status.md).
 | `PostToolUse` | last tool used + heartbeat + the "doing" activity message (installed by default) |
 | `Notification` | `waiting` on a permission prompt, `idle` on an idle prompt (split by `notification_type`) |
 | `Stop` | turn ended + token usage (read from the transcript) |
+| `PreCompact` | context compaction started; drops a marker the watcher reads to refine `working`→`compacting` ([ADR-0008](adr/0008-compacting-status.md)) |
 | `SessionEnd` | session closed; clears presence |
 
 ## Server API

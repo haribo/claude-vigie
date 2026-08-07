@@ -16,7 +16,7 @@ import (
 // defaultEvents are the hooks installed by default. PostToolUse is included so
 // the dashboard can show a live "doing" message and an activity heartbeat; it
 // fires per tool use, which is the intended trade-off.
-var defaultEvents = []string{"SessionStart", "UserPromptSubmit", "PostToolUse", "Notification", "Stop", "SessionEnd"}
+var defaultEvents = []string{"SessionStart", "UserPromptSubmit", "PostToolUse", "Notification", "Stop", "PreCompact", "SessionEnd"}
 
 func runInit(args []string) int {
 	fs := flag.NewFlagSet("init", flag.ContinueOnError)

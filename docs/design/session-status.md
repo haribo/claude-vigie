@@ -17,6 +17,7 @@ Every session shows exactly one status. What each tells the operator:
 | ---------- | ---------------------------------------------------------------------- |
 | `working`  | Claude is actively producing — a turn is running.                       |
 | `thinking` | Claude is reasoning inside a turn — extended thinking, before it outputs text or a tool call. A sub-state of an active turn. |
+| `compacting` | Claude is **summarizing its context** to free space — a ~90–170 s silent sub-state of an active turn. Opened by the `PreCompact` hook, closed by the transcript's `compact_boundary` ([ADR-0008](../adr/0008-compacting-status.md), #342). |
 | `waiting`  | Claude has stopped and is **waiting on the human** (a prompt or permission). |
 | `stalled`  | A turn is **parked on a hung tool** — a `tool_use` never got its `tool_result` and the session has gone quiet. Distinct from idle: the turn is unfinished, not between turns. |
 | `idle`     | The session is open and alive but between turns — nobody is acting.     |

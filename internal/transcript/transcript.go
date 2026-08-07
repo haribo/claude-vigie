@@ -64,6 +64,10 @@ type Info struct {
 	AgentsActive int
 	// AgentActivity is the "doing" line for those agents, e.g. "2 agents: <desc>".
 	AgentActivity string
+	// LastCompactBoundary is the RFC3339 timestamp of the last `compact_boundary`
+	// system line — the moment a context compaction finished. The watcher uses it
+	// to close a `compacting` status (#342). Empty when the session never compacted.
+	LastCompactBoundary string
 }
 
 type usage struct {
@@ -83,6 +87,7 @@ type message struct {
 
 type line struct {
 	Type           string  `json:"type"`
+	Subtype        string  `json:"subtype"` // system lines: "compact_boundary" ends a compaction (#342)
 	SessionID      string  `json:"sessionId"`
 	Cwd            string  `json:"cwd"`
 	GitBranch      string  `json:"gitBranch"`

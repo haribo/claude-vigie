@@ -384,6 +384,9 @@ func summaryParts(sessions []api.SessionView, history []int) (counts, extras []s
 	if n := c["thinking"]; n > 0 { // a sub-state of active work: shown only when present
 		counts = append(counts, statusStyle("thinking").Render(fmt.Sprintf("● thinking %d", n)))
 	}
+	if n := c["compacting"]; n > 0 { // summarizing context: shown only when present (#342)
+		counts = append(counts, statusStyle("compacting").Render(fmt.Sprintf("● compacting %d", n)))
+	}
 	counts = append(counts,
 		statusStyle("waiting").Render(fmt.Sprintf("● waiting %d", c["waiting"])),
 		statusStyle("idle").Render(fmt.Sprintf("● idle %d", c["idle"])),
@@ -578,6 +581,8 @@ func statusStyle(status string) lipgloss.Style {
 		return lipgloss.NewStyle().Foreground(cBlue)
 	case "thinking":
 		return lipgloss.NewStyle().Foreground(cAccent2) // violet — reasoning inside a turn
+	case "compacting":
+		return lipgloss.NewStyle().Foreground(cCyan) // cyan — summarizing its context (#342)
 	case "error":
 		return lipgloss.NewStyle().Foreground(cRed)
 	case "stalled":

@@ -18,6 +18,7 @@ import (
 
 	"github.com/haribo/claude-vigie/internal/api"
 	"github.com/haribo/claude-vigie/internal/clock"
+	"github.com/haribo/claude-vigie/internal/compaction"
 	"github.com/haribo/claude-vigie/internal/config"
 	"github.com/haribo/claude-vigie/internal/presence"
 	"github.com/haribo/claude-vigie/internal/transcript"
@@ -180,7 +181,7 @@ func (s *scanner) scan(root, machine string, maxAge time.Duration, now time.Time
 			id = strings.TrimSuffix(filepath.Base(p), ".jsonl")
 		}
 		usage := info.Usage
-		status, activity, reportAt := resolveStatus(reg, id, info, activityAge, lastActivity)
+		status, activity, reportAt := resolveStatus(reg, id, info, activityAge, lastActivity, now)
 		rc := reg[id].BridgeSessionID != ""
 		remoteURL := reg[id].remoteURL()
 		apiErr := 0
@@ -221,7 +222,7 @@ func (s *scanner) scan(root, machine string, maxAge time.Duration, now time.Time
 // activity, not the registry (whose status time lags a running turn). error and
 // thinking still refine the base. Sessions the registry does not cover (older
 // clients) fall back to the transcript heuristic.
-func resolveStatus(reg map[string]sessionRecord, id string, info *transcript.Info, activityAge time.Duration, lastActivity time.Time) (status, activity string, reportAt time.Time) {
+func resolveStatus(reg map[string]sessionRecord, id string, info *transcript.Info, activityAge time.Duration, lastActivity, now time.Time) (status, activity string, reportAt time.Time) {
 	activity, reportAt = info.Activity, lastActivity
 	rec, known := reg[id]
 	var base string
@@ -239,16 +240,27 @@ func resolveStatus(reg map[string]sessionRecord, id string, info *transcript.Inf
 	default:
 		base = sessionStatus(id, info.LastStopReason, info.LastAPIError, activityAge)
 	}
+	base, activity = refineStatus(base, activity, id, info, activityAge, now)
+	return base, activity, reportAt
+}
+
+// refineStatus applies the transcript-derived refinements on top of the registry
+// status and picks the matching "doing" message: thinking, then compacting
+// (#342), then the tool-based background/stalled/subagent rules (#256/#344).
+func refineStatus(base, activity, id string, info *transcript.Info, activityAge time.Duration, now time.Time) (string, string) {
 	base = withThinking(base, info.Thinking)
+	base = withCompacting(base, compactingNow(id, info, now)) // opaque `working` during compaction → `compacting`
 	prevBase := base
-	base = refineWithTools(base, info, activityAge) // background keeps working; a hung tool stalls (#256)
+	base = refineWithTools(base, info, activityAge) // background keeps working; a hung tool stalls
 	switch {
+	case base == "compacting":
+		activity = "compacting context"
 	case base == "stalled" && activity == "":
 		activity = "stopped at " + info.PendingTool
 	case prevBase == "idle" && base == "working" && info.AgentsActive > 0 && activityAge < agentWindow:
-		activity = info.AgentActivity // the work is running in a subagent (#344)
+		activity = info.AgentActivity // the work is running in a subagent
 	}
-	return base, activity, reportAt
+	return base, activity
 }
 
 // stalledAfter is how long a quiet session with an unanswered foreground tool
@@ -329,6 +341,45 @@ func withError(base string, lastAPIError int) string {
 		return "error"
 	}
 	return base
+}
+
+// compactWindow bounds how long a compaction marker keeps a session `compacting`
+// without the transcript's closing boundary. It is the safety cap so an
+// interrupted compaction never sticks — well past the observed 87–168 s range
+// (#342, ADR-0008).
+const compactWindow = 5 * time.Minute
+
+// withCompacting refines an active status to "compacting" while the session is
+// summarizing its context. Like withThinking it only touches a live turn
+// (working/thinking); it never overrides waiting/error/ended/stalled/idle (#342).
+func withCompacting(status string, compacting bool) string {
+	if compacting && (status == "working" || status == "thinking") {
+		return "compacting"
+	}
+	return status
+}
+
+// compactingNow reports whether a session is mid-compaction: a PreCompact marker
+// exists, no transcript boundary has closed it, and it has not aged past
+// compactWindow. It sweeps a resolved or expired marker so the state self-heals.
+func compactingNow(id string, info *transcript.Info, now time.Time) bool {
+	m, ok, err := compaction.Load(id)
+	if err != nil || !ok {
+		return false
+	}
+	started, ok := m.StartedAt()
+	if !ok || boundaryCloses(info.LastCompactBoundary, started) || now.Sub(started) >= compactWindow {
+		_ = compaction.Remove(id) // resolved, expired, or unparseable → sweep
+		return false
+	}
+	return true
+}
+
+// boundaryCloses reports whether a compact_boundary at RFC3339 `boundary` closes
+// a compaction that began at `started` (boundary at or after the start).
+func boundaryCloses(boundary string, started time.Time) bool {
+	t, err := time.Parse(time.RFC3339, boundary)
+	return err == nil && !t.Before(started)
 }
 
 // withThinking refines an active status to "thinking" when the transcript's last

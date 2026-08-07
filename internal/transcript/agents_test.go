@@ -5,6 +5,24 @@ import (
 	"testing"
 )
 
+// TestCompactBoundary is the #342 close signal: a `compact_boundary` system line
+// records when a context compaction finished.
+func TestCompactBoundary(t *testing.T) {
+	dir := t.TempDir()
+	p := filepath.Join(dir, "t.jsonl")
+	writeJSONL(t, p,
+		`{"type":"assistant","message":{"id":"m1","stop_reason":"tool_use"}}`,
+		`{"type":"system","subtype":"compact_boundary","timestamp":"2026-08-07T10:05:00Z","compactMetadata":{"trigger":"auto","preTokens":1000826}}`,
+	)
+	info, err := Parse(p)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if info.LastCompactBoundary != "2026-08-07T10:05:00Z" {
+		t.Errorf("LastCompactBoundary = %q, want the boundary timestamp", info.LastCompactBoundary)
+	}
+}
+
 // TestInFlightAgents is the #344 regression: an async Task/Agent launch is
 // answered immediately by an "Async agent launched" tool_result, so it never
 // stays a pending foreground tool; the session must still count the agent as

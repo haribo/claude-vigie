@@ -10,8 +10,29 @@ import (
 	"testing"
 
 	"github.com/haribo/claude-vigie/internal/api"
+	"github.com/haribo/claude-vigie/internal/compaction"
 	"github.com/haribo/claude-vigie/internal/config"
 )
+
+// TestRunPreCompactWritesMarker is the #342 open signal: a PreCompact hook drops
+// a compaction marker for the watcher and sends no server report.
+func TestRunPreCompactWritesMarker(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
+	payload := `{"session_id":"s9","hook_event_name":"PreCompact","trigger":"auto"}`
+	if err := Run("PreCompact", strings.NewReader(payload)); err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	m, ok, err := compaction.Load("s9")
+	if err != nil || !ok {
+		t.Fatalf("marker not written: ok=%v err=%v", ok, err)
+	}
+	if m.Trigger != "auto" {
+		t.Errorf("trigger = %q, want auto", m.Trigger)
+	}
+	if _, ok := m.StartedAt(); !ok {
+		t.Error("started timestamp not set")
+	}
+}
 
 func writeConfig(t *testing.T, serverURL string) {
 	t.Helper()

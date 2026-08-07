@@ -64,6 +64,10 @@ func (p *Parser) foldLine(raw []byte) {
 	case "user":
 		p.pending.clearToolResults(l.Message.Content)
 		p.agents.clearNotifications(l.Message.Content) // <task-notification> closes an agent (#344)
+	case "system":
+		if l.Subtype == "compact_boundary" && l.Timestamp != "" {
+			p.info.LastCompactBoundary = l.Timestamp // a compaction finished (#342)
+		}
 	}
 }
 

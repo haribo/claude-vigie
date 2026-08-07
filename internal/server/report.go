@@ -279,7 +279,7 @@ func holdsWaiting(sess store.Session, req api.ReportRequest) bool {
 	if sess.Status != "waiting" || sess.StatusSource != "hook" || sess.StatusChangedAt == "" {
 		return false
 	}
-	if req.Status != "working" && req.Status != "thinking" {
+	if req.Status != "working" && req.Status != "thinking" && req.Status != "compacting" {
 		return false
 	}
 	return !timeAfter(req.Timestamp, sess.StatusChangedAt)
