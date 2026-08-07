@@ -23,6 +23,7 @@ import (
 	"github.com/haribo/claude-vigie/internal/presence"
 	"github.com/haribo/claude-vigie/internal/transcript"
 	"github.com/haribo/claude-vigie/internal/usage"
+	"github.com/haribo/claude-vigie/internal/version"
 )
 
 // Options configures the watch loop.
@@ -206,6 +207,8 @@ func (s *scanner) scan(root, machine string, maxAge time.Duration, now time.Time
 			Usage:          &usage,
 			APIErrorStatus: apiErr,
 			Activity:       activity,
+			WatcherVersion: version.Version, // report this watcher's build (#356)
+			WatcherCommit:  version.Commit,
 			Timestamp:      reportAt.UTC().Format(time.RFC3339),
 		})
 	}

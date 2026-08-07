@@ -12,7 +12,7 @@ const RANK = { stalled: 0, working: 1, thinking: 2, waiting: 3, idle: 4, error: 
 
 let token = localStorage.getItem(TOKEN_KEY) || "";
 let sessions = [], byId = new Map();
-let usage = null, platform = null, stats = null, settings = null, ver = null;
+let usage = null, platform = null, stats = null, settings = null, ver = null, watcher = null;
 let activeTab = "sessions", detailId = null, showEnded = false;
 let sortKey = "seen", sortDir = 1;           // 1 = descending
 let statsPeriod = "Week", statsLoaded = false, settingsLoaded = false;
@@ -234,11 +234,13 @@ function renderMachines() {
   });
   const cards = Object.values(m).sort((a, b) => b.n - a.n).map((a) => {
     const brk = STATUSES.filter((k) => a[k]).map((k) => `<span class="b st-${k}"><span class="dot"></span>${a[k]} <small>${k}</small></span>`).join("");
+    const wv = watcher && watcher.versions && watcher.versions[a.name];
+    const wver = wv && wv.version ? wv.version : "—";
     return `<div class="mach">
       <div class="mach-head"><span class="nm">${esc(a.name)}</span><span class="u">${esc(a.user)}</span></div>
       <div class="mach-row"><span class="big">${a.n}<small>${a.n === 1 ? "session" : "sessions"}</small></span></div>
       <div class="mach-brk">${brk}</div>
-      <div class="mach-foot"><span>output <b>${humanTokens(a.out)}</b></span><span>last seen <b>${relAge(a.seen)}</b></span></div>
+      <div class="mach-foot"><span>output <b>${humanTokens(a.out)}</b></span><span>watcher <b>${esc(wver)}</b></span><span>last seen <b>${relAge(a.seen)}</b></span></div>
     </div>`;
   }).join("");
   $("tab-machines").innerHTML = sessions.length ? `<div class="mach-grid">${cards}</div>` : '<div class="empty">No machines reporting.</div>';
@@ -397,6 +399,7 @@ async function loadMeta() {
   try { usage = await api("/api/usage"); } catch (e) { /* optional */ }
   try { platform = await api("/api/status"); } catch (e) { /* optional */ }
   try { ver = await api("/api/version"); renderVersion(); } catch (e) { /* optional */ }
+  try { watcher = await api("/api/watcher"); if (activeTab === "machines") renderMachines(); } catch (e) { /* optional */ }
   renderBottom();
   if (activeTab === "settings" && settingsLoaded) renderSettings();
 }
