@@ -40,13 +40,13 @@ operator always knows there is more behind the current filter.
 direction** (what you almost always want first), and the sort is stable so equal
 rows keep their previous order:
 
-| Key         | Natural order (top first)                                   |
-| ----------- | ----------------------------------------------------------- |
-| `last seen` | most recently active (default)                              |
-| `tokens`    | most total tokens                                           |
-| `status`    | most active — `working` › `waiting` › `idle` › `ended`      |
-| `name`      | A → Z                                                        |
-| `rc`        | remotely controlled first                                   |
+| Key         | Natural order (top first)                                          |
+| ----------- | ------------------------------------------------------------------ |
+| `last seen` | most recently active (default)                                     |
+| `tokens`    | most total tokens                                                  |
+| `status`    | most active — `stalled` › `working` › `waiting` › `idle` › `ended` |
+| `name`      | A → Z                                                              |
+| `rc`        | remotely controlled first                                          |
 
 `tokens`, `status`, and `rc` break ties by most-recently-seen, so within a rank
 the freshest session is on top. The active key and direction are shown in the
