@@ -9,6 +9,8 @@ file is the single source of truth, not a second narrative.
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-08-07
+
 ### Added
 
 - New `compacting` status: while a session summarizes its context (a silent
@@ -107,6 +109,7 @@ across machines — it reads and reports session state; it never drives a sessio
 - The API binds `127.0.0.1` by default; every `/api/*` route is behind a
   constant-time shared-token check; request bodies are size-capped.
 
-[Unreleased]: https://github.com/haribo/claude-vigie/compare/v0.2.0...HEAD
+[Unreleased]: https://github.com/haribo/claude-vigie/compare/v0.3.0...HEAD
+[0.3.0]: https://github.com/haribo/claude-vigie/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/haribo/claude-vigie/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/haribo/claude-vigie/releases/tag/v0.1.0
