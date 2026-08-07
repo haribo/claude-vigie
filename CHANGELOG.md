@@ -9,6 +9,13 @@ file is the single source of truth, not a second narrative.
 
 ## [Unreleased]
 
+### Added
+
+- Sessions the operator interrupted (Ctrl-C/Esc) now show an `interrupted` marker
+  in the activity column instead of a bare `idle`, so a turn killed mid-flight is
+  distinguishable from one that finished cleanly. It clears with no timer — the
+  next real prompt or reply replaces it. A DOING refinement, not a new status.
+
 ## [0.3.0] - 2026-08-07
 
 ### Added

@@ -255,6 +255,8 @@ func refineStatus(base, activity, id string, info *transcript.Info, activityAge 
 	switch {
 	case base == "compacting":
 		activity = "compacting context"
+	case base == "idle" && info.Interrupted:
+		activity = "interrupted" // the operator killed the turn; still idle (#351)
 	case base == "stalled" && activity == "":
 		activity = "stopped at " + info.PendingTool
 	case prevBase == "idle" && base == "working" && info.AgentsActive > 0 && activityAge < agentWindow:

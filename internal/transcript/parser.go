@@ -61,9 +61,11 @@ func (p *Parser) foldLine(raw []byte) {
 		p.info.applyAssistant(l, p.seen)
 		p.pending.addToolUses(l.Message.Content)
 		p.agents.addLaunches(l.Message.Content)
+		p.info.Interrupted = false // a real turn resumed (#351)
 	case "user":
 		p.pending.clearToolResults(l.Message.Content)
-		p.agents.clearNotifications(l.Message.Content) // <task-notification> closes an agent (#344)
+		p.agents.clearNotifications(l.Message.Content)          // <task-notification> closes an agent (#344)
+		p.info.Interrupted = isInterruptLine(l.Message.Content) // synthetic interrupt marker, else a real prompt clears it (#351)
 	case "system":
 		if l.Subtype == "compact_boundary" && l.Timestamp != "" {
 			p.info.LastCompactBoundary = l.Timestamp // a compaction finished (#342)
