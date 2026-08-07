@@ -47,7 +47,8 @@ func sampleModel(t tab) model {
 			SevenDayPct: 69, SevenDayReset: "2026-08-07T15:00:00Z",
 			FetchedAt: "2026-08-04T15:00:00Z",
 		},
-		platform: api.PlatformStatus{Indicator: "none", Description: "All Systems Operational", FetchedAt: "2026-08-04T15:00:00Z"},
+		platform:      api.PlatformStatus{Indicator: "none", Description: "All Systems Operational", FetchedAt: "2026-08-04T15:00:00Z"},
+		daemonVersion: api.VersionInfo{Version: "0.2.0", Commit: "90a5c39", BuildTime: "2026-08-05T08:23:08Z"}, // exercises the Build detail line (#341)
 	}
 }
 

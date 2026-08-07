@@ -9,6 +9,29 @@ file is the single source of truth, not a second narrative.
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-08-07
+
+### Added
+
+- New `compacting` status: while a session summarizes its context (a silent
+  ~90–170 s the registry reports as `busy`), vigie now shows `compacting` instead
+  of an opaque `working`, so the context-gauge drop becomes legible. Detected via
+  a new `PreCompact` hook (start) and the transcript's `compact_boundary` (end),
+  with a safety timeout; it is a display refinement of `working`, not an
+  attention status ([ADR-0008](docs/adr/0008-compacting-status.md)).
+- The `vigie` client and `vigied` daemon build versions are now visible in the
+  dashboards: a Build section in the TUI Settings tab shows both and flags a
+  client/daemon drift, and a `vigied <version>` chip sits in the web topbar
+  (commit and build time in its tooltip). Served over a new `GET /api/version`.
+
+### Fixed
+
+- A session whose only work runs inside async subagents (the `Task`/`Agent` tool)
+  now reads `working`, not `idle`. Vigie tracks in-flight subagents from the
+  parent transcript alone — opening on the launch, closing on its
+  `task-notification` — with a liveness cap that self-heals a missed close, and
+  shows `N agents: <description>` in the activity column.
+
 ## [0.2.0] - 2026-08-05
 
 ### Changed
@@ -86,6 +109,7 @@ across machines — it reads and reports session state; it never drives a sessio
 - The API binds `127.0.0.1` by default; every `/api/*` route is behind a
   constant-time shared-token check; request bodies are size-capped.
 
-[Unreleased]: https://github.com/haribo/claude-vigie/compare/v0.2.0...HEAD
+[Unreleased]: https://github.com/haribo/claude-vigie/compare/v0.3.0...HEAD
+[0.3.0]: https://github.com/haribo/claude-vigie/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/haribo/claude-vigie/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/haribo/claude-vigie/releases/tag/v0.1.0

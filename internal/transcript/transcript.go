@@ -58,6 +58,16 @@ type Info struct {
 	// (run_in_background) — a real background task still running, which legitimately
 	// keeps the session working rather than stalling it (#256).
 	BackgroundActive bool
+	// AgentsActive is the number of async subagents (Task/Agent) launched from this
+	// transcript and not yet reported finished by a <task-notification>. A session
+	// whose only work runs in a subagent would otherwise read idle (#344).
+	AgentsActive int
+	// AgentActivity is the "doing" line for those agents, e.g. "2 agents: <desc>".
+	AgentActivity string
+	// LastCompactBoundary is the RFC3339 timestamp of the last `compact_boundary`
+	// system line — the moment a context compaction finished. The watcher uses it
+	// to close a `compacting` status (#342). Empty when the session never compacted.
+	LastCompactBoundary string
 }
 
 type usage struct {
@@ -77,6 +87,7 @@ type message struct {
 
 type line struct {
 	Type           string  `json:"type"`
+	Subtype        string  `json:"subtype"` // system lines: "compact_boundary" ends a compaction (#342)
 	SessionID      string  `json:"sessionId"`
 	Cwd            string  `json:"cwd"`
 	GitBranch      string  `json:"gitBranch"`

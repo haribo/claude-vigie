@@ -24,6 +24,7 @@ func Run(cfg *config.Config) error {
 		fetchSettings: func() (api.Settings, error) { return fetchSettings(cfg) },
 		fetchStats:    func() (api.StatsResponse, error) { return fetchStats(cfg) },
 		fetchPlatform: func() (api.PlatformStatus, error) { return fetchPlatform(cfg) },
+		fetchVersion:  func() (api.VersionInfo, error) { return fetchVersion(cfg) },
 		setRetention:  func(v string) error { return setSessionRetention(cfg, v) },
 		serverURL:     cfg.ServerURL,
 		prefs:         p,

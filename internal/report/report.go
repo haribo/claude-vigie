@@ -18,6 +18,7 @@ import (
 
 	"github.com/haribo/claude-vigie/internal/api"
 	"github.com/haribo/claude-vigie/internal/clock"
+	"github.com/haribo/claude-vigie/internal/compaction"
 	"github.com/haribo/claude-vigie/internal/config"
 	"github.com/haribo/claude-vigie/internal/presence"
 	"github.com/haribo/claude-vigie/internal/transcript"
@@ -40,6 +41,8 @@ type hookPayload struct {
 	// human-readable text on Notification — both feed the "doing" activity.
 	ToolInput json.RawMessage `json:"tool_input"`
 	Message   string          `json:"message"`
+	// Trigger is "auto" | "manual" on a PreCompact event (#342).
+	Trigger string `json:"trigger"`
 }
 
 // Run reads a hook payload from stdin, builds a report for the given event
@@ -59,6 +62,18 @@ func Run(event string, stdin io.Reader) error {
 	// Record/clear the session→process mapping so the watcher can tell a live
 	// session from a closed one. Best-effort: a hook must never fail a session.
 	recordPresence(event, p.SessionID)
+
+	// PreCompact drops a marker the watcher reads to refine `working` →
+	// `compacting`; no server report is needed and none is sent (the watcher
+	// reports the status). Best-effort — a hook must never fail a session
+	// (#342, ADR-0008).
+	if event == "PreCompact" {
+		_ = compaction.Save(p.SessionID, compaction.Marker{
+			Started: clock.Now().UTC().Format(time.RFC3339),
+			Trigger: p.Trigger,
+		})
+		return nil
+	}
 
 	cfg, err := config.Load()
 	if err != nil {
