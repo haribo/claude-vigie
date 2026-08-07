@@ -31,7 +31,9 @@ file is the single source of truth, not a second narrative.
   matches the client's (commit-compared when either side is a `dev` build). Any
   failure prints both versions and the remediation and exits 1 — no more silent
   degradation behind a full-screen UI, and no bypass flag
-  ([design](docs/design/tui-preflight.md)).
+  ([design](docs/design/tui-preflight.md)). When the local machine has vigie hooks
+  installed, the preflight also requires a fresh, version-matching local watcher —
+  a hooks-only machine with a dead or outdated watcher reports stale statuses.
 - The Machines tab now shows each machine's watcher version. The watcher reports
   its build in the heartbeat, the server stores it per machine and returns it from
   `GET /api/watcher`, and both the TUI (a VERSION column) and the web dashboard
