@@ -116,6 +116,15 @@ type PlatformStatus struct {
 	FetchedAt   string `json:"fetched_at,omitempty"`  // RFC3339
 }
 
+// VersionInfo is the daemon's build, returned at GET /api/version so an operator
+// can see which `vigied` they are talking to and spot a client that has drifted
+// behind it (#341). Version is "dev" for an untagged build, never empty.
+type VersionInfo struct {
+	Version   string `json:"version"`
+	Commit    string `json:"commit,omitempty"`
+	BuildTime string `json:"build_time,omitempty"`
+}
+
 // DailyStat is one UTC day's aggregated activity for a model. The client sums
 // and re-buckets these rows into day/week/month/year/total views.
 type DailyStat struct {
