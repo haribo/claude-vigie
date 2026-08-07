@@ -9,6 +9,13 @@ file is the single source of truth, not a second narrative.
 
 ## [Unreleased]
 
+### Added
+
+- The `vigie` client and `vigied` daemon build versions are now visible in the
+  dashboards: a Build section in the TUI Settings tab shows both and flags a
+  client/daemon drift, and a `vigied <version>` chip sits in the web topbar
+  (commit and build time in its tooltip). Served over a new `GET /api/version`.
+
 ### Fixed
 
 - A session whose only work runs inside async subagents (the `Task`/`Agent` tool)

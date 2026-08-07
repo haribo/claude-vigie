@@ -12,7 +12,7 @@ const RANK = { stalled: 0, working: 1, thinking: 2, waiting: 3, idle: 4, error: 
 
 let token = localStorage.getItem(TOKEN_KEY) || "";
 let sessions = [], byId = new Map();
-let usage = null, platform = null, stats = null, settings = null;
+let usage = null, platform = null, stats = null, settings = null, ver = null;
 let activeTab = "sessions", detailId = null, showEnded = false;
 let sortKey = "seen", sortDir = 1;           // 1 = descending
 let statsPeriod = "Week", statsLoaded = false, settingsLoaded = false;
@@ -396,8 +396,18 @@ async function loadSessions() {
 async function loadMeta() {
   try { usage = await api("/api/usage"); } catch (e) { /* optional */ }
   try { platform = await api("/api/status"); } catch (e) { /* optional */ }
+  try { ver = await api("/api/version"); renderVersion(); } catch (e) { /* optional */ }
   renderBottom();
   if (activeTab === "settings" && settingsLoaded) renderSettings();
+}
+
+// The web shell is served by vigied, so the only build it can show is the
+// daemon's — a topbar chip, full commit/build in its tooltip (#341).
+function renderVersion() {
+  const el = $("ver"); if (!el || !ver) return;
+  el.textContent = "vigied " + (ver.version || "dev");
+  el.title = [ver.commit && "commit " + ver.commit, ver.build_time && "built " + ver.build_time].filter(Boolean).join(" · ");
+  el.hidden = false;
 }
 
 // ---------- live stream (fetch-based SSE, so the bearer header is sent) ----------
@@ -430,7 +440,7 @@ function setConn(live) { const el = $("conn"); el.className = "chip conn " + (li
 // ---------- auth / gate ----------
 function onUnauthorized() { teardown(); localStorage.removeItem(TOKEN_KEY); token = ""; showGate(true); }
 function teardown() { if (liveCtrl) liveCtrl.abort(); liveCtrl = null; clearTimeout(liveRetry); stopPolling(); clearInterval(metaTimer); metaTimer = null; }
-function showGate(err) { $("gate").hidden = false; $("gate-err").hidden = !err; $("signout").hidden = true; $("botbar").hidden = true; setConn(false); $("token-input").focus(); }
+function showGate(err) { $("gate").hidden = false; $("gate-err").hidden = !err; $("signout").hidden = true; $("botbar").hidden = true; $("ver").hidden = true; setConn(false); $("token-input").focus(); }
 function hideGate() { $("gate").hidden = true; $("signout").hidden = false; }
 function signOut() { teardown(); localStorage.removeItem(TOKEN_KEY); token = ""; showGate(false); }
 

@@ -12,6 +12,7 @@ import (
 
 	"github.com/haribo/claude-vigie/internal/api"
 	"github.com/haribo/claude-vigie/internal/clock"
+	"github.com/haribo/claude-vigie/internal/version"
 )
 
 // pollInterval is the fallback refresh. SSE pushes data changes instantly, so
@@ -107,6 +108,7 @@ type model struct {
 	fetchSettings   func() (api.Settings, error)
 	fetchStats      func() (api.StatsResponse, error)
 	fetchPlatform   func() (api.PlatformStatus, error)
+	fetchVersion    func() (api.VersionInfo, error)
 	setRetention    func(v string) error
 	serverURL       string // read-only; set via `vigie init`
 	serverRetention time.Duration
@@ -115,6 +117,7 @@ type model struct {
 	sessions        []api.SessionView
 	usage           api.UsageReport
 	platform        api.PlatformStatus
+	daemonVersion   api.VersionInfo // the server's build, fetched once (#341)
 	watcherSeen     string
 	watcherMachines map[string]string // per-machine last watch report, RFC3339 (#284)
 	gotWatcher      bool
@@ -186,6 +189,11 @@ type platformMsg struct {
 	err error
 }
 
+type versionMsg struct {
+	v   api.VersionInfo
+	err error
+}
+
 type eventMsg struct{}
 
 type connMsg struct{ live bool }
@@ -210,7 +218,7 @@ type statsMsg struct {
 
 func (m model) Init() tea.Cmd {
 	return tea.Batch(m.fetchCmd(m.fetchSeq), m.fetchUsageCmd(), m.watcherCmd(),
-		m.settingsCmd(), m.statsCmd(), m.fetchPlatformCmd(), tickCmd(),
+		m.settingsCmd(), m.statsCmd(), m.fetchPlatformCmd(), m.fetchVersionCmd(), tickCmd(),
 		m.waitForEventCmd(), m.waitForConnCmd())
 }
 
@@ -273,6 +281,16 @@ func (m model) fetchPlatformCmd() tea.Cmd {
 	return func() tea.Msg {
 		ps, err := m.fetchPlatform()
 		return platformMsg{ps: ps, err: err}
+	}
+}
+
+func (m model) fetchVersionCmd() tea.Cmd {
+	if m.fetchVersion == nil {
+		return nil
+	}
+	return func() tea.Msg {
+		v, err := m.fetchVersion()
+		return versionMsg{v: v, err: err}
 	}
 }
 
@@ -371,6 +389,10 @@ func (m model) applyDataMsg(msg tea.Msg) model {
 	case platformMsg:
 		if msg.err == nil {
 			m.platform = msg.ps
+		}
+	case versionMsg:
+		if msg.err == nil {
+			m.daemonVersion = msg.v
 		}
 	case watcherMsg:
 		if msg.err == nil {
@@ -679,6 +701,41 @@ func (m model) View() string {
 
 // renderSettings renders the editable preferences: local display prefs (saved
 // to tui.toml) and the server-wide retention.
+// renderBuild shows the client and daemon build versions side by side, flagging
+// a drift — a local `vigie` that has fallen behind the `vigied` it talks to,
+// which fails in confusing ways on a fleet (#341). The version number is the
+// primary display; commit and build time are a dim secondary detail.
+func (m model) renderBuild() string {
+	var b strings.Builder
+	b.WriteString(dimStyle.Render("Build") + "\n\n")
+
+	// The version number is the primary line; commit and build time — long, and
+	// secondary — go on their own dim line. Each is clamped so the section never
+	// overflows a narrow terminal (#341, #331).
+	row := func(label, ver, commit, built string) {
+		b.WriteString(clampWidth("  "+labelStyle.Render(pad(label, 24))+ver, m.width) + "\n")
+		if commit != "" && commit != "none" {
+			detail := "commit " + commit
+			if built != "" && built != "unknown" {
+				detail += " · built " + built
+			}
+			b.WriteString(clampWidth("    "+dimStyle.Render(detail), m.width) + "\n")
+		}
+	}
+	row("vigie (this client)", version.Version, version.Commit, version.BuildTime)
+
+	if daemon := m.daemonVersion.Version; daemon == "" {
+		b.WriteString(clampWidth("  "+labelStyle.Render(pad("vigied (server)", 24))+
+			dimStyle.Render("unknown — not reached yet"), m.width) + "\n")
+	} else {
+		row("vigied (server)", daemon, m.daemonVersion.Commit, m.daemonVersion.BuildTime)
+		if daemon != version.Version {
+			b.WriteString(warnStyle.Render("  ⚠ client and daemon versions differ") + "\n")
+		}
+	}
+	return b.String()
+}
+
 func (m model) renderSettings() string {
 	var b strings.Builder
 
@@ -689,6 +746,8 @@ func (m model) renderSettings() string {
 	b.WriteString(dimStyle.Render("Connection") + "\n\n")
 	b.WriteString("  " + labelStyle.Render(pad("Server", 24)) + m.serverURL +
 		dimStyle.Render("   (read-only — set via `vigie init`)") + "\n\n")
+
+	b.WriteString(m.renderBuild() + "\n")
 
 	b.WriteString(dimStyle.Render("Preferences") + "\n\n")
 	rows := []struct {
