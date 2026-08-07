@@ -9,6 +9,8 @@ file is the single source of truth, not a second narrative.
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-08-07
+
 ### Changed
 
 - `vigie watch` now owns the reporting-hooks lifecycle: it re-installs its own
@@ -144,7 +146,8 @@ across machines — it reads and reports session state; it never drives a sessio
 - The API binds `127.0.0.1` by default; every `/api/*` route is behind a
   constant-time shared-token check; request bodies are size-capped.
 
-[Unreleased]: https://github.com/haribo/claude-vigie/compare/v0.3.0...HEAD
+[Unreleased]: https://github.com/haribo/claude-vigie/compare/v0.4.0...HEAD
+[0.4.0]: https://github.com/haribo/claude-vigie/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/haribo/claude-vigie/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/haribo/claude-vigie/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/haribo/claude-vigie/releases/tag/v0.1.0
