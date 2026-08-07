@@ -16,9 +16,15 @@ silently behind a full-screen UI the operator then has to quit to read the error
      release (e.g. `0.3.0` vs `0.3.0`);
    - when **either side is `dev`**, compare the **commit** instead — a
      `"dev" == "dev"` string match across two different builds is a false pass.
-3. **Local watcher fresh** — added by [#359](https://github.com/haribo/claude-vigie/issues/359):
-   only when this machine has vigie hooks installed, the preflight also requires a
-   fresh local watcher heartbeat and a matching watcher version (see that issue).
+3. **Local watcher fresh** (#359). Only when this machine has vigie hooks
+   installed (a `report --event=` marker for this leg in `settings.json`), the
+   preflight also requires, from `GET /api/watcher`, a **fresh** local heartbeat
+   (the same 15 s stale threshold as the TUI) and a watcher **version** that
+   matches this TUI (same `dev`-by-commit rule). A machine with no local hooks is
+   a pure observer and starts normally — no watcher required. Because the watcher
+   owns the hooks lifecycle ([ADR-0009](../adr/0009-watcher-managed-hooks.md)),
+   watcher version == hooks version, so this one check also proves the local
+   hooks are current.
 
 ## On failure
 

@@ -5,9 +5,11 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+	"time"
 
 	"github.com/haribo/claude-vigie/internal/api"
 	"github.com/haribo/claude-vigie/internal/config"
+	"github.com/haribo/claude-vigie/internal/install"
 )
 
 func TestVersionsMatch(t *testing.T) {
@@ -51,6 +53,8 @@ func preflightServer(t *testing.T, sessionsCode int, ver api.VersionInfo) *confi
 // TestPreflight covers the #357 gate: pass on a reachable, matching daemon; fail
 // on a bad token, a non-vigie 404, a version mismatch, and an unreachable server.
 func TestPreflight(t *testing.T) {
+	t.Setenv("HOME", t.TempDir()) // no local hooks → the watcher check (#359) short-circuits
+	t.Setenv("VIGIE_CONFIG", "")
 	// Under test, version.Version is "dev" and version.Commit is "none".
 	okVer := api.VersionInfo{Version: "dev", Commit: "none"}
 
@@ -68,5 +72,46 @@ func TestPreflight(t *testing.T) {
 	}
 	if err := preflight(&config.Config{ServerURL: "http://127.0.0.1:1", Token: "tok"}); err == nil {
 		t.Error("an unreachable server should fail preflight")
+	}
+}
+
+// TestPreflightWatcher covers the #359 gate: a machine with vigie hooks needs a
+// fresh, version-matching local watcher; a machine without hooks starts anyway.
+func TestPreflightWatcher(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
+	t.Setenv("VIGIE_CONFIG", "")
+
+	watcherSrv := func(ws api.WatcherStatus) *config.Config {
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+			_ = json.NewEncoder(w).Encode(ws)
+		}))
+		t.Cleanup(srv.Close)
+		return &config.Config{ServerURL: srv.URL, Token: "tok", Machine: "host"}
+	}
+	fresh := time.Now().Add(-2 * time.Second).UTC().Format(time.RFC3339)
+	stale := time.Now().Add(-60 * time.Second).UTC().Format(time.RFC3339)
+	okVer := api.VersionInfo{Version: "dev", Commit: "none"} // matches the test build
+
+	// No local hooks yet → pure observer, passes.
+	if err := preflightWatcher(watcherSrv(api.WatcherStatus{})); err != nil {
+		t.Errorf("no local hooks should pass, got %v", err)
+	}
+
+	// Install hooks → a fresh, matching local watcher is now required.
+	if _, err := install.Install([]string{"SessionStart"}, "/opt/vigie", "", 5); err != nil {
+		t.Fatal(err)
+	}
+	freshOK := api.WatcherStatus{Machines: map[string]string{"host": fresh}, Versions: map[string]api.VersionInfo{"host": okVer}}
+	if err := preflightWatcher(watcherSrv(freshOK)); err != nil {
+		t.Errorf("fresh matching watcher should pass, got %v", err)
+	}
+	if err := preflightWatcher(watcherSrv(api.WatcherStatus{Machines: map[string]string{"host": stale}, Versions: map[string]api.VersionInfo{"host": okVer}})); err == nil {
+		t.Error("a stale watcher heartbeat should fail")
+	}
+	if err := preflightWatcher(watcherSrv(api.WatcherStatus{Machines: map[string]string{"host": fresh}, Versions: map[string]api.VersionInfo{"host": {Version: "9.9.9"}}})); err == nil {
+		t.Error("a version-mismatched watcher should fail")
+	}
+	if err := preflightWatcher(watcherSrv(api.WatcherStatus{})); err == nil {
+		t.Error("hooks present but no watcher heartbeat should fail")
 	}
 }

@@ -79,6 +79,32 @@ func owns(cmd, configPath string) bool {
 	return false
 }
 
+// HooksInstalled reports whether vigie's reporting hooks for the given leg
+// (production when configPath is empty) are present in settings.json — used by
+// the TUI preflight to decide whether a fresh local watcher is required (#359).
+func HooksInstalled(configPath string) (bool, error) {
+	path, err := SettingsPath()
+	if err != nil {
+		return false, err
+	}
+	existing, err := readSettings(path)
+	if err != nil {
+		return false, err
+	}
+	_, hooks, err := parseSettings(existing)
+	if err != nil {
+		return false, err
+	}
+	for _, matchers := range hooks {
+		for _, m := range matchers {
+			if matcherIsLeg(m, configPath) {
+				return true, nil
+			}
+		}
+	}
+	return false, nil
+}
+
 // Install merges the reporting hooks for one leg (binPath, configPath) into the
 // settings file and returns the path written. Other legs are left untouched.
 func Install(events []string, binPath, configPath string, timeout int) (string, error) {
