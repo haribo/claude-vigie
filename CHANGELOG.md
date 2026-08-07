@@ -26,6 +26,12 @@ file is the single source of truth, not a second narrative.
 
 ### Added
 
+- `vigie tui` now runs a startup preflight before entering the alt-screen: it
+  requires a reachable server, a valid token, and a daemon whose build strictly
+  matches the client's (commit-compared when either side is a `dev` build). Any
+  failure prints both versions and the remediation and exits 1 — no more silent
+  degradation behind a full-screen UI, and no bypass flag
+  ([design](docs/design/tui-preflight.md)).
 - The Machines tab now shows each machine's watcher version. The watcher reports
   its build in the heartbeat, the server stores it per machine and returns it from
   `GET /api/watcher`, and both the TUI (a VERSION column) and the web dashboard
