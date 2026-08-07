@@ -11,6 +11,12 @@ file is the single source of truth, not a second narrative.
 
 ### Added
 
+- New `compacting` status: while a session summarizes its context (a silent
+  ~90–170 s the registry reports as `busy`), vigie now shows `compacting` instead
+  of an opaque `working`, so the context-gauge drop becomes legible. Detected via
+  a new `PreCompact` hook (start) and the transcript's `compact_boundary` (end),
+  with a safety timeout; it is a display refinement of `working`, not an
+  attention status ([ADR-0008](docs/adr/0008-compacting-status.md)).
 - The `vigie` client and `vigied` daemon build versions are now visible in the
   dashboards: a Build section in the TUI Settings tab shows both and flags a
   client/daemon drift, and a `vigied <version>` chip sits in the web topbar
