@@ -21,6 +21,7 @@ func runHooks(args []string) int {
 	sub, rest := args[0], args[1:]
 
 	fs := flag.NewFlagSet("hooks", flag.ContinueOnError)
+	fs.Usage = hooksUsage // an unknown flag prints the real usage, not a bare "Usage of hooks:" (#354)
 	if err := fs.Parse(rest); err != nil {
 		return 2
 	}
@@ -66,8 +67,8 @@ func hooksUsage() {
 	fmt.Fprint(os.Stderr, `vigie hooks — manage Claude Code reporting hooks (one leg per config)
 
 Usage:
-  vigie hooks install [--detailed]   install the reporting hooks for this leg
-  vigie hooks uninstall              remove the reporting hooks for this leg
+  vigie hooks install     install the reporting hooks for this leg
+  vigie hooks uninstall   remove the reporting hooks for this leg
 
 The leg is selected by VIGIE_CONFIG (or the deprecated FLEET_CONFIG): unset installs
 the production leg; set to a config file installs a dev leg that reports to that
