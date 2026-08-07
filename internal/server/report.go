@@ -190,8 +190,9 @@ func applyReport(sess store.Session, isNew bool, req api.ReportRequest) store.Se
 	if req.Effort != "" {
 		sess.Effort = req.Effort
 	}
-	if req.ContextTokens > 0 { // keep the last known size when a report carries none
-		sess.ContextTokens = req.ContextTokens
+	if req.ContextTokens != nil { // a known reading (incl. 0) overwrites; nil keeps the last known (#367)
+		sess.ContextTokens = *req.ContextTokens
+		sess.ContextKnown = true
 	}
 	if req.PermissionMode != "" { // keep the last known mode when a report carries none
 		sess.PermissionMode = req.PermissionMode
