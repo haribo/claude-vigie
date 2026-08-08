@@ -7,6 +7,7 @@ package store
 import (
 	"database/sql"
 	"fmt"
+	"net/url"
 
 	// Register the pure-Go SQLite driver under the name "sqlite".
 	_ "modernc.org/sqlite"
@@ -20,17 +21,9 @@ type Store struct {
 // Open opens (creating if needed) the SQLite database at path, applies
 // pending migrations, and returns a ready Store.
 func Open(path string) (*Store, error) {
-	db, err := sql.Open("sqlite", path)
+	db, err := sql.Open("sqlite", dsn(path))
 	if err != nil {
 		return nil, fmt.Errorf("opening sqlite %s: %w", path, err)
-	}
-
-	// WAL for concurrent readers alongside the single writer; enforce foreign
-	// keys (off by default in SQLite); wait instead of failing on a busy lock.
-	pragmas := `PRAGMA journal_mode=WAL; PRAGMA foreign_keys=ON; PRAGMA busy_timeout=5000;`
-	if _, err := db.Exec(pragmas); err != nil {
-		_ = db.Close()
-		return nil, fmt.Errorf("setting pragmas: %w", err)
 	}
 
 	s := &Store{db: db}
@@ -39,6 +32,22 @@ func Open(path string) (*Store, error) {
 		return nil, fmt.Errorf("migrating: %w", err)
 	}
 	return s, nil
+}
+
+// dsn builds the driver DSN. The pragmas travel as `_pragma` query params so the
+// modernc driver runs them on *every* pooled connection — not just the first.
+// busy_timeout and foreign_keys are per-connection state: setting them once via
+// db.Exec left every other connection the pool later opened with busy_timeout=0,
+// so under concurrent writes those connections failed immediately with
+// SQLITE_BUSY instead of waiting — surfacing as intermittent 500s (#372).
+// journal_mode=WAL (persistent in the file header) gives concurrent readers
+// alongside the single writer; busy_timeout makes contending writers wait.
+func dsn(path string) string {
+	q := url.Values{}
+	q.Add("_pragma", "busy_timeout(5000)")
+	q.Add("_pragma", "foreign_keys(on)")
+	q.Add("_pragma", "journal_mode(WAL)")
+	return "file:" + path + "?" + q.Encode()
 }
 
 // Close releases the database handle.
