@@ -18,6 +18,12 @@ file is the single source of truth, not a second narrative.
   `SQLITE_BUSY` — and the watcher writes every session (plus usage) every ~2 s.
   The pragmas now travel in the DSN, so the driver applies them to every
   connection and contending writers wait instead of erroring (#372).
+- The TUI startup preflight no longer reports a running watcher as down. A stale
+  server heartbeat is a failed round-trip, not proof the watcher is dead — a
+  just-restarted watcher or an unreachable server looks identical. The preflight
+  now cross-checks a local `/proc` liveness signal: it says "watcher not running,
+  start it" only when no local watcher process exists, and otherwise points at the
+  server/connectivity and says to retry (#371).
 
 ## [0.4.0] - 2026-08-07
 

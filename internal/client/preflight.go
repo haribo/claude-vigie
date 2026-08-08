@@ -5,6 +5,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"os"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -12,6 +14,7 @@ import (
 	"github.com/haribo/claude-vigie/internal/clock"
 	"github.com/haribo/claude-vigie/internal/config"
 	"github.com/haribo/claude-vigie/internal/install"
+	"github.com/haribo/claude-vigie/internal/presence"
 	"github.com/haribo/claude-vigie/internal/version"
 )
 
@@ -56,6 +59,11 @@ func preflightWatcher(cfg *config.Config) error {
 		return fmt.Errorf("fetching watcher status: %w", err)
 	}
 	if !heartbeatFresh(ws.Machines[cfg.Machine], clock.Now()) {
+		// A stale heartbeat is a server round-trip failing, not proof of a dead
+		// watcher: cross-check a local liveness signal before blaming it (#371).
+		if localWatcherRunning() {
+			return fmt.Errorf("this machine's watcher is running but the server has no recent heartbeat from it — the server may be unreachable or the watcher just started; check vigied and connectivity, then retry")
+		}
 		return fmt.Errorf("this machine has vigie hooks but its watcher is not running — start it (`vigie watch`, or restart the vigie-watch service)")
 	}
 	local := api.VersionInfo{Version: version.Version, Commit: version.Commit}
@@ -64,6 +72,20 @@ func preflightWatcher(cfg *config.Config) error {
 			describeVersion(wv), describeVersion(local))
 	}
 	return nil
+}
+
+// localWatcherRunning reports whether a watcher process for this binary is alive
+// on this machine, via a /proc scan (#371). It is a package var so tests can
+// stand in for the /proc lookup. A scan error (off Linux, unreadable /proc) is
+// treated as "not detected", so the preflight falls back to the plain
+// "watcher not running" message rather than guess.
+var localWatcherRunning = func() bool {
+	exe, err := os.Executable()
+	if err != nil {
+		return false
+	}
+	running, err := presence.WatcherRunning(filepath.Base(exe), os.Getpid())
+	return err == nil && running
 }
 
 func heartbeatFresh(seen string, now time.Time) bool {
