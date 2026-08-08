@@ -26,6 +26,24 @@ silently behind a full-screen UI the operator then has to quit to read the error
    watcher version == hooks version, so this one check also proves the local
    hooks are current.
 
+   **Stale heartbeat is not proof of a dead watcher** (#371). The heartbeat is a
+   server round-trip: a watcher that is genuinely running but whose report has
+   not landed — a just-restarted watcher, or an unreachable/erroring server —
+   looks identical to one that is down. So when the heartbeat is stale, the
+   preflight first cross-checks a **local** liveness signal: is another instance
+   of *this binary* running the `watch` subcommand on this machine (a `/proc`
+   scan, Linux only)? This decides the remediation:
+   - **no local watcher process** → "watcher not running, start it" (the true
+     down case);
+   - **a local watcher is running** → the watcher is up but the server has no
+     recent heartbeat from it — the fault is the server or a just-started
+     watcher, so the message points at `vigied`/connectivity and says to retry,
+     **not** to restart the watcher.
+
+   The `/proc` scan is best-effort: off Linux, or if it cannot read `/proc`, the
+   preflight falls back to the plain "watcher not running" message rather than
+   guess.
+
 ## On failure
 
 - **No alt-screen.** The failure is printed to stderr on the normal terminal.

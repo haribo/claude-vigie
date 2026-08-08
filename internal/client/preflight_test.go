@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 
@@ -113,5 +114,39 @@ func TestPreflightWatcher(t *testing.T) {
 	}
 	if err := preflightWatcher(watcherSrv(api.WatcherStatus{})); err == nil {
 		t.Error("hooks present but no watcher heartbeat should fail")
+	}
+}
+
+// TestPreflightWatcherStaleLocalLiveness covers #371: with hooks installed and a
+// stale server heartbeat, the remediation depends on whether a local watcher
+// process is actually running — "server has no recent heartbeat" when it is, the
+// plain "not running" otherwise.
+func TestPreflightWatcherStaleLocalLiveness(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
+	t.Setenv("VIGIE_CONFIG", "")
+	if _, err := install.Install([]string{"SessionStart"}, "/opt/vigie", "", 5); err != nil {
+		t.Fatal(err)
+	}
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		stale := time.Now().Add(-60 * time.Second).UTC().Format(time.RFC3339)
+		_ = json.NewEncoder(w).Encode(api.WatcherStatus{Machines: map[string]string{"host": stale}})
+	}))
+	t.Cleanup(srv.Close)
+	cfg := &config.Config{ServerURL: srv.URL, Token: "tok", Machine: "host"}
+
+	orig := localWatcherRunning
+	t.Cleanup(func() { localWatcherRunning = orig })
+
+	localWatcherRunning = func() bool { return true }
+	err := preflightWatcher(cfg)
+	if err == nil || !strings.Contains(err.Error(), "no recent heartbeat") {
+		t.Errorf("live local watcher + stale heartbeat: got %v, want a 'no recent heartbeat' error", err)
+	}
+
+	localWatcherRunning = func() bool { return false }
+	err = preflightWatcher(cfg)
+	if err == nil || !strings.Contains(err.Error(), "not running") {
+		t.Errorf("no local watcher + stale heartbeat: got %v, want a 'not running' error", err)
 	}
 }
