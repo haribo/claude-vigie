@@ -9,6 +9,24 @@ file is the single source of truth, not a second narrative.
 
 ## [Unreleased]
 
+## [0.4.1] - 2026-08-08
+
+### Fixed
+
+- The daemon no longer returns intermittent `500`s on session and usage reports
+  under load. `busy_timeout` and `foreign_keys` are per-connection SQLite state
+  but were set on only the first pooled connection, so every other connection the
+  pool opened had `busy_timeout=0` and failed a contended write immediately with
+  `SQLITE_BUSY` — and the watcher writes every session (plus usage) every ~2 s.
+  The pragmas now travel in the DSN, so the driver applies them to every
+  connection and contending writers wait instead of erroring (#372).
+- The TUI startup preflight no longer reports a running watcher as down. A stale
+  server heartbeat is a failed round-trip, not proof the watcher is dead — a
+  just-restarted watcher or an unreachable server looks identical. The preflight
+  now cross-checks a local `/proc` liveness signal: it says "watcher not running,
+  start it" only when no local watcher process exists, and otherwise points at the
+  server/connectivity and says to retry (#371).
+
 ## [0.4.0] - 2026-08-07
 
 ### Changed
@@ -146,7 +164,8 @@ across machines — it reads and reports session state; it never drives a sessio
 - The API binds `127.0.0.1` by default; every `/api/*` route is behind a
   constant-time shared-token check; request bodies are size-capped.
 
-[Unreleased]: https://github.com/haribo/claude-vigie/compare/v0.4.0...HEAD
+[Unreleased]: https://github.com/haribo/claude-vigie/compare/v0.4.1...HEAD
+[0.4.1]: https://github.com/haribo/claude-vigie/compare/v0.4.0...v0.4.1
 [0.4.0]: https://github.com/haribo/claude-vigie/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/haribo/claude-vigie/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/haribo/claude-vigie/compare/v0.1.0...v0.2.0

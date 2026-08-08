@@ -7,15 +7,19 @@ package api
 // ReportRequest is the payload the reporter POSTs to /api/report for one hook
 // event. The server derives the session status from Event.
 type ReportRequest struct {
-	Event          string `json:"event"`
-	SessionID      string `json:"session_id"`
-	User           string `json:"user,omitempty"` // OS account that launched the session
-	Machine        string `json:"machine"`
-	ProjectDir     string `json:"project_dir"`
-	GitBranch      string `json:"git_branch,omitempty"`
-	Model          string `json:"model,omitempty"`
-	Effort         string `json:"effort,omitempty"`          // reasoning effort of the last assistant turn
-	ContextTokens  int64  `json:"context_tokens,omitempty"`  // real prompt size of the latest request (#279)
+	Event      string `json:"event"`
+	SessionID  string `json:"session_id"`
+	User       string `json:"user,omitempty"` // OS account that launched the session
+	Machine    string `json:"machine"`
+	ProjectDir string `json:"project_dir"`
+	GitBranch  string `json:"git_branch,omitempty"`
+	Model      string `json:"model,omitempty"`
+	Effort     string `json:"effort,omitempty"` // reasoning effort of the last assistant turn
+	// ContextTokens is the real prompt size of the latest request (#279). A
+	// pointer so a known 0 (a just-cleared session, 0%) is distinct from absent
+	// (no reading — keep the last known value, render "-"): nil = unknown, &0 =
+	// known-empty, &N = known N (#367).
+	ContextTokens  *int64 `json:"context_tokens,omitempty"`
 	PermissionMode string `json:"permission_mode,omitempty"` // default/acceptEdits/plan/auto/bypassPermissions (#304)
 	Title          string `json:"title,omitempty"`           // conversation title (/rename or auto)
 	LastTool       string `json:"last_tool,omitempty"`
@@ -47,15 +51,18 @@ type Usage struct {
 
 // SessionView is a session as returned by /api/sessions.
 type SessionView struct {
-	ID              string  `json:"id"`
-	Title           string  `json:"title,omitempty"`
-	User            string  `json:"user,omitempty"`
-	Machine         string  `json:"machine"`
-	ProjectDir      string  `json:"project_dir"`
-	GitBranch       string  `json:"git_branch,omitempty"`
-	Model           string  `json:"model,omitempty"`
-	Effort          string  `json:"effort,omitempty"`          // reasoning effort of the last assistant turn
-	ContextTokens   int64   `json:"context_tokens,omitempty"`  // real prompt size of the latest request (#279)
+	ID         string `json:"id"`
+	Title      string `json:"title,omitempty"`
+	User       string `json:"user,omitempty"`
+	Machine    string `json:"machine"`
+	ProjectDir string `json:"project_dir"`
+	GitBranch  string `json:"git_branch,omitempty"`
+	Model      string `json:"model,omitempty"`
+	Effort     string `json:"effort,omitempty"` // reasoning effort of the last assistant turn
+	// ContextTokens is the real prompt size of the latest request (#279). nil when
+	// vigie has no reading (rendered "-"); a non-nil value is known, including a
+	// known 0 for a just-cleared session shown as 0% (#367).
+	ContextTokens   *int64  `json:"context_tokens,omitempty"`
 	PermissionMode  string  `json:"permission_mode,omitempty"` // default/acceptEdits/plan/auto/bypassPermissions (#304)
 	Status          string  `json:"status"`
 	LastTool        string  `json:"last_tool,omitempty"`

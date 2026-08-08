@@ -121,15 +121,36 @@ type cacheEntry struct {
 	parser *transcript.Parser
 }
 
+// procID identifies a live Claude Code process — the {pid, /proc start-time} pair
+// vigie already uses to tell a running process from a reused PID. Two session ids
+// sharing a procID are the same lineage: a `/clear` switched the id in place on
+// the same process (#367).
+type procID struct {
+	pid       int
+	procStart uint64
+}
+
+// lineageEntry is the last known model and effort of the live session seen on a
+// process, so a fresh session that replaces it (a `/clear`, which starts with no
+// assistant line) inherits them until it writes its own first turn (#367).
+type lineageEntry struct {
+	model  string
+	effort string
+}
+
 // scanner scans transcripts and caches each parse, so an unchanged (idle)
 // transcript is not re-parsed every interval — important because a large
 // transcript takes seconds to parse and the watcher scans frequently.
 type scanner struct {
 	cache map[string]cacheEntry
+	// lineage carries each live process's last known model/effort across scans,
+	// keyed by process identity, so a `/clear`'d session inherits them instead of
+	// showing "-" until its first turn. Pruned to live processes each scan (#367).
+	lineage map[procID]lineageEntry
 }
 
 func newScanner() *scanner {
-	return &scanner{cache: map[string]cacheEntry{}}
+	return &scanner{cache: map[string]cacheEntry{}, lineage: map[procID]lineageEntry{}}
 }
 
 // Scan performs a single cache-less scan (used in tests and one-offs).
@@ -146,7 +167,8 @@ func (s *scanner) scan(root, machine string, maxAge time.Duration, now time.Time
 	}
 
 	osUser := systemUser()
-	reg := readRegistry() // Claude Code's authoritative status source (#254)
+	reg := readRegistry()         // Claude Code's authoritative status source (#254)
+	regByProc := indexByProc(reg) // process identity → its current session id (#367)
 	var reports []api.ReportRequest
 	fresh := make(map[string]cacheEntry, len(s.cache))
 	for _, p := range paths {
@@ -182,13 +204,18 @@ func (s *scanner) scan(root, machine string, maxAge time.Duration, now time.Time
 			id = strings.TrimSuffix(filepath.Base(p), ".jsonl")
 		}
 		usage := info.Usage
-		status, activity, reportAt := resolveStatus(reg, id, info, activityAge, lastActivity, now)
+		model, effort := s.trackLineage(reg, id, info)
+		status, activity, reportAt := resolveStatus(reg, regByProc, id, info, activityAge, lastActivity, now)
 		rc := reg[id].BridgeSessionID != ""
 		remoteURL := reg[id].remoteURL()
 		apiErr := 0
 		if status == "error" {
 			apiErr = info.LastAPIError // carry the HTTP code only while the error is shown
 		}
+		// The watcher parses the transcript every scan, so context is always a known
+		// reading — a pointer distinguishes a known 0 (a just-cleared session, 0%)
+		// from absent (#367).
+		ctx := info.ContextTokens
 		reports = append(reports, api.ReportRequest{
 			Event:          "watch",
 			SessionID:      id,
@@ -196,9 +223,9 @@ func (s *scanner) scan(root, machine string, maxAge time.Duration, now time.Time
 			Machine:        machine,
 			ProjectDir:     info.Cwd,
 			GitBranch:      info.GitBranch,
-			Model:          info.Model,
-			Effort:         info.Effort,
-			ContextTokens:  info.ContextTokens,
+			Model:          model,
+			Effort:         effort,
+			ContextTokens:  &ctx,
 			PermissionMode: info.PermissionMode,
 			Title:          info.Title,
 			Status:         status,
@@ -213,7 +240,66 @@ func (s *scanner) scan(root, machine string, maxAge time.Duration, now time.Time
 		})
 	}
 	s.cache = fresh // drop entries for files no longer scanned
+	s.pruneLineage(regByProc)
 	return reports, nil
+}
+
+// indexByProc maps each live process identity to the session id it currently
+// runs, from the registry. Records without a usable pid/start-time are skipped,
+// so a schema drift never forges a lineage link (#367).
+func indexByProc(reg map[string]sessionRecord) map[procID]string {
+	m := make(map[procID]string, len(reg))
+	for id, rec := range reg {
+		if rec.PID > 0 && rec.ProcStart != 0 {
+			m[procID{pid: rec.PID, procStart: rec.ProcStart}] = id
+		}
+	}
+	return m
+}
+
+// trackLineage returns the model and effort to report for a session, filling a
+// fresh session's blanks from the last known values of the same process (a
+// `/clear` inherits in place), and remembers this session's own readings for the
+// next one on that process. Only live registry sessions take part — a superseded
+// old transcript never donates or inherits (#367).
+func (s *scanner) trackLineage(reg map[string]sessionRecord, id string, info *transcript.Info) (model, effort string) {
+	model, effort = info.Model, info.Effort
+	rec, live := reg[id]
+	if !live || rec.PID <= 0 || rec.ProcStart == 0 {
+		return model, effort
+	}
+	proc := procID{pid: rec.PID, procStart: rec.ProcStart}
+	if prev, ok := s.lineage[proc]; ok {
+		if model == "" {
+			model = prev.model
+		}
+		if effort == "" {
+			effort = prev.effort
+		}
+	}
+	// Remember only real (parsed) values, so an inherited blank never sticks and
+	// the entry tracks whichever session on this process last had its own reading.
+	if info.Model != "" || info.Effort != "" {
+		e := s.lineage[proc]
+		if info.Model != "" {
+			e.model = info.Model
+		}
+		if info.Effort != "" {
+			e.effort = info.Effort
+		}
+		s.lineage[proc] = e
+	}
+	return model, effort
+}
+
+// pruneLineage drops lineage entries whose process is no longer live, keeping the
+// table bounded to the processes currently in the registry (#367).
+func (s *scanner) pruneLineage(regByProc map[procID]string) {
+	for proc := range s.lineage {
+		if _, live := regByProc[proc]; !live {
+			delete(s.lineage, proc)
+		}
+	}
 }
 
 // resolveStatus derives a session's status, activity, and report time. When
@@ -225,7 +311,7 @@ func (s *scanner) scan(root, machine string, maxAge time.Duration, now time.Time
 // activity, not the registry (whose status time lags a running turn). error and
 // thinking still refine the base. Sessions the registry does not cover (older
 // clients) fall back to the transcript heuristic.
-func resolveStatus(reg map[string]sessionRecord, id string, info *transcript.Info, activityAge time.Duration, lastActivity, now time.Time) (status, activity string, reportAt time.Time) {
+func resolveStatus(reg map[string]sessionRecord, regByProc map[procID]string, id string, info *transcript.Info, activityAge time.Duration, lastActivity, now time.Time) (status, activity string, reportAt time.Time) {
 	activity, reportAt = info.Activity, lastActivity
 	rec, known := reg[id]
 	var base string
@@ -240,11 +326,28 @@ func resolveStatus(reg map[string]sessionRecord, id string, info *transcript.Inf
 		case base == "waiting" && activity == "" && rec.WaitingFor != "":
 			activity = capText(rec.WaitingFor, 80) // surface the ask in DOING
 		}
+	case superseded(id, regByProc):
+		return "ended", activity, reportAt // switched in place on the same process (e.g. /clear) (#367)
 	default:
 		base = sessionStatus(id, info.LastStopReason, info.LastAPIError, activityAge)
 	}
 	base, activity = refineStatus(base, activity, id, info, activityAge, now)
 	return base, activity, reportAt
+}
+
+// superseded reports whether a session that has left the registry was replaced
+// *in place* on the same process — the `/clear` case: the old id's transcript is
+// still fresh and its (reused) process alive, but that process now runs a
+// different session id. Read-only: it reads the presence mapping vigie already
+// keeps (ADR-0005). Without it the old transcript lingers as a ghost idle row,
+// because the reused process reads alive (#367).
+func superseded(id string, regByProc map[procID]string) bool {
+	m, ok, err := presence.Load(id)
+	if err != nil || !ok || m.PID <= 0 || m.StartTime == 0 {
+		return false
+	}
+	cur, live := regByProc[procID{pid: m.PID, procStart: m.StartTime}]
+	return live && cur != id
 }
 
 // refineStatus applies the transcript-derived refinements on top of the registry

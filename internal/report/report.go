@@ -99,7 +99,8 @@ func Run(event string, stdin io.Reader) error {
 			req.Usage = &info.Usage
 			req.Model = info.Model
 			req.Effort = info.Effort
-			req.ContextTokens = info.ContextTokens
+			ctx := info.ContextTokens // a parsed reading — known, even at 0 (#367)
+			req.ContextTokens = &ctx
 			if info.PermissionMode != "" {
 				req.PermissionMode = info.PermissionMode
 			}

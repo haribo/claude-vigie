@@ -9,6 +9,16 @@ import (
 	"github.com/haribo/claude-vigie/internal/store"
 )
 
+// contextView maps the stored context reading onto the view's pointer: nil when
+// the count is not known (rendered "-"), else a pointer to the count — including
+// a known 0 for a just-cleared session shown as 0% (#367).
+func contextView(tokens int64, known bool) *int64 {
+	if !known {
+		return nil
+	}
+	return &tokens
+}
+
 // staleReportAfter is how long a session may go without a report before it is
 // shown as ended: the watcher re-reports every scan (~2s), so a live session
 // stays well within this, while one that dropped out of scan settles to ended.
@@ -103,7 +113,7 @@ func toView(s store.Session, samples []int64, now time.Time, machineWatched bool
 		GitBranch:      s.GitBranch,
 		Model:          s.Model,
 		Effort:         s.Effort,
-		ContextTokens:  s.ContextTokens,
+		ContextTokens:  contextView(s.ContextTokens, s.ContextKnown),
 		PermissionMode: s.PermissionMode,
 		Status:         status,
 		LastTool:       s.LastTool,

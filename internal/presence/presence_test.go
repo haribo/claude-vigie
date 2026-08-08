@@ -2,6 +2,8 @@ package presence
 
 import (
 	"os"
+	"os/exec"
+	"path/filepath"
 	"testing"
 	"time"
 )
@@ -106,5 +108,58 @@ func TestReadStatAndAlive(t *testing.T) {
 	// A pid that almost certainly does not exist.
 	if Alive(Mapping{PID: 2 << 30, StartTime: 1}) {
 		t.Error("Alive(nonexistent pid) = true, want false")
+	}
+}
+
+// TestWatcherRunning starts a real child process that impersonates a watcher — a
+// copy of /bin/sh named like our binary, invoked with a bare "watch" arg — and
+// checks the /proc scan detects it, ignores self, and rejects a name mismatch (#371).
+func TestWatcherRunning(t *testing.T) {
+	if _, err := os.Stat("/proc"); err != nil {
+		t.Skipf("no /proc: %v", err)
+	}
+	sh, err := exec.LookPath("sh")
+	if err != nil {
+		t.Skipf("no sh: %v", err)
+	}
+	// A copy of sh named "vigieprobe" so its /proc comm matches the name we scan for.
+	const name = "vigieprobe"
+	bin := filepath.Join(t.TempDir(), name)
+	data, err := os.ReadFile(sh) //nolint:gosec // test-only copy of the system shell
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(bin, data, 0o700); err != nil { //nolint:gosec // test binary must be executable
+		t.Fatal(err)
+	}
+	// The trailing ":" keeps sh from exec-ing the single command and losing its
+	// comm; the bare "watch" ($0) lands in the child's argv for the scan to find.
+	cmd := exec.Command(bin, "-c", "sleep 300; :", "watch") //nolint:gosec // fixed test args
+	if err := cmd.Start(); err != nil {
+		t.Fatalf("starting probe: %v", err)
+	}
+	t.Cleanup(func() { _ = cmd.Process.Kill(); _, _ = cmd.Process.Wait() })
+
+	// Poll briefly: the child needs a moment to appear in /proc under its comm.
+	found := false
+	for i := 0; i < 50; i++ {
+		if ok, err := WatcherRunning(name, os.Getpid()); err != nil {
+			t.Fatalf("WatcherRunning: %v", err)
+		} else if ok {
+			found = true
+			break
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+	if !found {
+		t.Error("WatcherRunning did not detect the running probe")
+	}
+	// Excluding the probe's own pid hides it (nothing else is named vigieprobe).
+	if ok, err := WatcherRunning(name, cmd.Process.Pid); err != nil || ok {
+		t.Errorf("WatcherRunning(selfPID=probe) = %v, %v; want false, nil", ok, err)
+	}
+	// A name that no process carries is never a match.
+	if ok, err := WatcherRunning("no-such-binxyz", os.Getpid()); err != nil || ok {
+		t.Errorf("WatcherRunning(unknown) = %v, %v; want false, nil", ok, err)
 	}
 }
