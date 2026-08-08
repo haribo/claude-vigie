@@ -9,6 +9,16 @@ file is the single source of truth, not a second narrative.
 
 ## [Unreleased]
 
+### Fixed
+
+- The daemon no longer returns intermittent `500`s on session and usage reports
+  under load. `busy_timeout` and `foreign_keys` are per-connection SQLite state
+  but were set on only the first pooled connection, so every other connection the
+  pool opened had `busy_timeout=0` and failed a contended write immediately with
+  `SQLITE_BUSY` — and the watcher writes every session (plus usage) every ~2 s.
+  The pragmas now travel in the DSN, so the driver applies them to every
+  connection and contending writers wait instead of erroring (#372).
+
 ## [0.4.0] - 2026-08-07
 
 ### Changed
