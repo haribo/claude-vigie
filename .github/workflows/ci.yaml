@@ -77,12 +77,12 @@ jobs:
       # Validate .goreleaser.yaml and cross-compile the release binaries without
       # publishing, so a broken config or a build error is caught on the PR rather
       # than on the day of the tag (#252).
-      - uses: goreleaser/goreleaser-action@v6
+      - uses: goreleaser/goreleaser-action@v7
         with:
           version: "~> v2"
           args: check
 
-      - uses: goreleaser/goreleaser-action@v6
+      - uses: goreleaser/goreleaser-action@v7
         with:
           version: "~> v2"
           args: build --snapshot --clean
