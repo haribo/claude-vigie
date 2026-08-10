@@ -124,6 +124,9 @@ type model struct {
 	gotWatcher      bool
 	err             error
 	width           int
+	height          int // terminal rows; 0 until the first WindowSizeMsg (#378)
+	rowOffset       int // sticky top of the sessions viewport, in body-line space (#378)
+	detailOffset    int // scroll offset of the detail view (#378)
 	tab             tab
 	cursor          int
 	selectedID      string // session under the cursor, tracked across reorders
@@ -331,6 +334,8 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.WindowSizeMsg:
 		m.width = msg.Width
+		m.height = msg.Height
+		return m.scrollToCursor(), nil
 	case tea.FocusMsg:
 		m.focused = true // operator is watching → suppress desktop notifications
 	case tea.BlurMsg:
@@ -465,13 +470,13 @@ func (m model) handleSessionsKey(msg tea.KeyMsg) model {
 		m.filtering = true
 	case "s":
 		m.sortKey = (m.sortKey + 1) % sortKeyCount
-		return m.saveViewPrefs()
+		return m.saveViewPrefs().scrollToCursor()
 	case "S":
 		m.sortReversed = !m.sortReversed
-		return m.saveViewPrefs()
+		return m.saveViewPrefs().scrollToCursor()
 	case "g":
 		m.groupBy = (m.groupBy + 1) % groupByCount
-		return m.saveViewPrefs()
+		return m.saveViewPrefs().scrollToCursor()
 	case "a": // toggle the persistent hide-ended setting (#320); best-effort save,
 		// like the sort/group prefs (#237) — shaping one's view, allowed by ADR-0007
 		m.prefs.hideEnded = !m.prefs.hideEnded
@@ -483,11 +488,12 @@ func (m model) handleSessionsKey(msg tea.KeyMsg) model {
 			m.selectedID = id
 			m.cursor = m.cursorForSelection()
 			m.detail = true
+			m.detailOffset = 0
 		}
 	default:
 		return m.handleNavKey(msg)
 	}
-	return m
+	return m.scrollToCursor()
 }
 
 // saveViewPrefs mirrors the live sort/group choices into prefs and persists them
@@ -591,16 +597,27 @@ func (m model) handleNavKey(msg tea.KeyMsg) model {
 	vis := m.visibleSessions()
 	switch msg.String() {
 	case "down", "j":
+		if m.detail { // in detail, ↓/j scrolls the panel, not the list (#378)
+			m.detailOffset++
+			return m
+		}
 		if m.cursor < len(vis)-1 {
 			m.cursor++
 		}
 	case "up", "k":
+		if m.detail {
+			if m.detailOffset > 0 {
+				m.detailOffset--
+			}
+			return m
+		}
 		if m.cursor > 0 {
 			m.cursor--
 		}
 	case "enter":
 		if len(vis) > 0 {
 			m.detail = true
+			m.detailOffset = 0
 		}
 	case "esc":
 		if m.detail {
@@ -610,6 +627,19 @@ func (m model) handleNavKey(msg tea.KeyMsg) model {
 		}
 	}
 	m.selectedID = idAt(vis, m.cursor) // pin the selection to a session
+	return m.scrollToCursor()
+}
+
+// scrollToCursor updates the sticky viewport offset so the cursor stays visible
+// within the scroll-off margin, using the same budget the renderer uses (#378).
+func (m model) scrollToCursor() model {
+	tr, budget := m.sessionsBand(m.bodyHeight())
+	if budget <= 0 || tr.selected < 0 {
+		m.rowOffset = 0
+		return m
+	}
+	_, _, off, _ := window(len(tr.body), tr.selected, budget, m.rowOffset)
+	m.rowOffset = off
 	return m
 }
 
@@ -646,7 +676,7 @@ func (m model) handleFilterKey(msg tea.KeyMsg) model {
 		m.filter += string(msg.Runes)
 	}
 	m.cursor = 0 // selection resets as the filtered list changes
-	return m
+	return m.scrollToCursor()
 }
 
 // visibleSessions returns the sessions after filtering and sorting. Ended and
@@ -680,7 +710,7 @@ func (m model) View() string {
 	b.WriteString(renderTabBar(m.tab, m.width))
 	b.WriteString("\n")
 	if m.gotWatcher && m.watcherStale() {
-		b.WriteString(warnStyle.Render("⚠ no watcher reporting — statuses may be stale") + "\n")
+		b.WriteString(m.watcherWarn() + "\n")
 	}
 
 	switch m.tab {
@@ -694,12 +724,39 @@ func (m model) View() string {
 		b.WriteString(m.renderSettings())
 	}
 
+	b.WriteString("\n" + rule(m.width) + "\n" + m.footerBlock())
+	return b.String()
+}
+
+// watcherWarn is the stale-watcher banner (shown when gotWatcher && watcherStale).
+func (m model) watcherWarn() string {
+	return warnStyle.Render("⚠ no watcher reporting — statuses may be stale")
+}
+
+// footerBlock is the key-hint footer, wrapped to width so it never overflows (#328).
+func (m model) footerBlock() string {
 	foot := footer(m.tab)
 	if m.width > 0 {
-		foot = lipgloss.NewStyle().Width(m.width).Render(foot) // wrap, don't overflow (#328)
+		foot = lipgloss.NewStyle().Width(m.width).Render(foot)
 	}
-	b.WriteString("\n" + rule(m.width) + "\n" + foot)
-	return b.String()
+	return foot
+}
+
+// bodyHeight is the number of terminal rows available to the tab body, between
+// the tab-bar/warn chrome above and the rule+footer below — the single source of
+// truth for the vertical budget (#378). It measures the rendered chrome rather
+// than hard-coding line counts, and returns 0 when the height is unknown, which
+// callers read as "render unbounded".
+func (m model) bodyHeight() int {
+	if m.height <= 0 {
+		return 0
+	}
+	chrome := lineCount(renderTabBar(m.tab, m.width))
+	if m.gotWatcher && m.watcherStale() {
+		chrome += lineCount(m.watcherWarn())
+	}
+	chrome += 1 + lineCount(m.footerBlock()) // rule + footer
+	return m.height - chrome
 }
 
 // renderSettings renders the editable preferences: local display prefs (saved
@@ -877,10 +934,11 @@ func (m model) viewSessions() string {
 		return dimStyle.Render("no sessions yet")
 	}
 
+	bodyHeight := m.bodyHeight()
 	vis := m.visibleSessions()
 	cursor := clamp(m.cursor, len(vis))
 	if m.detail && len(vis) > 0 {
-		return renderDetail(vis[cursor])
+		return m.viewDetail(vis[cursor], bodyHeight)
 	}
 
 	var b strings.Builder
@@ -898,10 +956,115 @@ func (m model) viewSessions() string {
 	if len(vis) == 0 {
 		b.WriteString(dimStyle.Render("no sessions match the filter"))
 	} else {
-		b.WriteString(renderGroupedTable(vis, active, m.width, cursor, m.groupBy, sortState{m.sortKey, m.sortReversed}))
+		b.WriteString(m.renderTableBand(m.sessionsBand(bodyHeight)))
 	}
-	b.WriteString(rule(m.width) + "\n" + usageStrip(m.usage, m.platform, m.width))
+	b.WriteString("\n" + rule(m.width) + "\n" + usageStrip(m.usage, m.platform, m.width))
 	return b.String()
+}
+
+// renderTableBand renders the pinned column header and the scrollable row band:
+// the whole body when rowBudget <= 0 (it fits, or the height is unknown), else a
+// window around the cursor with a sticky group header and a scroll indicator
+// (#378). The returned block carries no trailing newline.
+func (m model) renderTableBand(tr tableRows, rowBudget int) string {
+	var b strings.Builder
+	for _, h := range tr.header { // pinned column header + rule
+		b.WriteString(h + "\n")
+	}
+	if rowBudget <= 0 {
+		for i, row := range tr.body {
+			b.WriteString(row)
+			if i < len(tr.body)-1 {
+				b.WriteString("\n")
+			}
+		}
+		return b.String()
+	}
+	start, end, _, _ := window(len(tr.body), tr.selected, rowBudget, m.rowOffset)
+	if start > 0 && m.groupBy != groupNone && tr.groupOf[start] >= 0 {
+		b.WriteString(tr.body[tr.groupOf[start]] + "\n") // sticky group header
+	}
+	for _, row := range tr.body[start:end] {
+		b.WriteString(row + "\n")
+	}
+	b.WriteString(scrollIndicator(start, end, len(tr.body), m.width))
+	return b.String()
+}
+
+// sessionsBand builds the sessions table and returns the row budget for its
+// scrollable band: 0 when the whole body fits (or the height is unknown), so the
+// caller renders every row; otherwise the number of body rows that fit once the
+// fixed chrome, the scroll indicator, and (when grouped) the sticky group header
+// are reserved. It is the single budget calculation shared by rendering and by
+// the offset update, so the two can never disagree (#378).
+func (m model) sessionsBand(bodyHeight int) (tableRows, int) {
+	vis := m.visibleSessions()
+	cursor := clamp(m.cursor, len(vis))
+	active := activeColumns(m.prefs.columnOrder, m.prefs.columnHidden)
+	tr := buildTable(vis, active, m.width, cursor, m.groupBy, sortState{m.sortKey, m.sortReversed})
+	if bodyHeight <= 0 {
+		return tr, 0
+	}
+	// Fixed chrome inside the sessions body, measured (never hard-coded): the
+	// summary strip, its rule, the optional filter and overflow-banner lines, the
+	// pinned table header, and the trailing rule + usage strip.
+	fixed := lineCount(joinLR(renderSummaryFit(m.sessions, m.history, m.width), m.summaryRight(), m.width))
+	fixed += lineCount(rule(m.width))
+	if m.filtering || m.filter != "" {
+		fixed += lineCount(m.filterLine())
+	}
+	if banner := overflowBanner(active, m.width); banner != "" {
+		fixed += lineCount(banner)
+	}
+	fixed += len(tr.header)
+	fixed += lineCount(rule(m.width)) + lineCount(usageStrip(m.usage, m.platform, m.width))
+
+	base := bodyHeight - fixed
+	if len(tr.body) <= base {
+		return tr, 0 // the whole table fits; no windowing, no indicator
+	}
+	budget := base - 1 // reserve the scroll indicator line
+	if m.groupBy != groupNone {
+		budget-- // reserve the sticky group header
+	}
+	if budget < 1 {
+		budget = 1
+	}
+	return tr, budget
+}
+
+// viewDetail renders a session's detail panel, scrolled to fit the height with a
+// dim indicator when it overflows (#378).
+func (m model) viewDetail(s api.SessionView, bodyHeight int) string {
+	detail := renderDetail(s)
+	if bodyHeight <= 0 {
+		return detail
+	}
+	lines := strings.Split(strings.TrimRight(detail, "\n"), "\n")
+	if len(lines) <= bodyHeight {
+		return detail
+	}
+	budget := bodyHeight - 1 // the indicator takes a line
+	if budget < 1 {
+		budget = 1
+	}
+	start := clampInt(m.detailOffset, 0, len(lines)-budget)
+	var b strings.Builder
+	for _, l := range lines[start : start+budget] {
+		b.WriteString(l + "\n")
+	}
+	b.WriteString(scrollIndicator(start, start+budget, len(lines), m.width))
+	return b.String()
+}
+
+// scrollIndicator is the dim, right-aligned "rows a–b / n" shown on the pinned
+// line below a scrolled band (#378).
+func scrollIndicator(start, end, total, width int) string {
+	label := dimStyle.Render(fmt.Sprintf("rows %d–%d / %d", start+1, end, total))
+	if width <= 0 {
+		return label
+	}
+	return lipgloss.NewStyle().Width(width).Align(lipgloss.Right).Render(label)
 }
 
 // summaryRight is the right-aligned side of the summary strip: the active sort
