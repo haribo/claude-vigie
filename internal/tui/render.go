@@ -189,14 +189,7 @@ func sortArrow(reversed bool) string {
 // (width <= 0 means unknown: show everything). The row at index selected is
 // marked with a cursor (selected < 0 for none).
 func renderTable(sessions []api.SessionView, base []column, width, selected int, st sortState) string {
-	cols := visibleColumns(base, width)
-	var b strings.Builder
-	b.WriteString(renderHeaderRow(cols, st) + "\n")
-	b.WriteString(rule(width) + "\n")
-	for idx, s := range sessions {
-		b.WriteString(renderRow(cols, s, idx == selected, width) + "\n")
-	}
-	return b.String()
+	return buildTable(sessions, base, width, selected, groupNone, st).join()
 }
 
 func renderHeaderRow(cols []column, st sortState) string {
@@ -259,32 +252,7 @@ func renderRow(cols []column, s api.SessionView, selected bool, termWidth int) s
 // renderGroupedTable renders sessions grouped by gb, with a header and token
 // subtotal per group. gb == groupNone falls back to a flat table.
 func renderGroupedTable(sessions []api.SessionView, base []column, width, selected int, gb groupBy, st sortState) string {
-	if gb == groupNone {
-		return renderTable(sessions, base, width, selected, st)
-	}
-
-	subtotal := map[string]int64{}
-	count := map[string]int{}
-	for _, s := range sessions {
-		k := groupKey(s, gb)
-		subtotal[k] += totalTokens(s)
-		count[k]++
-	}
-
-	cols := visibleColumns(base, width)
-	var b strings.Builder
-	b.WriteString(renderHeaderRow(cols, st) + "\n")
-	b.WriteString(rule(width) + "\n")
-	lastKey, first := "", true
-	for idx, s := range sessions {
-		k := groupKey(s, gb)
-		if first || k != lastKey {
-			b.WriteString(groupHeaderStyle.Render(fmt.Sprintf("▸ %s  (%d · %s)", orDash(k), count[k], humanizeTokens(subtotal[k]))) + "\n")
-			lastKey, first = k, false
-		}
-		b.WriteString(renderRow(cols, s, idx == selected, width) + "\n")
-	}
-	return b.String()
+	return buildTable(sessions, base, width, selected, gb, st).join()
 }
 
 func groupKey(s api.SessionView, gb groupBy) string {
