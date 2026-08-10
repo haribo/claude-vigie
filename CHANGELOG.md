@@ -9,7 +9,16 @@ file is the single source of truth, not a second narrative.
 
 ## [Unreleased]
 
-## [0.4.1] - 2026-08-08
+### Added
+
+- The sessions table now scrolls within a vertical viewport instead of spilling
+  off the bottom of the terminal. It tracks the terminal height (previously only
+  width was honored), keeps the tab bar, summary, column header, and usage/footer
+  pinned, and scrolls only the row band — continuous, cursor-driven, htop/k9s
+  style, with a 2-row look-ahead margin and a `rows a–b / n` indicator shown only
+  when the list overflows. Grouped views keep the current group's header pinned;
+  the detail panel scrolls the same way ([design](docs/design/tui-viewport.md),
+  #378).
 
 ### Fixed
 
