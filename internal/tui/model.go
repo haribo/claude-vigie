@@ -125,28 +125,36 @@ type model struct {
 	err             error
 	width           int
 	height          int // terminal rows; 0 until the first WindowSizeMsg (#378)
-	rowOffset       int // sticky top of the sessions viewport, in body-line space (#378)
-	detailOffset    int // scroll offset of the detail view (#378)
 	tab             tab
-	cursor          int
-	selectedID      string // session under the cursor, tracked across reorders
-	detail          bool
-	history         []int
-	filter          string
-	filtering       bool
-	sortKey         sortKey
-	sortReversed    bool
-	groupBy         groupBy
-	fetchSeq        int // generation of the last issued sessions fetch
-	appliedSeq      int // generation of the last applied sessions result
+	sess            sessionsView // the Sessions tab's own state (#379)
+	fetchSeq        int          // generation of the last issued sessions fetch
+	appliedSeq      int          // generation of the last applied sessions result
 	prefs           prefs
 	settingsCursor  int
 	events          <-chan struct{}
-	conn            <-chan bool       // server-connection state pushed by the SSE loop
-	sseLive         bool              // is the SSE stream currently connected
-	clock           func() time.Time  // injected wall clock; defaults to clock.Now
-	prevStatus      map[string]string // last status per session, for notify transitions (#260)
-	focused         bool              // terminal has focus → suppress desktop notifications
+	conn            <-chan bool      // server-connection state pushed by the SSE loop
+	sseLive         bool             // is the SSE stream currently connected
+	clock           func() time.Time // injected wall clock; defaults to clock.Now
+	focused         bool             // terminal has focus → suppress desktop notifications
+}
+
+// sessionsView is the Sessions tab's private state — the cursor and selection,
+// the filter/sort/group shaping, the vertical viewport offsets, and the
+// per-session status memory for notifications. Extracted from the model so the
+// tab owns its own state rather than sharing one god-object (#379).
+type sessionsView struct {
+	cursor       int
+	selectedID   string // session under the cursor, tracked across reorders
+	detail       bool
+	detailOffset int   // scroll offset of the detail view (#378)
+	rowOffset    int   // sticky top of the sessions viewport, in body-line space (#378)
+	history      []int // recent working-count samples, for the activity sparkline
+	filter       string
+	filtering    bool
+	sortKey      sortKey
+	sortReversed bool
+	groupBy      groupBy
+	prevStatus   map[string]string // last status per session, for notify transitions (#260)
 }
 
 // now reads the injected clock, falling back to the system clock so a model
@@ -376,11 +384,11 @@ func (m model) applySessions(msg sessionsMsg) model {
 	m = m.withNotifiedTransitions(msg.sessions) // desktop notify on working→attention (#260)
 	m.sessions = msg.sessions
 	m.err = nil
-	m.history = append(m.history, countByStatus(m.sessions, "working"))
-	if len(m.history) > sparkWindow {
-		m.history = m.history[len(m.history)-sparkWindow:]
+	m.sess.history = append(m.sess.history, countByStatus(m.sessions, "working"))
+	if len(m.sess.history) > sparkWindow {
+		m.sess.history = m.sess.history[len(m.sess.history)-sparkWindow:]
 	}
-	m.cursor = m.cursorForSelection() // keep the cursor on the same session
+	m.sess.cursor = m.cursorForSelection() // keep the cursor on the same session
 	return m
 }
 
@@ -424,7 +432,7 @@ func (m model) applyDataMsg(msg tea.Msg) model {
 }
 
 func (m model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
-	if m.filtering {
+	if m.sess.filtering {
 		return m.handleFilterKey(msg), nil
 	}
 	switch msg.String() {
@@ -467,28 +475,28 @@ func (m model) handleStatsKey(msg tea.KeyMsg) model {
 func (m model) handleSessionsKey(msg tea.KeyMsg) model {
 	switch msg.String() {
 	case "/":
-		m.filtering = true
+		m.sess.filtering = true
 	case "s":
-		m.sortKey = (m.sortKey + 1) % sortKeyCount
+		m.sess.sortKey = (m.sess.sortKey + 1) % sortKeyCount
 		return m.saveViewPrefs().scrollToCursor()
 	case "S":
-		m.sortReversed = !m.sortReversed
+		m.sess.sortReversed = !m.sess.sortReversed
 		return m.saveViewPrefs().scrollToCursor()
 	case "g":
-		m.groupBy = (m.groupBy + 1) % groupByCount
+		m.sess.groupBy = (m.sess.groupBy + 1) % groupByCount
 		return m.saveViewPrefs().scrollToCursor()
 	case "a": // toggle the persistent hide-ended setting (#320); best-effort save,
 		// like the sort/group prefs (#237) — shaping one's view, allowed by ADR-0007
 		m.prefs.hideEnded = !m.prefs.hideEnded
 		savePrefs(m.prefs)
-		m.cursor = 0
+		m.sess.cursor = 0
 	case "n": // jump to the oldest session waiting on the operator (#261) — pure
 		// navigation: looking is done in the session, not acknowledged in vigie (ADR-0007)
 		if id := nextAttention(m.sessions); id != "" {
-			m.selectedID = id
-			m.cursor = m.cursorForSelection()
-			m.detail = true
-			m.detailOffset = 0
+			m.sess.selectedID = id
+			m.sess.cursor = m.cursorForSelection()
+			m.sess.detail = true
+			m.sess.detailOffset = 0
 		}
 	default:
 		return m.handleNavKey(msg)
@@ -499,9 +507,9 @@ func (m model) handleSessionsKey(msg tea.KeyMsg) model {
 // saveViewPrefs mirrors the live sort/group choices into prefs and persists them
 // so they survive a restart (#237). Best-effort: savePrefs never blocks the UI.
 func (m model) saveViewPrefs() model {
-	m.prefs.sortKey = m.sortKey
-	m.prefs.sortReversed = m.sortReversed
-	m.prefs.groupBy = m.groupBy
+	m.prefs.sortKey = m.sess.sortKey
+	m.prefs.sortReversed = m.sess.sortReversed
+	m.prefs.groupBy = m.sess.groupBy
 	savePrefs(m.prefs)
 	return m
 }
@@ -597,36 +605,36 @@ func (m model) handleNavKey(msg tea.KeyMsg) model {
 	vis := m.visibleSessions()
 	switch msg.String() {
 	case "down", "j":
-		if m.detail { // in detail, ↓/j scrolls the panel, not the list (#378)
-			m.detailOffset++
+		if m.sess.detail { // in detail, ↓/j scrolls the panel, not the list (#378)
+			m.sess.detailOffset++
 			return m
 		}
-		if m.cursor < len(vis)-1 {
-			m.cursor++
+		if m.sess.cursor < len(vis)-1 {
+			m.sess.cursor++
 		}
 	case "up", "k":
-		if m.detail {
-			if m.detailOffset > 0 {
-				m.detailOffset--
+		if m.sess.detail {
+			if m.sess.detailOffset > 0 {
+				m.sess.detailOffset--
 			}
 			return m
 		}
-		if m.cursor > 0 {
-			m.cursor--
+		if m.sess.cursor > 0 {
+			m.sess.cursor--
 		}
 	case "enter":
 		if len(vis) > 0 {
-			m.detail = true
-			m.detailOffset = 0
+			m.sess.detail = true
+			m.sess.detailOffset = 0
 		}
 	case "esc":
-		if m.detail {
-			m.detail = false
+		if m.sess.detail {
+			m.sess.detail = false
 		} else {
-			m.filter = ""
+			m.sess.filter = ""
 		}
 	}
-	m.selectedID = idAt(vis, m.cursor) // pin the selection to a session
+	m.sess.selectedID = idAt(vis, m.sess.cursor) // pin the selection to a session
 	return m.scrollToCursor()
 }
 
@@ -635,11 +643,11 @@ func (m model) handleNavKey(msg tea.KeyMsg) model {
 func (m model) scrollToCursor() model {
 	tr, budget := m.sessionsBand(m.bodyHeight())
 	if budget <= 0 || tr.selected < 0 {
-		m.rowOffset = 0
+		m.sess.rowOffset = 0
 		return m
 	}
-	_, _, off, _ := window(len(tr.body), tr.selected, budget, m.rowOffset)
-	m.rowOffset = off
+	_, _, off, _ := window(len(tr.body), tr.selected, budget, m.sess.rowOffset)
+	m.sess.rowOffset = off
 	return m
 }
 
@@ -647,14 +655,14 @@ func (m model) scrollToCursor() model {
 // cursor after a reorder, clamping if the session is gone or none is pinned.
 func (m model) cursorForSelection() int {
 	vis := m.visibleSessions()
-	if m.selectedID != "" {
+	if m.sess.selectedID != "" {
 		for i, s := range vis {
-			if s.ID == m.selectedID {
+			if s.ID == m.sess.selectedID {
 				return i
 			}
 		}
 	}
-	return clamp(m.cursor, len(vis))
+	return clamp(m.sess.cursor, len(vis))
 }
 
 func idAt(vis []api.SessionView, i int) string {
@@ -667,15 +675,15 @@ func idAt(vis []api.SessionView, i int) string {
 func (m model) handleFilterKey(msg tea.KeyMsg) model {
 	switch msg.Type {
 	case tea.KeyEnter, tea.KeyEsc:
-		m.filtering = false
+		m.sess.filtering = false
 	case tea.KeyBackspace:
-		if r := []rune(m.filter); len(r) > 0 {
-			m.filter = string(r[:len(r)-1])
+		if r := []rune(m.sess.filter); len(r) > 0 {
+			m.sess.filter = string(r[:len(r)-1])
 		}
 	case tea.KeyRunes, tea.KeySpace:
-		m.filter += string(msg.Runes)
+		m.sess.filter += string(msg.Runes)
 	}
-	m.cursor = 0 // selection resets as the filtered list changes
+	m.sess.cursor = 0 // selection resets as the filtered list changes
 	return m.scrollToCursor()
 }
 
@@ -693,9 +701,9 @@ func (m model) visibleSessions() []api.SessionView {
 			out = append(out, s)
 		}
 	}
-	sortSessions(out, m.sortKey, m.sortReversed)
-	if m.groupBy != groupNone {
-		gb := m.groupBy
+	sortSessions(out, m.sess.sortKey, m.sess.sortReversed)
+	if m.sess.groupBy != groupNone {
+		gb := m.sess.groupBy
 		sort.SliceStable(out, func(i, j int) bool {
 			return groupKey(out[i], gb) < groupKey(out[j], gb)
 		})
@@ -936,17 +944,17 @@ func (m model) viewSessions() string {
 
 	bodyHeight := m.bodyHeight()
 	vis := m.visibleSessions()
-	cursor := clamp(m.cursor, len(vis))
-	if m.detail && len(vis) > 0 {
+	cursor := clamp(m.sess.cursor, len(vis))
+	if m.sess.detail && len(vis) > 0 {
 		return m.viewDetail(vis[cursor], bodyHeight)
 	}
 
 	var b strings.Builder
 	// The tab-bar separator frames the summary strip above; a rule below
 	// separates it from the table.
-	b.WriteString(joinLR(renderSummaryFit(m.sessions, m.history, m.width), m.summaryRight(), m.width) + "\n")
+	b.WriteString(joinLR(renderSummaryFit(m.sessions, m.sess.history, m.width), m.summaryRight(), m.width) + "\n")
 	b.WriteString(rule(m.width) + "\n")
-	if m.filtering || m.filter != "" {
+	if m.sess.filtering || m.sess.filter != "" {
 		b.WriteString(m.filterLine() + "\n")
 	}
 	active := activeColumns(m.prefs.columnOrder, m.prefs.columnHidden)
@@ -980,8 +988,8 @@ func (m model) renderTableBand(tr tableRows, rowBudget int) string {
 		}
 		return b.String()
 	}
-	start, end, _, _ := window(len(tr.body), tr.selected, rowBudget, m.rowOffset)
-	if start > 0 && m.groupBy != groupNone && tr.groupOf[start] >= 0 {
+	start, end, _, _ := window(len(tr.body), tr.selected, rowBudget, m.sess.rowOffset)
+	if start > 0 && m.sess.groupBy != groupNone && tr.groupOf[start] >= 0 {
 		b.WriteString(tr.body[tr.groupOf[start]] + "\n") // sticky group header
 	}
 	for _, row := range tr.body[start:end] {
@@ -999,18 +1007,18 @@ func (m model) renderTableBand(tr tableRows, rowBudget int) string {
 // the offset update, so the two can never disagree (#378).
 func (m model) sessionsBand(bodyHeight int) (tableRows, int) {
 	vis := m.visibleSessions()
-	cursor := clamp(m.cursor, len(vis))
+	cursor := clamp(m.sess.cursor, len(vis))
 	active := activeColumns(m.prefs.columnOrder, m.prefs.columnHidden)
-	tr := buildTable(vis, active, m.width, cursor, m.groupBy, sortState{m.sortKey, m.sortReversed})
+	tr := buildTable(vis, active, m.width, cursor, m.sess.groupBy, sortState{m.sess.sortKey, m.sess.sortReversed})
 	if bodyHeight <= 0 {
 		return tr, 0
 	}
 	// Fixed chrome inside the sessions body, measured (never hard-coded): the
 	// summary strip, its rule, the optional filter and overflow-banner lines, the
 	// pinned table header, and the trailing rule + usage strip.
-	fixed := lineCount(joinLR(renderSummaryFit(m.sessions, m.history, m.width), m.summaryRight(), m.width))
+	fixed := lineCount(joinLR(renderSummaryFit(m.sessions, m.sess.history, m.width), m.summaryRight(), m.width))
 	fixed += lineCount(rule(m.width))
-	if m.filtering || m.filter != "" {
+	if m.sess.filtering || m.sess.filter != "" {
 		fixed += lineCount(m.filterLine())
 	}
 	if banner := overflowBanner(active, m.width); banner != "" {
@@ -1024,7 +1032,7 @@ func (m model) sessionsBand(bodyHeight int) (tableRows, int) {
 		return tr, 0 // the whole table fits; no windowing, no indicator
 	}
 	budget := base - 1 // reserve the scroll indicator line
-	if m.groupBy != groupNone {
+	if m.sess.groupBy != groupNone {
 		budget-- // reserve the sticky group header
 	}
 	if budget < 1 {
@@ -1048,7 +1056,7 @@ func (m model) viewDetail(s api.SessionView, bodyHeight int) string {
 	if budget < 1 {
 		budget = 1
 	}
-	start := clampInt(m.detailOffset, 0, len(lines)-budget)
+	start := clampInt(m.sess.detailOffset, 0, len(lines)-budget)
 	var b strings.Builder
 	for _, l := range lines[start : start+budget] {
 		b.WriteString(l + "\n")
@@ -1070,9 +1078,9 @@ func scrollIndicator(start, end, total, width int) string {
 // summaryRight is the right-aligned side of the summary strip: the active sort
 // (and group), plus the relative last-update age.
 func (m model) summaryRight() string {
-	parts := []string{labelStyle.Render("sort ") + sortNames[m.sortKey] + sortArrow(m.sortReversed)}
-	if m.groupBy != groupNone {
-		parts = append(parts, labelStyle.Render("group ")+groupNames[m.groupBy])
+	parts := []string{labelStyle.Render("sort ") + sortNames[m.sess.sortKey] + sortArrow(m.sess.sortReversed)}
+	if m.sess.groupBy != groupNone {
+		parts = append(parts, labelStyle.Render("group ")+groupNames[m.sess.groupBy])
 	}
 	if h := m.hiddenCount(); h > 0 {
 		parts = append(parts, labelStyle.Render("hidden ")+strconv.Itoa(h))
@@ -1098,8 +1106,8 @@ func (m model) connGlyph() string {
 
 // filterLine shows the active filter (with a caret while typing).
 func (m model) filterLine() string {
-	s := labelStyle.Render("filter ") + m.filter
-	if m.filtering {
+	s := labelStyle.Render("filter ") + m.sess.filter
+	if m.sess.filtering {
 		s += "▌"
 	}
 	return s
@@ -1188,13 +1196,13 @@ func statusRank(status string) int {
 // filter "rc" isolates remote-controlled sessions; anything else is a
 // case-insensitive fuzzy match over the session's fields.
 func (m model) matchesFilter(s api.SessionView) bool {
-	if m.filter == "" {
+	if m.sess.filter == "" {
 		return true
 	}
-	if strings.EqualFold(m.filter, "rc") {
+	if strings.EqualFold(m.sess.filter, "rc") {
 		return s.RemoteControl
 	}
-	return fuzzyMatch(m.filter, sessionHaystack(s))
+	return fuzzyMatch(m.sess.filter, sessionHaystack(s))
 }
 
 // fuzzyMatch reports whether the runes of pattern appear in order in text

@@ -43,13 +43,13 @@ func nextAttention(sessions []api.SessionView) string {
 // launching the TUI is silent. Suppressed while the TUI has focus (the operator is
 // already looking) or notifications are opted out.
 func (m model) withNotifiedTransitions(next []api.SessionView) model {
-	prev := m.prevStatus
-	m.prevStatus = make(map[string]string, len(next))
+	prev := m.sess.prevStatus
+	m.sess.prevStatus = make(map[string]string, len(next))
 	for _, s := range next {
 		if prev[s.ID] == "working" && isAttention(s.Status) && !m.focused && m.prefs.notify {
 			notifyFn(sessionName(s), s.Status)
 		}
-		m.prevStatus[s.ID] = s.Status
+		m.sess.prevStatus[s.ID] = s.Status
 	}
 	return m
 }

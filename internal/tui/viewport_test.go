@@ -55,7 +55,7 @@ func TestSessionsViewportFitsHeight(t *testing.T) {
 	const heightFloor, heightCeil, width = 22, 60, 120
 	m := sampleModel(tabSessions)
 	m.width = width
-	m.cursor = len(m.visibleSessions()) - 1 // worst case: last row must be reachable
+	m.sess.cursor = len(m.visibleSessions()) - 1 // worst case: last row must be reachable
 	m = m.scrollToCursor()
 
 	for h := heightFloor; h <= heightCeil; h++ {

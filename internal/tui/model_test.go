@@ -78,20 +78,20 @@ func TestCursorAndDetail(t *testing.T) {
 	m, _ = m.Update(key("j")) // down
 	m, _ = m.Update(key("j"))
 	m, _ = m.Update(key("j")) // clamp at last (index 2)
-	if m.(model).cursor != 2 {
-		t.Errorf("cursor = %d, want 2 (clamped)", m.(model).cursor)
+	if m.(model).sess.cursor != 2 {
+		t.Errorf("cursor = %d, want 2 (clamped)", m.(model).sess.cursor)
 	}
 	m, _ = m.Update(key("k")) // up
-	if m.(model).cursor != 1 {
-		t.Errorf("cursor = %d, want 1", m.(model).cursor)
+	if m.(model).sess.cursor != 1 {
+		t.Errorf("cursor = %d, want 1", m.(model).sess.cursor)
 	}
 
 	m, _ = m.Update(named(tea.KeyEnter))
-	if !m.(model).detail {
+	if !m.(model).sess.detail {
 		t.Error("enter did not open detail")
 	}
 	m, _ = m.Update(named(tea.KeyEsc))
-	if m.(model).detail {
+	if m.(model).sess.detail {
 		t.Error("esc did not close detail")
 	}
 }
@@ -169,14 +169,14 @@ func TestVisibleSessionsFilterAndSort(t *testing.T) {
 		t.Errorf("default (last-seen) sort first = %q, want beta", vis[0].Title)
 	}
 
-	m.sortKey = sortTokens
+	m.sess.sortKey = sortTokens
 	vis := m.visibleSessions()
 	if vis[0].Title != "beta" || vis[2].Title != "alpha" {
 		t.Errorf("token sort = %q..%q, want beta..alpha", vis[0].Title, vis[2].Title)
 	}
 
-	m.sortKey = sortLastSeen
-	m.filter = "m1"
+	m.sess.sortKey = sortLastSeen
+	m.sess.filter = "m1"
 	if vis := m.visibleSessions(); len(vis) != 2 {
 		t.Fatalf("filter m1 len = %d, want 2", len(vis))
 	}
@@ -188,31 +188,31 @@ func TestFilterInput(t *testing.T) {
 	var m tea.Model = model{sessions: []api.SessionView{{Title: "claude-fleet"}, {Title: "note"}}}
 
 	m, _ = m.Update(key("/"))
-	if !m.(model).filtering {
+	if !m.(model).sess.filtering {
 		t.Fatal("/ did not enter filter mode")
 	}
 	m, _ = m.Update(key("c"))
 	m, _ = m.Update(key("f"))
-	if m.(model).filter != "cf" {
-		t.Errorf("filter = %q, want cf", m.(model).filter)
+	if m.(model).sess.filter != "cf" {
+		t.Errorf("filter = %q, want cf", m.(model).sess.filter)
 	}
 	if vis := m.(model).visibleSessions(); len(vis) != 1 || vis[0].Title != "claude-fleet" {
 		t.Errorf("filtered = %v", vis)
 	}
 
 	m, _ = m.Update(named(tea.KeyEnter))
-	if m.(model).filtering {
+	if m.(model).sess.filtering {
 		t.Error("enter did not leave filter mode")
 	}
 	m, _ = m.Update(named(tea.KeyEsc))
-	if m.(model).filter != "" {
-		t.Errorf("esc did not clear filter: %q", m.(model).filter)
+	if m.(model).sess.filter != "" {
+		t.Errorf("esc did not clear filter: %q", m.(model).sess.filter)
 	}
 }
 
 func TestGroupingClustersByKey(t *testing.T) {
 	m := model{
-		groupBy: groupMachine,
+		sess: sessionsView{groupBy: groupMachine},
 		// zero-value prefs hide nothing, isolating grouping from hide-ended/idle
 		sessions: []api.SessionView{
 			{Title: "a", Machine: "m2", LastSeenAt: "2026-07-26T12:00:00Z"},
@@ -267,13 +267,13 @@ func TestGroupToggleCycles(t *testing.T) {
 	key := func(s string) tea.KeyMsg { return tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune(s)} }
 	var m tea.Model = model{}
 	m, _ = m.Update(key("g"))
-	if m.(model).groupBy != groupMachine {
-		t.Errorf("after 1x g: groupBy = %d, want groupMachine", m.(model).groupBy)
+	if m.(model).sess.groupBy != groupMachine {
+		t.Errorf("after 1x g: groupBy = %d, want groupMachine", m.(model).sess.groupBy)
 	}
 	m, _ = m.Update(key("g"))
 	m, _ = m.Update(key("g"))
-	if m.(model).groupBy != groupNone {
-		t.Errorf("after 3x g: groupBy = %d, want groupNone", m.(model).groupBy)
+	if m.(model).sess.groupBy != groupNone {
+		t.Errorf("after 3x g: groupBy = %d, want groupNone", m.(model).sess.groupBy)
 	}
 }
 
@@ -300,12 +300,12 @@ func TestRCSortAndFilter(t *testing.T) {
 	m := model{sessions: []api.SessionView{
 		{Title: "a", Status: "idle", LastSeenAt: "2026-07-27T10:00:00Z"},
 		{Title: "b", Status: "idle", RemoteControl: true, LastSeenAt: "2026-07-27T09:00:00Z"},
-	}, sortKey: sortRC}
+	}, sess: sessionsView{sortKey: sortRC}}
 	vis := m.visibleSessions()
 	if !vis[0].RemoteControl {
 		t.Errorf("rc sort: first = %q, want the rc-active one", vis[0].Title)
 	}
-	m.filter = "rc"
+	m.sess.filter = "rc"
 	vis = m.visibleSessions()
 	if len(vis) != 1 || !vis[0].RemoteControl {
 		t.Errorf("filter rc = %d rows, want 1 rc-active", len(vis))
@@ -357,7 +357,7 @@ func TestAKeyTogglesHideEnded(t *testing.T) {
 }
 
 func TestCursorTracksSessionOnReorder(t *testing.T) {
-	m := model{selectedID: "b", cursor: 1, sessions: []api.SessionView{
+	m := model{sess: sessionsView{selectedID: "b", cursor: 1}, sessions: []api.SessionView{
 		{ID: "a", LastSeenAt: "2026-07-28T10:00:00Z"},
 		{ID: "b", LastSeenAt: "2026-07-28T09:00:00Z"},
 		{ID: "c", LastSeenAt: "2026-07-28T08:00:00Z"},
@@ -372,7 +372,7 @@ func TestCursorTracksSessionOnReorder(t *testing.T) {
 		t.Errorf("after reorder cursor = %d, want 0 (following session b)", got)
 	}
 	// A pinned session that vanished clamps instead of pointing at the wrong row.
-	m.selectedID = "gone"
+	m.sess.selectedID = "gone"
 	if got := m.cursorForSelection(); got < 0 || got > 2 {
 		t.Errorf("clamp out of range: %d", got)
 	}
