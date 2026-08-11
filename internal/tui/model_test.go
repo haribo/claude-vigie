@@ -363,17 +363,17 @@ func TestCursorTracksSessionOnReorder(t *testing.T) {
 		{ID: "c", LastSeenAt: "2026-07-28T08:00:00Z"},
 	}}
 	// last-seen desc → a,b,c; b is at index 1.
-	if got := m.cursorForSelection(); got != 1 {
+	if got := m.sess.cursorForSelection(m.visibleSessions()); got != 1 {
 		t.Fatalf("initial cursor = %d, want 1", got)
 	}
 	// b becomes the most recent → it moves to the top; the cursor must follow.
 	m.sessions[1].LastSeenAt = "2026-07-28T11:00:00Z"
-	if got := m.cursorForSelection(); got != 0 {
+	if got := m.sess.cursorForSelection(m.visibleSessions()); got != 0 {
 		t.Errorf("after reorder cursor = %d, want 0 (following session b)", got)
 	}
 	// A pinned session that vanished clamps instead of pointing at the wrong row.
 	m.sess.selectedID = "gone"
-	if got := m.cursorForSelection(); got < 0 || got > 2 {
+	if got := m.sess.cursorForSelection(m.visibleSessions()); got < 0 || got > 2 {
 		t.Errorf("clamp out of range: %d", got)
 	}
 }
