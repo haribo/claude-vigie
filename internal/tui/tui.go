@@ -28,15 +28,17 @@ func Run(cfg *config.Config) error {
 		setRetention:  func(v string) error { return setSessionRetention(cfg, v) },
 		serverURL:     cfg.ServerURL,
 		prefs:         p,
-		sortKey:       p.sortKey, // restore the persisted table order (#237)
-		sortReversed:  p.sortReversed,
-		groupBy:       p.groupBy,
-		fetchSeq:      1, // Init issues generation 1
-		events:        events,
-		conn:          conn,
-		clock:         clock.Now,
-		prevStatus:    map[string]string{},
-		focused:       true, // assume focused at start; blur/focus events correct it
+		sess: sessionsView{
+			sortKey:      p.sortKey, // restore the persisted table order (#237)
+			sortReversed: p.sortReversed,
+			groupBy:      p.groupBy,
+			prevStatus:   map[string]string{},
+		},
+		fetchSeq: 1, // Init issues generation 1
+		events:   events,
+		conn:     conn,
+		clock:    clock.Now,
+		focused:  true, // assume focused at start; blur/focus events correct it
 	}
 	// WithReportFocus lets the terminal tell us focus/blur, so desktop
 	// notifications stay silent while the operator is watching the TUI (#260).
