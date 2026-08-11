@@ -113,7 +113,7 @@ type model struct {
 	serverURL       string // read-only; set via `vigie init`
 	serverRetention time.Duration
 	stats           api.StatsResponse
-	statsPeriod     period
+	stat            statsView // the Stats tab's own state (#379)
 	sessions        []api.SessionView
 	usage           api.UsageReport
 	platform        api.PlatformStatus
@@ -130,7 +130,7 @@ type model struct {
 	fetchSeq        int          // generation of the last issued sessions fetch
 	appliedSeq      int          // generation of the last applied sessions result
 	prefs           prefs
-	settingsCursor  int
+	set             settingsView // the Settings tab's own state (#379)
 	events          <-chan struct{}
 	conn            <-chan bool      // server-connection state pushed by the SSE loop
 	sseLive         bool             // is the SSE stream currently connected
@@ -155,6 +155,12 @@ type sessionsView struct {
 	sortReversed bool
 	groupBy      groupBy
 	prevStatus   map[string]string // last status per session, for notify transitions (#260)
+}
+
+// settingsView is the Settings tab's own state: the row cursor spanning the
+// editable prefs and the column picker below them (#379).
+type settingsView struct {
+	cursor int
 }
 
 // now reads the injected clock, falling back to the system clock so a model
@@ -466,9 +472,7 @@ func (m model) handleViewKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 }
 
 func (m model) handleStatsKey(msg tea.KeyMsg) model {
-	if p, ok := periodFromKey(msg.String()); ok {
-		m.statsPeriod = p
-	}
+	m.stat = m.stat.handleKey(msg)
 	return m
 }
 
@@ -519,15 +523,15 @@ func (m model) saveViewPrefs() model {
 func totalSettingsRows() int { return settingsCount + len(columns) }
 
 func (m model) handleSettingsKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
-	onColumn := m.settingsCursor >= settingsCount // a column-picker row
+	onColumn := m.set.cursor >= settingsCount // a column-picker row
 	switch msg.String() {
 	case "down", "j":
-		if m.settingsCursor < totalSettingsRows()-1 {
-			m.settingsCursor++
+		if m.set.cursor < totalSettingsRows()-1 {
+			m.set.cursor++
 		}
 	case "up", "k":
-		if m.settingsCursor > 0 {
-			m.settingsCursor--
+		if m.set.cursor > 0 {
+			m.set.cursor--
 		}
 	case " ", "enter":
 		if onColumn {
@@ -556,7 +560,7 @@ func (m model) handleSettingsKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 
 // columnAtCursor returns the picker column under the settings cursor.
 func (m model) columnAtCursor() column {
-	return pickerColumns(m.prefs.columnOrder)[m.settingsCursor-settingsCount]
+	return pickerColumns(m.prefs.columnOrder)[m.set.cursor-settingsCount]
 }
 
 // toggleColumnRow shows/hides the column under the cursor (mandatory ones can't
@@ -573,7 +577,7 @@ func (m model) moveColumnRow(dir int) model {
 	m.prefs.columnOrder = moveColumn(m.prefs.columnOrder, key, dir)
 	for i, c := range pickerColumns(m.prefs.columnOrder) {
 		if c.key() == key {
-			m.settingsCursor = settingsCount + i
+			m.set.cursor = settingsCount + i
 			break
 		}
 	}
@@ -584,7 +588,7 @@ func (m model) moveColumnRow(dir int) model {
 // editSetting changes the selected preference. Local prefs (rows 0-1) are saved
 // to tui.toml; the server retention (row 2) is written to the server via a Cmd.
 func (m model) editSetting(dir int) (tea.Model, tea.Cmd) {
-	switch m.settingsCursor {
+	switch m.set.cursor {
 	case 0:
 		m.prefs.hideEnded = !m.prefs.hideEnded
 		savePrefs(m.prefs)
@@ -756,7 +760,7 @@ func (m model) renderSettings() string {
 	}
 	for i, r := range rows {
 		gutter := "  "
-		if i == m.settingsCursor {
+		if i == m.set.cursor {
 			gutter = cursorStyle.Render("❯ ")
 		}
 		line := gutter + labelStyle.Render(pad(r.label, 24)) + r.value
@@ -789,7 +793,7 @@ func (m model) renderSettings() string {
 	b.WriteString("\n" + header + "\n\n")
 	for i, c := range pickerColumns(m.prefs.columnOrder) {
 		gutter := "  "
-		if settingsCount+i == m.settingsCursor {
+		if settingsCount+i == m.set.cursor {
 			gutter = cursorStyle.Render("❯ ")
 		}
 		box := dimStyle.Render("[ ]")
