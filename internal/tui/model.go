@@ -388,7 +388,7 @@ func (m model) applySessions(msg sessionsMsg) model {
 	if len(m.sess.history) > sparkWindow {
 		m.sess.history = m.sess.history[len(m.sess.history)-sparkWindow:]
 	}
-	m.sess.cursor = m.cursorForSelection() // keep the cursor on the same session
+	m.sess.cursor = m.sess.cursorForSelection(m.visibleSessions()) // keep the cursor on the same session
 	return m
 }
 
@@ -494,7 +494,7 @@ func (m model) handleSessionsKey(msg tea.KeyMsg) model {
 		// navigation: looking is done in the session, not acknowledged in vigie (ADR-0007)
 		if id := nextAttention(m.sessions); id != "" {
 			m.sess.selectedID = id
-			m.sess.cursor = m.cursorForSelection()
+			m.sess.cursor = m.sess.cursorForSelection(m.visibleSessions())
 			m.sess.detail = true
 			m.sess.detailOffset = 0
 		}
@@ -602,39 +602,7 @@ func (m model) editSetting(dir int) (tea.Model, tea.Cmd) {
 }
 
 func (m model) handleNavKey(msg tea.KeyMsg) model {
-	vis := m.visibleSessions()
-	switch msg.String() {
-	case "down", "j":
-		if m.sess.detail { // in detail, ↓/j scrolls the panel, not the list (#378)
-			m.sess.detailOffset++
-			return m
-		}
-		if m.sess.cursor < len(vis)-1 {
-			m.sess.cursor++
-		}
-	case "up", "k":
-		if m.sess.detail {
-			if m.sess.detailOffset > 0 {
-				m.sess.detailOffset--
-			}
-			return m
-		}
-		if m.sess.cursor > 0 {
-			m.sess.cursor--
-		}
-	case "enter":
-		if len(vis) > 0 {
-			m.sess.detail = true
-			m.sess.detailOffset = 0
-		}
-	case "esc":
-		if m.sess.detail {
-			m.sess.detail = false
-		} else {
-			m.sess.filter = ""
-		}
-	}
-	m.sess.selectedID = idAt(vis, m.sess.cursor) // pin the selection to a session
+	m.sess = m.sess.handleNav(msg, m.visibleSessions())
 	return m.scrollToCursor()
 }
 
@@ -651,20 +619,6 @@ func (m model) scrollToCursor() model {
 	return m
 }
 
-// cursorForSelection returns the cursor index that keeps selectedID under the
-// cursor after a reorder, clamping if the session is gone or none is pinned.
-func (m model) cursorForSelection() int {
-	vis := m.visibleSessions()
-	if m.sess.selectedID != "" {
-		for i, s := range vis {
-			if s.ID == m.sess.selectedID {
-				return i
-			}
-		}
-	}
-	return clamp(m.sess.cursor, len(vis))
-}
-
 func idAt(vis []api.SessionView, i int) string {
 	if i >= 0 && i < len(vis) {
 		return vis[i].ID
@@ -673,42 +627,14 @@ func idAt(vis []api.SessionView, i int) string {
 }
 
 func (m model) handleFilterKey(msg tea.KeyMsg) model {
-	switch msg.Type {
-	case tea.KeyEnter, tea.KeyEsc:
-		m.sess.filtering = false
-	case tea.KeyBackspace:
-		if r := []rune(m.sess.filter); len(r) > 0 {
-			m.sess.filter = string(r[:len(r)-1])
-		}
-	case tea.KeyRunes, tea.KeySpace:
-		m.sess.filter += string(msg.Runes)
-	}
-	m.sess.cursor = 0 // selection resets as the filtered list changes
+	m.sess = m.sess.handleFilterInput(msg)
 	return m.scrollToCursor()
 }
 
-// visibleSessions returns the sessions after filtering and sorting. Ended and
-// idle-aged sessions are hidden per the persistent view prefs (toggled live by
-// the `a` key and Settings).
+// visibleSessions is the model's view of the Sessions tab's filtered/sorted list,
+// threading the shared session data and prefs into the tab's own selector (#379).
 func (m model) visibleSessions() []api.SessionView {
-	now := m.now()
-	out := make([]api.SessionView, 0, len(m.sessions))
-	for _, s := range m.sessions {
-		if !m.prefs.visible(s, now) {
-			continue
-		}
-		if m.matchesFilter(s) {
-			out = append(out, s)
-		}
-	}
-	sortSessions(out, m.sess.sortKey, m.sess.sortReversed)
-	if m.sess.groupBy != groupNone {
-		gb := m.sess.groupBy
-		sort.SliceStable(out, func(i, j int) bool {
-			return groupKey(out[i], gb) < groupKey(out[j], gb)
-		})
-	}
-	return out
+	return m.sess.visible(m.sessions, m.prefs, m.now())
 }
 
 func (m model) View() string {
@@ -955,7 +881,7 @@ func (m model) viewSessions() string {
 	b.WriteString(joinLR(renderSummaryFit(m.sessions, m.sess.history, m.width), m.summaryRight(), m.width) + "\n")
 	b.WriteString(rule(m.width) + "\n")
 	if m.sess.filtering || m.sess.filter != "" {
-		b.WriteString(m.filterLine() + "\n")
+		b.WriteString(m.sess.filterLine() + "\n")
 	}
 	active := activeColumns(m.prefs.columnOrder, m.prefs.columnHidden)
 	if banner := overflowBanner(active, m.width); banner != "" {
@@ -1019,7 +945,7 @@ func (m model) sessionsBand(bodyHeight int) (tableRows, int) {
 	fixed := lineCount(joinLR(renderSummaryFit(m.sessions, m.sess.history, m.width), m.summaryRight(), m.width))
 	fixed += lineCount(rule(m.width))
 	if m.sess.filtering || m.sess.filter != "" {
-		fixed += lineCount(m.filterLine())
+		fixed += lineCount(m.sess.filterLine())
 	}
 	if banner := overflowBanner(active, m.width); banner != "" {
 		fixed += lineCount(banner)
@@ -1104,15 +1030,6 @@ func (m model) connGlyph() string {
 	}
 }
 
-// filterLine shows the active filter (with a caret while typing).
-func (m model) filterLine() string {
-	s := labelStyle.Render("filter ") + m.sess.filter
-	if m.sess.filtering {
-		s += "▌"
-	}
-	return s
-}
-
 // joinLR places left and right on one line, right-aligned to width when known.
 // When both cannot fit, it keeps the primary left side (clamped to width) and
 // drops the secondary right side rather than overflowing the terminal (#328).
@@ -1190,19 +1107,6 @@ func statusRank(status string) int {
 	default:
 		return 0
 	}
-}
-
-// matchesFilter reports whether s passes the current filter. The special
-// filter "rc" isolates remote-controlled sessions; anything else is a
-// case-insensitive fuzzy match over the session's fields.
-func (m model) matchesFilter(s api.SessionView) bool {
-	if m.sess.filter == "" {
-		return true
-	}
-	if strings.EqualFold(m.sess.filter, "rc") {
-		return s.RemoteControl
-	}
-	return fuzzyMatch(m.sess.filter, sessionHaystack(s))
 }
 
 // fuzzyMatch reports whether the runes of pattern appear in order in text
