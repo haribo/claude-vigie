@@ -41,19 +41,19 @@ func TestBucketStats(t *testing.T) {
 func TestStatsPeriodKeys(t *testing.T) {
 	var m tea.Model = model{tab: tabStats}
 	m, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("m")})
-	if m.(model).statsPeriod != periodMonth {
-		t.Errorf("'m' → %v, want month", m.(model).statsPeriod)
+	if m.(model).stat.period != periodMonth {
+		t.Errorf("'m' → %v, want month", m.(model).stat.period)
 	}
 	m, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("t")})
-	if m.(model).statsPeriod != periodTotal {
-		t.Errorf("'t' → %v, want total", m.(model).statsPeriod)
+	if m.(model).stat.period != periodTotal {
+		t.Errorf("'t' → %v, want total", m.(model).stat.period)
 	}
 }
 
 func TestRenderStats(t *testing.T) {
 	m := model{
-		tab:         tabStats,
-		statsPeriod: periodDay,
+		tab:  tabStats,
+		stat: statsView{period: periodDay},
 		stats: api.StatsResponse{
 			SessionCount: 2,
 			Daily: []api.DailyStat{
