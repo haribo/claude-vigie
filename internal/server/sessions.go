@@ -132,5 +132,7 @@ func toView(s store.Session, samples []int64, now time.Time, machineWatched bool
 		Activity:        s.Activity,
 		StatusChangedAt: s.StatusChangedAt,
 		Samples:         samples,
+		CallAt:          s.CallAt,
+		CallMessage:     s.CallMessage,
 	}
 }

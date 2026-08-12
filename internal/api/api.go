@@ -38,7 +38,11 @@ type ReportRequest struct {
 	// so the server can track each machine's watcher version (#356).
 	WatcherVersion string `json:"watcher_version,omitempty"`
 	WatcherCommit  string `json:"watcher_commit,omitempty"`
-	Timestamp      string `json:"timestamp"` // RFC3339, event time
+	// CallMessage rides Event=="call": the message a session raised for the
+	// operator (ADR-0010). Optional — a call with no message is still a call, so
+	// the event, not this field, is what raises it.
+	CallMessage string `json:"call_message,omitempty"`
+	Timestamp   string `json:"timestamp"` // RFC3339, event time
 }
 
 // Usage holds token counters.
@@ -76,6 +80,11 @@ type SessionView struct {
 	Activity        string  `json:"activity,omitempty"`          // short "doing"/"waiting on" message
 	StatusChangedAt string  `json:"status_changed_at,omitempty"` // RFC3339, when Status last changed
 	Samples         []int64 `json:"samples,omitempty"`           // recent output-token samples, oldest first
+	// CallAt/CallMessage carry a call the session raised for the operator
+	// (ADR-0010). The call is active iff CallAt is non-empty; the message may be
+	// empty. Orthogonal to Status — a calling session keeps its own status.
+	CallAt      string `json:"call_at,omitempty"`
+	CallMessage string `json:"call_message,omitempty"`
 }
 
 // Settings are the server-wide settings (read/written at /api/settings).
