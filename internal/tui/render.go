@@ -123,8 +123,16 @@ var columns = []column{
 	{"DOING", 36, 10, false, activityCell, activityStyle},
 }
 
-// activityCell renders the short "doing"/"waiting on" message, or a dash.
+// activityCell renders the short "doing"/"waiting on" message, or a dash. A
+// raised call takes the cell: it is the reason the row is blinking, and the
+// operator needs it more than the tool that ran last (#389).
 func activityCell(s api.SessionView) string {
+	if hasCall(s) {
+		if s.CallMessage != "" {
+			return s.CallMessage
+		}
+		return "called you"
+	}
 	if s.Activity == "" {
 		return "-"
 	}
@@ -134,6 +142,12 @@ func activityCell(s api.SessionView) string {
 // activityStyle colors the DOING cell: amber for waiting (a call to action),
 // dim for a working turn's tool call.
 func activityStyle(s api.SessionView) lipgloss.Style {
+	if hasCall(s) {
+		// The call message is the reason the row is blinking: it carries the row's
+		// status color rather than the dim default, so the eye that the marker
+		// drew lands on a readable reason (#389).
+		return statusStyle(s.Status)
+	}
 	if s.Status == "waiting" {
 		return statusStyle("waiting")
 	}
@@ -189,7 +203,7 @@ func sortArrow(reversed bool) string {
 // (width <= 0 means unknown: show everything). The row at index selected is
 // marked with a cursor (selected < 0 for none).
 func renderTable(sessions []api.SessionView, base []column, width, selected int, st sortState) string {
-	return buildTable(sessions, base, width, selected, groupNone, st).join()
+	return buildTable(sessions, base, width, selected, groupNone, st, frame{}).join()
 }
 
 func renderHeaderRow(cols []column, st sortState) string {
@@ -209,7 +223,7 @@ func renderHeaderRow(cols []column, st sortState) string {
 	return "  " + headerStyle.Render(strings.Join(headers, colSep))
 }
 
-func renderRow(cols []column, s api.SessionView, selected bool, termWidth int) string {
+func renderRow(cols []column, s api.SessionView, selected bool, termWidth int, fr frame) string {
 	// When selected, the background is applied to every segment (each cell and
 	// separator) individually: applying it once over the whole line fails
 	// because the cells' own ANSI reset sequences cut it off.
@@ -232,6 +246,13 @@ func renderRow(cols []column, s api.SessionView, selected bool, termWidth int) s
 				style = style.Background(cSel)
 			}
 		}
+		// The call marker replaces the status dot of a calling session, and only
+		// that glyph: the status word beside it stays readable, so the animation
+		// destroys no information (ADR-0010, #389). Substituting after padding
+		// keeps the cell width identical whichever half-cycle we are on.
+		if hasCall(s) && c.key() == "status" {
+			txt = replaceLeadingDot(txt, fr.callDot())
+		}
 		cells[i] = style.Render(txt)
 	}
 	sep := colSep
@@ -252,7 +273,7 @@ func renderRow(cols []column, s api.SessionView, selected bool, termWidth int) s
 // renderGroupedTable renders sessions grouped by gb, with a header and token
 // subtotal per group. gb == groupNone falls back to a flat table.
 func renderGroupedTable(sessions []api.SessionView, base []column, width, selected int, gb groupBy, st sortState) string {
-	return buildTable(sessions, base, width, selected, gb, st).join()
+	return buildTable(sessions, base, width, selected, gb, st, frame{}).join()
 }
 
 func groupKey(s api.SessionView, gb groupBy) string {
@@ -346,9 +367,16 @@ func summaryParts(sessions []api.SessionView, history []int) (counts, extras []s
 		}
 	}
 
-	counts = []string{
-		statusStyle("working").Render(fmt.Sprintf("● working %d", c["working"])),
+	counts = []string{}
+	// A call is explicit and the most urgent thing on screen, so it leads. It
+	// borrows the `waiting` color rather than introducing a tenth: a call *is*
+	// the operator being needed, and the word disambiguates it (ADR-0010).
+	if n := callCount(sessions); n > 0 {
+		counts = append(counts, statusStyle("waiting").Render(fmt.Sprintf("● call %d", n)))
 	}
+	counts = append(counts,
+		statusStyle("working").Render(fmt.Sprintf("● working %d", c["working"])),
+	)
 	if n := c["thinking"]; n > 0 { // a sub-state of active work: shown only when present
 		counts = append(counts, statusStyle("thinking").Render(fmt.Sprintf("● thinking %d", n)))
 	}

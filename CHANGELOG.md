@@ -11,6 +11,19 @@ file is the single source of truth, not a second narrative.
 
 ### Added
 
+- The TUI now surfaces a session's call by **motion**: its status dot blinks in
+  its own status color, at 1 Hz (inside WCAG 2.3.1's three-flashes-per-second
+  ceiling), and the call message takes the `DOING` cell in that same color. No new
+  glyph, color or column — the dot is the one element in a row that can be
+  animated without destroying information, since the status word stays readable
+  beside it. A `● call N` counter leads the summary strip when non-zero, a raised
+  call reuses the desktop notification, and it jumps ahead of the inferred
+  attention states in the `n` queue — a call is explicit where `waiting` is a
+  deduction. The animation tick exists only while something is actually calling;
+  the ambient poll stays at 5 s. Two preferences in `tui.toml`: `blink = false`
+  stops the animation, and `call_marker` changes the glyph for fonts that lack it
+  — a marker wider than one terminal cell is rejected rather than allowed to shift
+  every column to its right ([ADR-0010](docs/adr/0010-session-raised-operator-call.md), #389).
 - A session can now raise an explicit **call** for the operator: ask for it in
   plain language ("when you're finished, tell me in vigie") and Claude runs
   `vigie call "backfill done — 12k rows"` at the end of its turn. vigie surfaces

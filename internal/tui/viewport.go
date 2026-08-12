@@ -27,7 +27,7 @@ type tableRows struct {
 // a flat body; otherwise group headers interleave the rows. It is the single
 // source both the string wrappers (renderTable/renderGroupedTable) and the
 // viewport build on.
-func buildTable(sessions []api.SessionView, base []column, width, selected int, gb groupBy, st sortState) tableRows {
+func buildTable(sessions []api.SessionView, base []column, width, selected int, gb groupBy, st sortState, fr frame) tableRows {
 	cols := visibleColumns(base, width)
 	tr := tableRows{header: []string{renderHeaderRow(cols, st), rule(width)}, selected: -1}
 
@@ -36,7 +36,7 @@ func buildTable(sessions []api.SessionView, base []column, width, selected int, 
 			if idx == selected {
 				tr.selected = len(tr.body)
 			}
-			tr.body = append(tr.body, renderRow(cols, s, idx == selected, width))
+			tr.body = append(tr.body, renderRow(cols, s, idx == selected, width, fr))
 			tr.groupOf = append(tr.groupOf, -1)
 		}
 		return tr
@@ -61,7 +61,7 @@ func buildTable(sessions []api.SessionView, base []column, width, selected int, 
 		if idx == selected {
 			tr.selected = len(tr.body)
 		}
-		tr.body = append(tr.body, renderRow(cols, s, idx == selected, width))
+		tr.body = append(tr.body, renderRow(cols, s, idx == selected, width, fr))
 		tr.groupOf = append(tr.groupOf, curGroup)
 	}
 	return tr

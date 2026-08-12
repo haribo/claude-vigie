@@ -22,6 +22,19 @@ func isAttention(status string) bool { return attentionStatuses[status] }
 // StatusChangedAt is the only measure of how long it has been waiting. Empty when
 // nothing needs attention.
 func nextAttention(sessions []api.SessionView) string {
+	// A raised call jumps ahead of every inferred attention state: the session
+	// said so itself, where waiting/error/stalled are deductions (ADR-0010, #389).
+	var called []api.SessionView
+	for _, s := range sessions {
+		if hasCall(s) {
+			called = append(called, s)
+		}
+	}
+	if len(called) > 0 {
+		sort.Slice(called, func(i, j int) bool { return called[i].CallAt < called[j].CallAt })
+		return called[0].ID
+	}
+
 	var q []api.SessionView
 	for _, s := range sessions {
 		if isAttention(s.Status) {
@@ -43,13 +56,23 @@ func nextAttention(sessions []api.SessionView) string {
 // launching the TUI is silent. Suppressed while the TUI has focus (the operator is
 // already looking) or notifications are opted out.
 func (m model) withNotifiedTransitions(next []api.SessionView) model {
-	prev := m.sess.prevStatus
+	prev, prevCall := m.sess.prevStatus, m.sess.prevCall
 	m.sess.prevStatus = make(map[string]string, len(next))
+	m.sess.prevCall = make(map[string]bool, len(next))
 	for _, s := range next {
-		if prev[s.ID] == "working" && isAttention(s.Status) && !m.focused && m.prefs.notify {
-			notifyFn(sessionName(s), s.Status)
+		_, known := prev[s.ID] // a session first seen at startup never notifies
+		calling := hasCall(s)
+		if !m.focused && m.prefs.notify {
+			switch {
+			case known && calling && !prevCall[s.ID]:
+				// A raised call is exactly what this notification is for (#260).
+				notifyFn(sessionName(s), "calling you")
+			case prev[s.ID] == "working" && isAttention(s.Status):
+				notifyFn(sessionName(s), s.Status)
+			}
 		}
 		m.sess.prevStatus[s.ID] = s.Status
+		m.sess.prevCall[s.ID] = calling
 	}
 	return m
 }

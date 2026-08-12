@@ -155,6 +155,9 @@ type sessionsView struct {
 	sortReversed bool
 	groupBy      groupBy
 	prevStatus   map[string]string // last status per session, for notify transitions (#260)
+	prevCall     map[string]bool   // last call state per session, for notify transitions (#389)
+	blinkOn      bool              // marker on its visible half-cycle (#389)
+	blinkTicking bool              // a blink tick is in flight (never stack two)
 }
 
 // settingsView is the Settings tab's own state: the row cursor spanning the
@@ -340,6 +343,29 @@ func (m model) waitForConnCmd() tea.Cmd {
 	return func() tea.Msg { return connMsg{live: <-m.conn} }
 }
 
+// frame is the current animation state handed to the renderer (#389).
+func (m model) frame() frame {
+	return frame{blinkOn: m.sess.blinkOn, marker: m.prefs.callMarker, enabled: m.prefs.blink}
+}
+
+type blinkMsg struct{}
+
+// blinkCmd schedules the next marker half-cycle. It is only ever scheduled while
+// a call is on screen: the ambient poll is 5 s and must not be raised to animate.
+func blinkCmd() tea.Cmd {
+	return tea.Tick(blinkInterval, func(time.Time) tea.Msg { return blinkMsg{} })
+}
+
+// withBlinkTick starts the animation when a call appears and nothing is animating
+// yet, so the tick exists exactly as long as something blinks (#389).
+func (m model) withBlinkTick() (tea.Model, tea.Cmd) {
+	if m.sess.blinkTicking || !m.frame().blinking(m.visibleSessions()) {
+		return m, nil
+	}
+	m.sess.blinkTicking = true
+	return m, blinkCmd()
+}
+
 func tickCmd() tea.Cmd {
 	return tea.Tick(pollInterval, func(time.Time) tea.Msg { return tickMsg{} })
 }
@@ -370,8 +396,17 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tickMsg:
 		sc := m.refreshSessions()
 		return m, tea.Batch(sc, m.fetchUsageCmd(), m.watcherCmd(), m.statsCmd(), m.fetchPlatformCmd(), tickCmd())
+	case blinkMsg:
+		// Stop as soon as nothing is calling: the animation must not outlive its
+		// reason, and the marker is left visible so no row keeps a blank dot.
+		if !m.frame().blinking(m.visibleSessions()) {
+			m.sess.blinkTicking, m.sess.blinkOn = false, false
+			return m, nil
+		}
+		m.sess.blinkOn = !m.sess.blinkOn
+		return m, blinkCmd()
 	default:
-		return m.applyDataMsg(msg), nil
+		return m.applyDataMsg(msg).withBlinkTick()
 	}
 	return m, nil
 }
@@ -939,7 +974,7 @@ func (m model) sessionsBand(bodyHeight int) (tableRows, int) {
 	vis := m.visibleSessions()
 	cursor := clamp(m.sess.cursor, len(vis))
 	active := activeColumns(m.prefs.columnOrder, m.prefs.columnHidden)
-	tr := buildTable(vis, active, m.width, cursor, m.sess.groupBy, sortState{m.sess.sortKey, m.sess.sortReversed})
+	tr := buildTable(vis, active, m.width, cursor, m.sess.groupBy, sortState{m.sess.sortKey, m.sess.sortReversed}, m.frame())
 	if bodyHeight <= 0 {
 		return tr, 0
 	}

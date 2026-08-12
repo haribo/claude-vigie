@@ -22,12 +22,17 @@ type prefs struct {
 	notify        bool          // desktop notifications on working→attention (#260)
 	columnOrder   []string      // display order of ALL table columns; empty = built-in default (#308)
 	columnHidden  []string      // hidden table columns (#315)
+	blink         bool          // animate the marker of a calling session (#389)
+	callMarker    string        // glyph for a calling session's dot; "" = defaultCallMarker
 }
 
 // defaultPrefs are used when no preferences file exists: hide only ended
 // sessions, keep idle ones visible regardless of age, sort by last seen, notify.
 func defaultPrefs() prefs {
-	return prefs{hideEnded: true, idleHideAfter: 0, sortKey: sortLastSeen, groupBy: groupNone, notify: true}
+	return prefs{
+		hideEnded: true, idleHideAfter: 0, sortKey: sortLastSeen, groupBy: groupNone,
+		notify: true, blink: true, callMarker: defaultCallMarker,
+	}
 }
 
 // visible reports whether a session should be shown given these preferences.
@@ -53,6 +58,8 @@ type prefsFile struct {
 	Notify        *bool    `toml:"notify"`        // pointer: absent = default (on)
 	ColumnOrder   []string `toml:"column_order"`  // display order of all columns; empty = default (#308)
 	ColumnHidden  []string `toml:"column_hidden"` // hidden columns (#315)
+	Blink         *bool    `toml:"blink"`         // pointer: absent = default (on) (#389)
+	CallMarker    string   `toml:"call_marker"`   // glyph for a calling session's dot (#389)
 }
 
 func prefsPath() (string, error) {
@@ -106,7 +113,16 @@ group_by = %q
 # visibility, [ ] reorder).
 column_order = %s
 column_hidden = %s
-`, p.notify, p.hideEnded, idle, sortNames[p.sortKey], p.sortReversed, groupNames[p.groupBy], list(p.columnOrder), list(p.columnHidden))
+
+# Blink the status dot of a session that has called you (vigie call). Off leaves
+# the call readable only in the DOING column.
+blink = %t
+
+# Glyph for a calling session's dot. Must be exactly one terminal cell wide: a
+# two-cell glyph (an emoji, an ideograph) would shift every column to its right,
+# so anything wider is ignored and the default is kept.
+call_marker = %q
+`, p.notify, p.hideEnded, idle, sortNames[p.sortKey], p.sortReversed, groupNames[p.groupBy], list(p.columnOrder), list(p.columnHidden), p.blink, p.callMarker)
 }
 
 // savePrefs writes the preferences file (best-effort; the UI must not block).
@@ -192,5 +208,14 @@ func loadPrefs() prefs {
 	}
 	p.columnOrder = f.ColumnOrder
 	p.columnHidden = f.ColumnHidden
+	if f.Blink != nil { // absent keeps the default (on)
+		p.blink = *f.Blink
+	}
+	// A marker wider than one cell would shift every column to its right, since
+	// the table pads by rune count and vigie carries no display-width dependency.
+	// An invalid value is ignored rather than obeyed (#389).
+	if isSingleCell(f.CallMarker) {
+		p.callMarker = f.CallMarker
+	}
 	return p
 }
