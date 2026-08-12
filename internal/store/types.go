@@ -52,6 +52,14 @@ type Session struct {
 	// timestamp). It lets a hook `waiting` outlive a stale watcher `working`: the
 	// watcher only clears it once the transcript moves past this time.
 	StatusChangedAt string
+	// CallMessage and CallAt hold a call the session raised for the operator
+	// (ADR-0010): the message (may be empty — a call with no message is still a
+	// call) and when it was raised (RFC3339). A call is active iff CallAt is
+	// non-empty. Orthogonal to Status: a calling session keeps its own status. Set
+	// by the session and cleared by it resuming work (UserPromptSubmit) or ending
+	// (SessionEnd) — never by an action on vigie (ADR-0007).
+	CallMessage string
+	CallAt      string
 }
 
 // Usage holds cumulative token counters for a session.

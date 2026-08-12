@@ -43,6 +43,7 @@ A fleet is *N* client machines all reporting to one daemon.
 | Token | `vigied` | `token` | Print/generate the shared auth token (to connect clients) |
 | Installer | `vigie` | `init` | Merges hooks into `~/.claude/settings.json`, writes the client config |
 | Reporter | `vigie` | `report` | Invoked by Claude Code hooks; sends one event per hook |
+| Call | `vigie` | `call` | Run *inside* a session to raise a call for the operator ([ADR-0010](adr/0010-session-raised-operator-call.md)); cleared when that session resumes or ends |
 | Watcher | `vigie` | `watch` | Background service: refreshes its own hooks at startup ([ADR-0009](adr/0009-watcher-managed-hooks.md)), scans local transcripts, derives status from process presence + activity, reports every session (covering ones the hooks miss), and holds the usage lease to fetch subscription usage |
 | Terminal client | `vigie` | `tui` | Live dashboard in the terminal (Bubble Tea) |
 | Web dashboard | `vigied` | `serve` | Read-only browser mirror of the TUI, served at `GET /` (static assets embedded via `go:embed`) |

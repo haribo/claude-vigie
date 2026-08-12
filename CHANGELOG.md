@@ -9,6 +9,21 @@ file is the single source of truth, not a second narrative.
 
 ## [Unreleased]
 
+### Added
+
+- A session can now raise an explicit **call** for the operator: ask for it in
+  plain language ("when you're finished, tell me in vigie") and Claude runs
+  `vigie call "backfill done — 12k rows"` at the end of its turn. vigie surfaces
+  the call until work resumes in that session. The call is set **and cleared by
+  the session** (`UserPromptSubmit`, `SessionEnd`), so no action on vigie is ever
+  required — it is an observed signal like status, not operator handling state,
+  which is what keeps it on the right side of
+  [ADR-0007](docs/adr/0007-read-only-to-operator.md)
+  ([ADR-0010](docs/adr/0010-session-raised-operator-call.md), #388). It is
+  orthogonal to status — a calling session keeps whatever status it has — and the
+  message is optional. Like the hooks it is fire-and-forget: it can never fail a
+  session. Rendering lands separately (TUI #389, web #390).
+
 ### Fixed
 
 - A machine whose watcher is running but currently has **no session to report** no

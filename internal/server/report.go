@@ -174,9 +174,10 @@ func (s *Server) maybeSample(ctx context.Context, sessionID, at string, output i
 // wasted (#258).
 func visibleSignature(s store.Session) string {
 	u := s.Usage
-	return fmt.Sprintf("%s|%s|%s|%s|%s|%s|%s|%s|%s|%s|%t|%s|%d|%d|%d|%d|%d",
+	return fmt.Sprintf("%s|%s|%s|%s|%s|%s|%s|%s|%s|%s|%t|%s|%d|%s|%s|%d|%d|%d|%d",
 		s.Status, s.StatusChangedAt, s.Activity, s.Title, s.User, s.Machine, s.Model,
 		s.GitBranch, s.ProjectDir, s.LastTool, s.RemoteControl, s.RemoteURL, s.APIErrorStatus,
+		s.CallAt, s.CallMessage, // raising or clearing a call must reach the dashboards (#388)
 		u.InputTokens, u.OutputTokens, u.CacheCreationTokens, u.CacheReadTokens)
 }
 
@@ -219,6 +220,9 @@ func applyReport(sess store.Session, isNew bool, req api.ReportRequest) store.Se
 		sess.StartedAt = req.Timestamp
 	}
 	sess.LastSeenAt = req.Timestamp
+
+	sess = applyCall(sess, req)
+
 	sess = applyStatus(sess, req)
 	if req.Event == "SessionEnd" {
 		sess.EndedAt = req.Timestamp
@@ -241,9 +245,34 @@ func applyReport(sess store.Session, isNew bool, req api.ReportRequest) store.Se
 	return sess
 }
 
+// applyCall folds a call into the session (ADR-0010). The session raises it, and
+// the session clears it — by resuming work or by ending. No action on vigie is
+// ever involved, which is what keeps the call on the right side of ADR-0007.
+//
+// Clearing keys on these events rather than on the session merely being
+// `working`: Claude is still inside an active turn when it raises the call, so a
+// status-based rule would erase the call the instant it was made.
+func applyCall(sess store.Session, req api.ReportRequest) store.Session {
+	switch req.Event {
+	case "call":
+		sess.CallMessage, sess.CallAt = req.CallMessage, req.Timestamp
+	case "UserPromptSubmit", "SessionEnd":
+		sess.CallMessage, sess.CallAt = "", ""
+	}
+	return sess
+}
+
 // applyStatus folds the report's status into the session: the reconciled status
 // and its owner, when it last changed, and the transient activity message.
 func applyStatus(sess store.Session, req api.ReportRequest) store.Session {
+	// A call carries no status and is orthogonal to it (ADR-0010), so it must
+	// neither derive one nor take ownership of it: deriving would invent "working"
+	// for a session that has none yet, and stamping the source "hook" would let a
+	// watcher-set state latch — the watcher could no longer retract its own (the
+	// #201 failure mode).
+	if req.Event == "call" {
+		return sess
+	}
 	prev := sess.Status
 	if req.Status != "" {
 		if !holdsWaiting(sess, req) {

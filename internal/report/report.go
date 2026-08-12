@@ -11,6 +11,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"os"
 	"os/exec"
 	"os/user"
 	"strings"
@@ -109,6 +110,37 @@ func Run(event string, stdin io.Reader) error {
 	}
 
 	return post(cfg, req)
+}
+
+// sessionIDEnv is the session id Claude Code exports into every tool process it
+// spawns. A subagent inherits the *same* value as its parent — verified against a
+// live subagent — so a call raised from one resolves to the parent session with no
+// extra work. (`CLAUDE_CODE_CHILD_SESSION` is a boolean flag, not a child id, and
+// carries nothing usable here.)
+const sessionIDEnv = "CLAUDE_CODE_SESSION_ID"
+
+// Call raises a call for the operator on the session this process runs in
+// (ADR-0010). The message is optional: a call with no message is still a call.
+//
+// Like the hooks, it is best-effort — the caller ignores the error and exits 0, so
+// a monitoring signal can never fail the operator's session.
+func Call(message string) error {
+	sessionID := os.Getenv(sessionIDEnv) //nolint:forbidigo // the session id is Claude Code's own handle, not vigie config
+	if sessionID == "" {
+		return fmt.Errorf("%s is not set — `vigie call` runs inside a Claude Code session", sessionIDEnv)
+	}
+	cfg, err := config.Load()
+	if err != nil {
+		return fmt.Errorf("loading config: %w", err)
+	}
+	return post(cfg, api.ReportRequest{
+		Event:       "call",
+		SessionID:   sessionID,
+		User:        systemUser(),
+		Machine:     cfg.Machine,
+		CallMessage: message,
+		Timestamp:   clock.Now().UTC().Format(time.RFC3339),
+	})
 }
 
 // hookActivity extracts the short "doing" message: the tool call on
