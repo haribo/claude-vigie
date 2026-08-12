@@ -11,6 +11,15 @@ file is the single source of truth, not a second narrative.
 
 ### Added
 
+- The web dashboard surfaces a session's call with the same grammar as the TUI —
+  the marker lives in the status, never in the Doing cell. The dot inside the
+  status pill **pulses** (a soft CSS fade, where the terminal is limited to two
+  hard states), the pill keeps its status color and label because a calling
+  session is still `idle`, the row takes the existing attention left-border plus a
+  faint tint of the same color, and the call message fills the Doing cell in that
+  color. No new color: everything derives from `--st`. `prefers-reduced-motion:
+  reduce` stops the pulse, and a call counter leads the summary strip when
+  non-zero ([ADR-0010](docs/adr/0010-session-raised-operator-call.md), #390).
 - The TUI now surfaces a session's call by **motion**: its status dot blinks in
   its own status color, at 1 Hz (inside WCAG 2.3.1's three-flashes-per-second
   ceiling), and the call message takes the `DOING` cell in that same color. No new
