@@ -29,11 +29,11 @@ const trim = (x) => x.toFixed(1).replace(/\.0$/, "");
 // optional, and a call with none is still a call.
 function hasCall(s) { return Boolean(s && s.call_at); }
 
-// doingText is the Doing cell's content: a raised call takes it, because it is
+// detailText is the Detail cell's content: a raised call takes it, because it is
 // the reason the row is pulsing and it outranks the tool that ran last.
-function doingText(s) {
+function detailText(s) {
   if (hasCall(s)) return s.call_message ? esc(s.call_message) : "called you";
-  return s.activity ? esc(s.activity) : "-";
+  return s.detail ? esc(s.detail) : "-";
 }
 
 function humanTokens(n) { n = Number(n) || 0; if (n >= 1e6) return trim(n / 1e6) + "M"; if (n >= 1e3) return trim(n / 1e3) + "k"; return String(n); }
@@ -122,8 +122,8 @@ const COLS = [
     cell: (s) => `<td>${s.remote_control ? '<span class="rc-on" title="Remote control on">◉</span>' : '<span class="rc-off" title="Remote control off">○</span>'}</td>` },
   { key: "status", label: "Status", cmp: (a, b) => RANK[a.status] - RANK[b.status],
     cell: (s) => { const st = STATUSES.includes(s.status) ? s.status : "idle"; const code = (s.status === "error" && s.api_error_status) ? ` <span class="code">${s.api_error_status}</span>` : ""; return `<td><span class="pill st-${st}${hasCall(s) ? " call" : ""}"><span class="dot"></span>${st}${code}</span></td>`; } },
-  { key: "doing", label: "Doing", nosort: true,
-    cell: (s) => { const d = doingText(s); const cls = hasCall(s) ? "doing call" : (s.status === "waiting" ? "doing wait" : "doing"); return `<td class="${cls}" title="${d}">${d}</td>`; } },
+  { key: "detail", label: "Detail", nosort: true,
+    cell: (s) => { const d = detailText(s); const cls = hasCall(s) ? "detail call" : (s.status === "waiting" ? "detail wait" : "detail"); return `<td class="${cls}" title="${d}">${d}</td>`; } },
   { key: "act", label: "", nosort: true,
     cell: () => `<td><button class="det-btn" aria-label="Open detail" title="Open detail"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg></button></td>` },
 ];
@@ -135,12 +135,22 @@ const COLS_KEY = "cf_columns";
 const MANDATORY_COLS = new Set(["name", "status"]);
 const COL_KEYS = COLS.map((c) => c.key);
 
+// LEGACY_COLS maps a key saved under an older name to its current one. Without
+// it a stored layout silently loses the renamed column — it falls out of the
+// custom order, and if it had been hidden it reappears. `doing` became `detail`
+// in #393.
+const LEGACY_COLS = { doing: "detail" };
+function migrateKeys(keys) {
+  const seen = new Set();
+  return keys.map((k) => LEGACY_COLS[k] || k).filter((k) => !seen.has(k) && seen.add(k));
+}
+
 function loadLayout() {
   try {
     const v = JSON.parse(localStorage.getItem(COLS_KEY) || "null");
     // Migrate the old visible-only array form to {order, hidden}.
     if (Array.isArray(v)) return { order: v.slice(), hidden: COL_KEYS.filter((k) => !v.includes(k) && !MANDATORY_COLS.has(k)) };
-    if (v && Array.isArray(v.order)) return { order: v.order, hidden: Array.isArray(v.hidden) ? v.hidden : [] };
+    if (v && Array.isArray(v.order)) return { order: migrateKeys(v.order), hidden: migrateKeys(Array.isArray(v.hidden) ? v.hidden : []) };
   } catch (e) { /* fall through to default */ }
   return { order: [], hidden: [] };
 }
@@ -365,12 +375,12 @@ function openDetail(id) {
   const st = STATUSES.includes(s.status) ? s.status : "idle";
   const u = s.usage || {};
   const code = (s.status === "error" && s.api_error_status) ? ` <span class="code">${s.api_error_status}</span>` : "";
-  const doingWait = s.status === "waiting";
+  const waiting = s.status === "waiting";
   const ctx = [
     field("Session id", esc(s.id), "mut"), field("User", esc(dash(s.user)), "mut"), field("Machine", esc(s.machine)),
     field("Directory", esc(dash(s.project_dir)), "mut"), field("Branch", s.git_branch ? esc(s.git_branch) : "—"),
     field("Model", esc(dash(shortModel(s.model))), s.model ? "" : "mut"), field("Effort", esc(dash(s.effort)), s.effort ? "" : "mut"),
-    field("Doing", doingText(s), hasCall(s) ? "call" : (doingWait ? "wait" : "mut")),
+    field("Detail", detailText(s), hasCall(s) ? "call" : (waiting ? "wait" : "mut")),
     field("Remote control", s.remote_control ? "on ◉" : "off ○", "mut"),
     s.remote_url ? field("Remote", `<a href="${esc(s.remote_url)}" target="_blank" rel="noopener noreferrer">${esc(s.remote_url)}</a>`) : "",
     field("Last tool", esc(dash(s.last_tool)), "mut"),

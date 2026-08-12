@@ -120,11 +120,11 @@ td.dim { color: var(--muted); } td.faint { color: var(--faint); }
 }
 @media (prefers-reduced-motion: reduce) { .pill.call .dot { animation: none; } }
 .rc-on { color: var(--working); } .rc-off { color: var(--faint); }
-.doing { color: var(--muted); max-width: 320px; overflow: hidden; text-overflow: ellipsis; }
-.doing.wait { color: var(--waiting); font-weight: 600; }
+.detail { color: var(--muted); max-width: 320px; overflow: hidden; text-overflow: ellipsis; }
+.detail.wait { color: var(--waiting); font-weight: 600; }
 /* The call message is the reason the row is pulsing: it carries the row's status
    colour instead of the muted default. */
-.doing.call { color: var(--st); font-weight: 600; }
+.detail.call { color: var(--st); font-weight: 600; }
 .spark { display: block; }
 .det-btn { display: inline-flex; align-items: center; justify-content: center; width: 26px; height: 26px; padding: 0; border-radius: 7px; background: transparent; border: 1px solid transparent; color: var(--faint); transition: all 0.12s ease; }
 .det-btn svg { width: 15px; height: 15px; }
