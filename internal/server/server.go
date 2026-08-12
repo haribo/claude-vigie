@@ -32,6 +32,7 @@ type Store interface {
 	ListSamples(ctx context.Context, sessionID, since string, limit int) ([]int64, error)
 	AcquireLease(ctx context.Context, holder string, ttl time.Duration, now time.Time) (bool, string, error)
 	GetMeta(ctx context.Context, key string) (string, bool, error)
+	ListMeta(ctx context.Context) (map[string]string, error)
 	SetMeta(ctx context.Context, key, value string) error
 }
 

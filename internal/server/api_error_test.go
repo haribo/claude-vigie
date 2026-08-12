@@ -8,6 +8,7 @@ import (
 
 	"github.com/haribo/claude-vigie/internal/api"
 	"github.com/haribo/claude-vigie/internal/store"
+	"github.com/haribo/claude-vigie/internal/version"
 )
 
 func TestToViewAPIError(t *testing.T) {
@@ -24,7 +25,7 @@ func TestReportAPIErrorFlow(t *testing.T) {
 	srv := newTestServer(t)
 	now := time.Now().UTC().Format(time.RFC3339)
 	body, _ := json.Marshal(api.ReportRequest{
-		Event: "watch", SessionID: "s-e", Machine: "m",
+		Event: "watch", WatcherVersion: version.Version, WatcherCommit: version.Commit, SessionID: "s-e", Machine: "m",
 		Status: "error", APIErrorStatus: 529, Timestamp: now,
 	})
 	if rec := do(t, srv, http.MethodPost, "/api/report", body, true); rec.Code >= http.StatusMultipleChoices {

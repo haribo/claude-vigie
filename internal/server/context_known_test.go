@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/haribo/claude-vigie/internal/api"
+	"github.com/haribo/claude-vigie/internal/version"
 )
 
 // contextOf fetches the single session's context reading from /api/sessions.
@@ -39,7 +40,7 @@ func TestContextKnownMerge(t *testing.T) {
 
 	// A watcher report carries a known 500k context.
 	report(t, srv, api.ReportRequest{
-		Event: "watch", SessionID: "s1", Machine: "m", ProjectDir: "/p",
+		Event: "watch", WatcherVersion: version.Version, WatcherCommit: version.Commit, SessionID: "s1", Machine: "m", ProjectDir: "/p",
 		Status: "working", ContextTokens: ctxPtr(500_000), Timestamp: "2026-07-26T10:00:00Z",
 	})
 	if c := contextOf(t, srv); c == nil || *c != 500_000 {
@@ -58,7 +59,7 @@ func TestContextKnownMerge(t *testing.T) {
 	// A known 0 (fresh context after a switch) is applied — the view shows 0%,
 	// represented as a non-nil pointer to 0, not a dropped/unknown reading.
 	report(t, srv, api.ReportRequest{
-		Event: "watch", SessionID: "s1", Machine: "m", ProjectDir: "/p",
+		Event: "watch", WatcherVersion: version.Version, WatcherCommit: version.Commit, SessionID: "s1", Machine: "m", ProjectDir: "/p",
 		Status: "idle", ContextTokens: ctxPtr(0), Timestamp: "2026-07-26T10:00:02Z",
 	})
 	c := contextOf(t, srv)

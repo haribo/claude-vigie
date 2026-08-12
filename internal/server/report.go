@@ -32,6 +32,21 @@ func (s *Server) handleReport(w http.ResponseWriter, r *http.Request) {
 	}
 
 	ctx := r.Context()
+
+	// A drifted watcher may not write session state (#384). Its build travels in
+	// every watch report (#356), so the daemon — the authority on its own build —
+	// arbitrates here, where an outdated client cannot bypass the check. The
+	// machine's presence and its faulty build are still recorded, so the fleet can
+	// see which machine to upgrade; only the session data is refused. Hook reports
+	// declare no build and stay ungated on purpose: they run inside the operator's
+	// Claude session (docs/design/version-consistency.md).
+	if req.Event == "watch" && !watcherBuildMatches(req) {
+		s.recordWatchHeartbeat(ctx, req)
+		metricReportsRejected.WithLabelValues("version_drift").Inc()
+		s.writeError(w, http.StatusConflict, driftMessage(req))
+		return
+	}
+
 	existing, err := s.store.GetSession(ctx, req.SessionID)
 	isNew := errors.Is(err, store.ErrNotFound)
 	if err != nil && !isNew {

@@ -17,7 +17,8 @@ func TestReportBodyTooLarge(t *testing.T) {
 	}
 
 	// A normal body still succeeds.
-	ok := []byte(`{"session_id":"s","event":"watch","machine":"m","status":"working","timestamp":"2026-07-31T12:00:00Z"}`)
+	ok := []byte(`{"session_id":"s","event":"watch",` + watchBuildJSON() +
+		`"machine":"m","status":"working","timestamp":"2026-07-31T12:00:00Z"}`)
 	if rec := do(t, srv, http.MethodPost, "/api/report", ok, true); rec.Code >= http.StatusMultipleChoices {
 		t.Fatalf("normal body: status = %d", rec.Code)
 	}
