@@ -83,31 +83,28 @@ func Run(ctx context.Context, cfg *config.Config, opts Options) error {
 
 	sc := newScanner()
 	lastGC := clock.Now()
-	var drifted bool
-	var lastProbe time.Time
+	var drifted, beatFailing bool
+	var lastBeat time.Time
 	for {
-		// A drifted watcher goes inert rather than exiting: the packaged unit uses
-		// Restart=on-failure, so exiting would crash-loop every few seconds and cost
-		// the machine all observability. It keeps probing slowly so a realignment —
-		// a daemon rollback, or a local upgrade and restart — self-heals (#384).
-		if drifted && clock.Now().Sub(lastProbe) < driftProbeInterval {
-			select {
-			case <-ctx.Done():
-				return nil
-			case <-ticker.C:
-			}
-			continue
-		}
-		if drifted {
-			lastProbe = clock.Now() // this cycle is the probe
+		// Liveness is claimed on its own, never as a side effect of session data: a
+		// watcher with nothing to report is still running, and a machine with no
+		// live session used to read as watcher-less (#386). The answer also carries
+		// the drift verdict, so it is what ends a drifted state (#384).
+		if clock.Now().Sub(lastBeat) >= heartbeatInterval {
+			drifted, beatFailing = beat(cfg, drifted, beatFailing)
+			lastBeat = clock.Now()
 		}
 
-		reports, err := sc.scan(root, cfg.Machine, opts.MaxAge, clock.Now())
-		if err != nil {
-			fmt.Fprintf(os.Stderr, "watch: %v\n", err)
-		}
-		if drifted = postReports(cfg, reports, drifted); drifted {
-			lastProbe = clock.Now()
+		// A drifted watcher goes inert rather than exiting: the packaged unit uses
+		// Restart=on-failure, so exiting would crash-loop every few seconds and cost
+		// the machine all observability. It keeps beating, so it stays visible, and
+		// resumes by itself once the builds realign.
+		if !drifted {
+			reports, err := sc.scan(root, cfg.Machine, opts.MaxAge, clock.Now())
+			if err != nil {
+				fmt.Fprintf(os.Stderr, "watch: %v\n", err)
+			}
+			drifted = postReports(cfg, reports, drifted)
 		}
 		if time.Since(lastGC) > gcInterval {
 			collectDeadMappings(opts.MaxAge)
@@ -121,14 +118,48 @@ func Run(ctx context.Context, cfg *config.Config, opts Options) error {
 	}
 }
 
-// driftProbeInterval is how often a drifted watcher retries a single report to
-// see whether the builds have realigned (#384).
-const driftProbeInterval = 60 * time.Second
+// heartbeatInterval is how often the watcher claims liveness. It sits well inside
+// the 15 s staleness threshold the TUI and the Machines tab use, and is decoupled
+// from the scan interval so a fast scan does not multiply requests (#386).
+const heartbeatInterval = 5 * time.Second
+
+// beat claims liveness and folds the daemon's answer into the drift state. It
+// announces transitions only — into drift, out of it, and in and out of a
+// transport failure — so a persistent condition never fills the journal (#386).
+func beat(cfg *config.Config, drifted, failing bool) (newDrifted, newFailing bool) {
+	err := postJSON(cfg, "/api/watcher/heartbeat", api.HeartbeatRequest{
+		Machine:        cfg.Machine,
+		WatcherVersion: version.Version,
+		WatcherCommit:  version.Commit,
+	}, nil)
+	switch {
+	case err == nil:
+		if drifted {
+			fmt.Fprintln(os.Stderr, "watch: build now matches the daemon — resuming session reports")
+		}
+		if failing {
+			fmt.Fprintln(os.Stderr, "watch: heartbeat is reaching the server again")
+		}
+		return false, false
+	case isDrift(err):
+		if !drifted {
+			fmt.Fprintf(os.Stderr, "watch: %v; session reports stay refused until this machine is upgraded\n", err)
+		}
+		return true, false
+	default:
+		// A transport failure is not drift — including the 404 an older daemon
+		// answers, which the startup version probe has already explained.
+		if !failing {
+			fmt.Fprintf(os.Stderr, "watch: heartbeat: %v\n", err)
+		}
+		return drifted, true
+	}
+}
 
 // postReports sends each report and returns whether this watcher is drifted — the
 // daemon refusing its build. It stops at the first refusal, so a drifted watcher
-// makes one rejected request per probe rather than one per session, and it
-// announces each transition (into drift, and back out) exactly once (#384).
+// makes one rejected request rather than one per session, and it announces the
+// transition into drift exactly once (#384).
 func postReports(cfg *config.Config, reports []api.ReportRequest, drifted bool) bool {
 	for _, r := range reports {
 		err := post(cfg, r)
@@ -140,7 +171,7 @@ func postReports(cfg *config.Config, reports []api.ReportRequest, drifted bool) 
 			}
 		case isDrift(err):
 			if !drifted {
-				fmt.Fprintf(os.Stderr, "watch: %v; retrying every %s\n", err, driftProbeInterval)
+				fmt.Fprintf(os.Stderr, "watch: %v; session reports stay refused until this machine is upgraded\n", err)
 			}
 			return true
 		default:

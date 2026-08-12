@@ -83,6 +83,16 @@ type Settings struct {
 	SessionRetention string `json:"session_retention"` // Go duration; "" = disabled
 }
 
+// HeartbeatRequest is a watcher's liveness claim: it is alive on this machine,
+// running this build. Liveness is deliberately independent of session reports —
+// a watcher with nothing to report is still running
+// (docs/design/watcher-liveness.md, #386).
+type HeartbeatRequest struct {
+	Machine        string `json:"machine"`
+	WatcherVersion string `json:"watcher_version,omitempty"`
+	WatcherCommit  string `json:"watcher_commit,omitempty"`
+}
+
 // LeaseRequest asks for the usage-fetch lease.
 type LeaseRequest struct {
 	Holder string `json:"holder"`

@@ -2,6 +2,7 @@ package server
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"net/http"
 	"strings"
@@ -62,6 +63,38 @@ func machineWatchKey(machine string) string { return watchSeenKey + ":" + machin
 
 // machineWatchVersionKey holds a machine's watcher build as "version\tcommit" (#356).
 func machineWatchVersionKey(machine string) string { return "watch_version:" + machine }
+
+// handleWatcherHeartbeat records a watcher's liveness claim, independent of any
+// session it may or may not have to report — a watcher with nothing to report is
+// still running, and deriving liveness from session data hid exactly those
+// machines (docs/design/watcher-liveness.md, #386).
+//
+// The heartbeat is always recorded, drifted or not: that is what keeps a refused
+// machine visible. A drifted build still gets 409, which is also the answer that
+// tells the watcher when it may resume (#384).
+func (s *Server) handleWatcherHeartbeat(w http.ResponseWriter, r *http.Request) {
+	var req api.HeartbeatRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		s.writeError(w, http.StatusBadRequest, "invalid json body")
+		return
+	}
+	if req.Machine == "" {
+		s.writeError(w, http.StatusBadRequest, "machine is required")
+		return
+	}
+
+	// Reuse the report shape so liveness and the version gate share one rule.
+	claim := api.ReportRequest{
+		Machine: req.Machine, WatcherVersion: req.WatcherVersion, WatcherCommit: req.WatcherCommit,
+	}
+	ctx := r.Context()
+	s.recordWatchHeartbeat(ctx, claim)
+	if !watcherBuildMatches(claim) {
+		s.writeError(w, http.StatusConflict, driftMessage(claim))
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
 
 // handleWatcher returns when the server last received a watch report — globally
 // and per machine — so the client can flag machines whose statuses may be stale

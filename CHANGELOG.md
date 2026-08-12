@@ -9,6 +9,21 @@ file is the single source of truth, not a second narrative.
 
 ## [Unreleased]
 
+### Fixed
+
+- A machine whose watcher is running but currently has **no session to report** no
+  longer reads as having no watcher. Liveness was a side effect of session data —
+  the server only refreshed a machine's heartbeat while handling a session report —
+  so a machine with nothing open (or nothing newer than `--max-age`) silently
+  dropped out of `GET /api/watcher`, showed as "hooks only" in the Machines tab,
+  and made the TUI preflight refuse to start while blaming the server. The watcher
+  now claims liveness on its own, every 5 s, over a dedicated
+  `POST /api/watcher/heartbeat` that is independent of sessions
+  ([design](docs/design/watcher-liveness.md), #386). That heartbeat also carries
+  the version verdict, replacing the 60 s report-retry probe from #384 — which
+  could never work on the machine this fixes, since a drifted watcher with no
+  sessions had no report to probe with.
+
 ### Changed
 
 - A watcher whose build does not match the daemon can no longer write session

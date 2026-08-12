@@ -99,12 +99,17 @@ it; `exit 0` would die silently, and since #371 the TUI would then report
 Instead, on a `409` the watcher enters a **drifted** state:
 
 - it stops scanning and reporting session state;
-- it logs **one** clear line naming both builds and the remediation — rate-limited,
-  not repeated every scan;
-- it **re-probes on a slow cadence** (60 s) with a single report. If the daemon
-  accepts it, the watcher resumes normally. So realignment — a daemon rollback, or
-  a local upgrade followed by a service restart — self-heals with no extra
-  operator action.
+- it logs **one** clear line naming both builds and the remediation — announced on
+  transition, not repeated every scan;
+- it keeps sending its **liveness heartbeat**
+  ([watcher-liveness.md](watcher-liveness.md)), which both keeps the drifted
+  machine visible and carries the answer that ends the drift: a `204` means the
+  builds have realigned, and the watcher resumes on its own.
+
+> **Amended by #386.** This originally re-probed with a single *session report*
+> every 60 s. That could never work on a machine with no sessions — there was no
+> report to probe with, and such a machine was invisible anyway. The heartbeat
+> replaces it: one mechanism, and it works with zero sessions.
 
 **Startup fast-path.** At startup the watcher fetches `GET /api/version` once and,
 on mismatch, reports the drift immediately with its remediation rather than
