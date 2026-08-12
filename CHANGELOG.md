@@ -11,6 +11,16 @@ file is the single source of truth, not a second narrative.
 
 ### Added
 
+- `vigie` now installs a personal Agent Skill (`~/.claude/skills/vigie-call/`) so
+  Claude knows the `vigie call` command exists without any per-project setup — the
+  whole feature rests on the command actually being run when you ask to be told.
+  It is written by `vigie init` and `vigie hooks install`, refreshed by
+  `vigie watch` at startup so an install predating a release cannot keep a stale
+  description, and removed by `vigie hooks uninstall`. The production leg alone
+  owns it: a dev leg touches no production artefact. The skill states plainly that
+  the call is **best-effort** — if Claude does not run it, nothing is raised and
+  the session reads exactly as it does today
+  ([design](docs/design/call-discoverability.md), #391).
 - The web dashboard surfaces a session's call with the same grammar as the TUI —
   the marker lives in the status, never in the Doing cell. The dot inside the
   status pill **pulses** (a soft CSS fade, where the terminal is limited to two

@@ -40,6 +40,16 @@ func runHooks(args []string) int {
 			return 1
 		}
 		fmt.Printf("installed the %s reporting hooks in %s\n", legName(configPath), path)
+		// The skill teaches Claude that `vigie call` exists (#391). It is not
+		// leg-scoped — there is one Claude Code configuration per machine — so only
+		// the production leg writes it, leaving the dev leg free of side effects.
+		if configPath == "" {
+			if sp, sErr := install.InstallSkill(); sErr != nil {
+				fmt.Fprintf(os.Stderr, "hooks: installing the call skill failed (continuing): %v\n", sErr)
+			} else {
+				fmt.Printf("installed the call skill in %s\n", sp)
+			}
+		}
 		return 0
 	case "uninstall":
 		path, err := install.Uninstall(configPath)
@@ -48,6 +58,13 @@ func runHooks(args []string) int {
 			return 1
 		}
 		fmt.Printf("removed the %s reporting hooks from %s\n", legName(configPath), path)
+		if configPath == "" { // symmetric with install: the dev leg owns no skill
+			if sp, sErr := install.UninstallSkill(); sErr != nil {
+				fmt.Fprintf(os.Stderr, "hooks: removing the call skill failed: %v\n", sErr)
+			} else {
+				fmt.Printf("removed the call skill from %s\n", sp)
+			}
+		}
 		return 0
 	default:
 		fmt.Fprintf(os.Stderr, "unknown hooks subcommand: %s\n\n", sub)
