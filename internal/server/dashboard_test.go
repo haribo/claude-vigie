@@ -13,6 +13,7 @@ import (
 	"testing"
 
 	"github.com/haribo/claude-vigie/internal/api"
+	"github.com/haribo/claude-vigie/internal/version"
 )
 
 var metricRe = regexp.MustCompile(`vigie_[a-zA-Z0-9_]+`)
@@ -38,7 +39,7 @@ func TestDashboardMetricsExist(t *testing.T) {
 	// rejected report.
 	SetBuildInfo("test", "go-test")
 	good, _ := json.Marshal(api.ReportRequest{
-		Event: "watch", SessionID: "s", Machine: "m", Status: "working",
+		Event: "watch", WatcherVersion: version.Version, WatcherCommit: version.Commit, SessionID: "s", Machine: "m", Status: "working",
 		Model: "m1", Usage: &api.Usage{OutputTokens: 100}, Timestamp: "2026-07-31T12:00:00Z",
 	})
 	do(t, srv, http.MethodPost, "/api/report", good, true)

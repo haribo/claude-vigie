@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/haribo/claude-vigie/internal/api"
+	"github.com/haribo/claude-vigie/internal/version"
 )
 
 // TestStatusReconcileTimeline replays both observers — hook events and watcher
@@ -34,7 +35,9 @@ func TestStatusReconcileTimeline(t *testing.T) {
 		}
 	}
 	hook := func(id, event string) { report(id, api.ReportRequest{Event: event}) }
-	watch := func(id, status string) { report(id, api.ReportRequest{Event: "watch", Status: status}) }
+	watch := func(id, status string) {
+		report(id, api.ReportRequest{Event: "watch", WatcherVersion: version.Version, WatcherCommit: version.Commit, Status: status})
+	}
 
 	viewOf := func(id string) api.SessionView {
 		t.Helper()
@@ -117,10 +120,10 @@ func TestStatusReconcileTimeline(t *testing.T) {
 	report("block", api.ReportRequest{Event: "Notification"}) // waiting; StatusChangedAt = now
 	assert("block", "waiting")
 	stale := now.Add(-2 * time.Second).UTC().Format(time.RFC3339)
-	report("block", api.ReportRequest{Event: "watch", Status: "working", Timestamp: stale})
+	report("block", api.ReportRequest{Event: "watch", WatcherVersion: version.Version, WatcherCommit: version.Commit, Status: "working", Timestamp: stale})
 	assert("block", "waiting") // frozen transcript → held
 	advance(5 * time.Second)
-	report("block", api.ReportRequest{Event: "watch", Status: "working"}) // transcript moved (approval)
+	report("block", api.ReportRequest{Event: "watch", WatcherVersion: version.Version, WatcherCommit: version.Commit, Status: "working"}) // transcript moved (approval)
 	assert("block", "working")
 
 	// error — a watcher observation wins and clears on recovery.

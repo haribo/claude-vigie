@@ -9,6 +9,21 @@ file is the single source of truth, not a second narrative.
 
 ## [Unreleased]
 
+### Changed
+
+- A watcher whose build does not match the daemon can no longer write session
+  state. Enforcement lives in the daemon — the watcher's build already travels in
+  every report (#356), and a rule applied only by the client can be skipped by
+  exactly the outdated client it must stop — which closes the gap where a machine
+  running a watcher but never a TUI drifted unchecked. A refused report answers
+  `409` and writes nothing, while the machine and its faulty build stay visible in
+  `GET /api/watcher` and the Machines tab, so the operator can see what to
+  upgrade. The watcher goes **inert** rather than exiting (the packaged unit uses
+  `Restart=on-failure`, so exiting would crash-loop): it logs the drift once,
+  retries a single report every 60 s, and resumes on its own once the builds
+  realign. Hook reports stay ungated on purpose — they run inside the operator's
+  Claude session ([design](docs/design/version-consistency.md), #384).
+
 ### Added
 
 - The sessions table now scrolls within a vertical viewport instead of spilling

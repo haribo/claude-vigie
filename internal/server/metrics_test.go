@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/haribo/claude-vigie/internal/api"
+	"github.com/haribo/claude-vigie/internal/version"
 )
 
 func TestMetricsExposition(t *testing.T) {
@@ -17,7 +18,7 @@ func TestMetricsExposition(t *testing.T) {
 
 	// Ingest a report so the counters and the state gauge move.
 	body, _ := json.Marshal(api.ReportRequest{
-		Event: "watch", SessionID: "s", Machine: "m", Status: "working",
+		Event: "watch", WatcherVersion: version.Version, WatcherCommit: version.Commit, SessionID: "s", Machine: "m", Status: "working",
 		Timestamp: "2026-07-31T12:00:00Z",
 	})
 	if rec := do(t, srv, http.MethodPost, "/api/report", body, true); rec.Code >= http.StatusMultipleChoices {
