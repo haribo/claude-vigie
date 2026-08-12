@@ -314,7 +314,7 @@ func (s *scanner) scan(root, machine string, maxAge time.Duration, now time.Time
 			RemoteURL:      remoteURL,
 			Usage:          &usage,
 			APIErrorStatus: apiErr,
-			Activity:       activity,
+			Detail:         activity,
 			WatcherVersion: version.Version, // report this watcher's build (#356)
 			WatcherCommit:  version.Commit,
 			Timestamp:      reportAt.UTC().Format(time.RFC3339),
@@ -403,9 +403,9 @@ func resolveStatus(reg map[string]sessionRecord, regByProc map[procID]string, id
 		base = withError(mapRegistryStatus(rec.Status), info.LastAPIError)
 		switch {
 		case rec.Status == "shell":
-			activity = "shell" // dropped to a shell: status stays idle, DOING says so (#280)
+			activity = "shell" // dropped to a shell: status stays idle, DETAIL says so (#280)
 		case base == "waiting" && activity == "" && rec.WaitingFor != "":
-			activity = capText(rec.WaitingFor, 80) // surface the ask in DOING
+			activity = capText(rec.WaitingFor, 80) // surface the ask in DETAIL
 		}
 	case superseded(id, regByProc):
 		return "ended", activity, reportAt // switched in place on the same process (e.g. /clear) (#367)

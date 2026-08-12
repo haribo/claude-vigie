@@ -26,8 +26,15 @@ type ReportRequest struct {
 	// NotificationType is the Claude Code Notification hook's notification_type
 	// (e.g. permission_prompt vs idle_prompt); it splits waiting from idle.
 	NotificationType string `json:"notification_type,omitempty"`
-	// Activity is a short human message describing what the session is doing
-	// (working) or waiting on (waiting) — a tool call or a notification message.
+	// Detail is the contextual detail of the session's current state: the running
+	// tool, what a permission prompt is asking about, `shell`, `interrupted`. Named
+	// `activity` before #393.
+	Detail string `json:"detail,omitempty"`
+	// Activity is the pre-#393 name of Detail, still read from a reporter that
+	// predates the rename. The hook reporter is deliberately ungated by the version
+	// check (docs/design/version-consistency.md), so it can lag the daemon; without
+	// this fallback its detail would be dropped silently. Removable once no such
+	// client remains.
 	Activity       string `json:"activity,omitempty"`
 	Status         string `json:"status,omitempty"`           // explicit status (watcher); empty = derive from event
 	RemoteControl  *bool  `json:"remote_control,omitempty"`   // detected /rc state (watcher); nil = no info
@@ -77,7 +84,7 @@ type SessionView struct {
 	RemoteControl   bool    `json:"remote_control"`
 	RemoteURL       string  `json:"remote_url,omitempty"`        // /rc resume URL while remote control is active
 	APIErrorStatus  int     `json:"api_error_status,omitempty"`  // HTTP code when Status == "error", else 0
-	Activity        string  `json:"activity,omitempty"`          // short "doing"/"waiting on" message
+	Detail          string  `json:"detail,omitempty"`            // contextual detail of the current state (#393)
 	StatusChangedAt string  `json:"status_changed_at,omitempty"` // RFC3339, when Status last changed
 	Samples         []int64 `json:"samples,omitempty"`           // recent output-token samples, oldest first
 	// CallAt/CallMessage carry a call the session raised for the operator
