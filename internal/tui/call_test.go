@@ -86,18 +86,18 @@ func TestBlinkKeepsRowWidth(t *testing.T) {
 }
 
 // TestCallTakesTheDoingCell: the call message is the reason the row blinks, so it
-// outranks the last tool in DOING.
+// outranks the last tool in DETAIL.
 func TestCallTakesTheDoingCell(t *testing.T) {
-	withMsg := api.SessionView{Activity: "Edit render.go", CallAt: "t", CallMessage: "backfill done"}
-	if got := activityCell(withMsg); got != "backfill done" {
-		t.Errorf("activityCell = %q, want the call message", got)
+	withMsg := api.SessionView{Detail: "Edit render.go", CallAt: "t", CallMessage: "backfill done"}
+	if got := detailCell(withMsg); got != "backfill done" {
+		t.Errorf("detailCell = %q, want the call message", got)
 	}
-	noMsg := api.SessionView{Activity: "Edit render.go", CallAt: "t"}
-	if got := activityCell(noMsg); got != "called you" {
+	noMsg := api.SessionView{Detail: "Edit render.go", CallAt: "t"}
+	if got := detailCell(noMsg); got != "called you" {
 		t.Errorf("a message-less call should still say so, got %q", got)
 	}
-	noCall := api.SessionView{Activity: "Edit render.go"}
-	if got := activityCell(noCall); got != "Edit render.go" {
+	noCall := api.SessionView{Detail: "Edit render.go"}
+	if got := detailCell(noCall); got != "Edit render.go" {
 		t.Errorf("without a call the activity stays, got %q", got)
 	}
 }

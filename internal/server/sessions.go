@@ -129,7 +129,7 @@ func toView(s store.Session, samples []int64, now time.Time, machineWatched bool
 		RemoteControl:   s.RemoteControl,
 		RemoteURL:       s.RemoteURL,
 		APIErrorStatus:  s.APIErrorStatus,
-		Activity:        s.Activity,
+		Detail:          s.Detail,
 		StatusChangedAt: s.StatusChangedAt,
 		Samples:         samples,
 		CallAt:          s.CallAt,

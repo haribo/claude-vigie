@@ -175,7 +175,7 @@ func (s *Server) maybeSample(ctx context.Context, sessionID, at string, output i
 func visibleSignature(s store.Session) string {
 	u := s.Usage
 	return fmt.Sprintf("%s|%s|%s|%s|%s|%s|%s|%s|%s|%s|%t|%s|%d|%s|%s|%d|%d|%d|%d",
-		s.Status, s.StatusChangedAt, s.Activity, s.Title, s.User, s.Machine, s.Model,
+		s.Status, s.StatusChangedAt, s.Detail, s.Title, s.User, s.Machine, s.Model,
 		s.GitBranch, s.ProjectDir, s.LastTool, s.RemoteControl, s.RemoteURL, s.APIErrorStatus,
 		s.CallAt, s.CallMessage, // raising or clearing a call must reach the dashboards (#388)
 		u.InputTokens, u.OutputTokens, u.CacheCreationTokens, u.CacheReadTokens)
@@ -262,6 +262,16 @@ func applyCall(sess store.Session, req api.ReportRequest) store.Session {
 	return sess
 }
 
+// reportDetail is the report's contextual detail, accepting the pre-#393 field
+// name from a reporter that predates the rename (the hook reporter is
+// deliberately ungated by the version check, so it can lag the daemon).
+func reportDetail(req api.ReportRequest) string {
+	if req.Detail != "" {
+		return req.Detail
+	}
+	return req.Activity
+}
+
 // applyStatus folds the report's status into the session: the reconciled status
 // and its owner, when it last changed, and the transient activity message.
 func applyStatus(sess store.Session, req api.ReportRequest) store.Session {
@@ -290,15 +300,16 @@ func applyStatus(sess store.Session, req api.ReportRequest) store.Session {
 	// clear it on idle/ended, take a fresh message when the report has one, else
 	// drop a stale one on any status change so a new episode never shows the old
 	// "doing".
+	detail := reportDetail(req)
 	switch {
-	case sess.Status == "idle" && req.Activity == "shell":
-		sess.Activity = "shell" // a shell session is idle but not free: keep it in DOING (#280)
+	case sess.Status == "idle" && detail == "shell":
+		sess.Detail = "shell" // a shell session is idle but not free: keep it in DETAIL (#280)
 	case sess.Status == "idle" || sess.Status == "ended":
-		sess.Activity = "" // clears once the shell ends (the report no longer carries "shell")
-	case req.Activity != "":
-		sess.Activity = req.Activity
+		sess.Detail = "" // clears once the shell ends (the report no longer carries "shell")
+	case detail != "":
+		sess.Detail = detail
 	case sess.Status != prev:
-		sess.Activity = ""
+		sess.Detail = ""
 	}
 	return sess
 }

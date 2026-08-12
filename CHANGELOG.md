@@ -73,6 +73,19 @@ file is the single source of truth, not a second narrative.
 
 ### Changed
 
+- The `DOING` column is now `DETAIL`, in the TUI and the web dashboard alike. The
+  name no longer described its contents: three of the five things it carries are
+  not actions (a permission prompt's subject, `shell`, a call message) and a
+  fourth is the negation of one (`interrupted`). It also removes a real ambiguity
+  — a *different* column was already called `ACT`/`Activity` (the token
+  sparkline). The API field follows: `GET /api/sessions` now returns `detail`
+  instead of `activity`. That is a contract change, and it is coordinated rather
+  than silent: the TUI and the daemon are already version-locked to each other
+  (the startup preflight), the web dashboard is served by the daemon itself, and
+  the report endpoint still accepts the old `activity` field from a hook reporter
+  that predates the rename — the one client deliberately exempt from the version
+  gate. A saved column layout is migrated, so a renamed column keeps its position
+  and stays hidden if you had hidden it (#393).
 - A watcher whose build does not match the daemon can no longer write session
   state. Enforcement lives in the daemon — the watcher's build already travels in
   every report (#356), and a rule applied only by the client can be skipped by

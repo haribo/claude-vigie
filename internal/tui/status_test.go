@@ -51,11 +51,11 @@ func TestThinkingRendering(t *testing.T) {
 }
 
 func TestActivityCell(t *testing.T) {
-	if got := activityCell(api.SessionView{Activity: "Edit render.go"}); got != "Edit render.go" {
-		t.Errorf("activityCell = %q, want Edit render.go", got)
+	if got := detailCell(api.SessionView{Detail: "Edit render.go"}); got != "Edit render.go" {
+		t.Errorf("detailCell = %q, want Edit render.go", got)
 	}
-	if got := activityCell(api.SessionView{}); got != "-" {
-		t.Errorf("empty activityCell = %q, want -", got)
+	if got := detailCell(api.SessionView{}); got != "-" {
+		t.Errorf("empty detailCell = %q, want -", got)
 	}
 }
 

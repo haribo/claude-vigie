@@ -95,7 +95,7 @@ func TestScanRegistryWaitingWins(t *testing.T) {
 	var got *struct{ status, activity string }
 	for _, r := range reports {
 		if r.SessionID == "s-reg" {
-			got = &struct{ status, activity string }{r.Status, r.Activity}
+			got = &struct{ status, activity string }{r.Status, r.Detail}
 		}
 	}
 	if got == nil {
@@ -173,12 +173,12 @@ func TestScanRegistryShellShowsInDoing(t *testing.T) {
 	}
 	for _, r := range reports {
 		if r.SessionID == "s-shell" {
-			// Status stays idle (a shell isn't an attention state), but DOING says "shell".
+			// Status stays idle (a shell isn't an attention state), but DETAIL says "shell".
 			if r.Status != "idle" {
 				t.Errorf("status = %q, want idle", r.Status)
 			}
-			if r.Activity != "shell" {
-				t.Errorf("activity = %q, want shell (#280)", r.Activity)
+			if r.Detail != "shell" {
+				t.Errorf("activity = %q, want shell (#280)", r.Detail)
 			}
 			return
 		}

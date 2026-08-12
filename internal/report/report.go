@@ -91,7 +91,7 @@ func Run(event string, stdin io.Reader) error {
 		LastTool:         p.ToolName,
 		NotificationType: p.NotificationType,
 		PermissionMode:   p.PermissionMode, // "" when the event doesn't carry it
-		Activity:         hookActivity(event, p),
+		Detail:           hookActivity(event, p),
 		Timestamp:        clock.Now().UTC().Format(time.RFC3339),
 	}
 	// The transcript is only worth reading at turn/session boundaries.

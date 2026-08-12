@@ -24,7 +24,7 @@ func sampleModel(t tab) model {
 	add := func(title, dir, status string, out int64, rc bool) {
 		sessions = append(sessions, api.SessionView{
 			Title: title, Machine: "minet-dev", User: "nico", ProjectDir: "/home/nico/" + dir,
-			Status: status, RemoteControl: rc, Activity: "editing " + dir,
+			Status: status, RemoteControl: rc, Detail: "editing " + dir,
 			LastSeenAt: "2026-08-04T15:00:00Z", Usage: api.Usage{OutputTokens: out},
 		})
 	}

@@ -44,10 +44,12 @@ type Session struct {
 	// lets reconciliation keep a hook state while letting the watcher retract its
 	// own — see docs/design/session-status.md.
 	StatusSource string
-	// Activity is a short message describing what the session is doing (working)
-	// or waiting on (waiting): a tool call or a notification. Cleared on a status
-	// change so it never goes stale.
-	Activity string
+	// Detail is the contextual detail of the current state: the running tool, what
+	// a permission prompt is asking about, `shell`, `interrupted`, a call message.
+	// Cleared on a status change so it never goes stale. Persisted in the column
+	// still named `activity`: renaming a stored column for cosmetics would be risk
+	// without benefit (#393).
+	Detail string
 	// StatusChangedAt is when Status last changed (RFC3339, the reporting event's
 	// timestamp). It lets a hook `waiting` outlive a stale watcher `working`: the
 	// watcher only clears it once the transcript moves past this time.

@@ -120,28 +120,28 @@ var columns = []column{
 	{"RC", 3, 1, false, rcCell, rcStyle},
 	{"STATUS", 12, 0, false, statusCell, func(s api.SessionView) lipgloss.Style { return statusStyle(s.Status) }},
 	{"MODE", 7, 8, false, modeCell, modeStyle},
-	{"DOING", 36, 10, false, activityCell, activityStyle},
+	{"DETAIL", 36, 10, false, detailCell, detailStyle},
 }
 
-// activityCell renders the short "doing"/"waiting on" message, or a dash. A
+// detailCell renders the contextual detail of the current state, or a dash. A
 // raised call takes the cell: it is the reason the row is blinking, and the
 // operator needs it more than the tool that ran last (#389).
-func activityCell(s api.SessionView) string {
+func detailCell(s api.SessionView) string {
 	if hasCall(s) {
 		if s.CallMessage != "" {
 			return s.CallMessage
 		}
 		return "called you"
 	}
-	if s.Activity == "" {
+	if s.Detail == "" {
 		return "-"
 	}
-	return s.Activity
+	return s.Detail
 }
 
-// activityStyle colors the DOING cell: amber for waiting (a call to action),
+// detailStyle colors the DETAIL cell: amber for waiting (a call to action),
 // dim for a working turn's tool call.
-func activityStyle(s api.SessionView) lipgloss.Style {
+func detailStyle(s api.SessionView) lipgloss.Style {
 	if hasCall(s) {
 		// The call message is the reason the row is blinking: it carries the row's
 		// status color rather than the dim default, so the eye that the marker
@@ -301,7 +301,7 @@ func renderDetail(s api.SessionView) string {
 		detailField("Context", contextGauge(s)),
 		detailField("Status", statusDetail(s)),
 		detailField("Mode", modeDetail(s)),
-		detailField("Doing", orDash(s.Activity)),
+		detailField("Detail", orDash(s.Detail)),
 		detailField("Remote control", rcLabel(s.RemoteControl)),
 	}
 	if s.RemoteURL != "" { // the /rc resume link, only while remote control is on

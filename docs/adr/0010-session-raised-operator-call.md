@@ -86,7 +86,8 @@ instead (a missed call costs an ordinary `idle`, which is the status quo).
 - **The marker is a blinking `●` that keeps its status colour** — no new glyph, no
   new colour, no new column.
 - **With blinking disabled**, a calling session is distinguishable only by its
-  `DOING` message. Accepted: the call is an accelerator over the existing signals,
+  `DETAIL` message (the column was named `DOING` when this ADR was accepted; it
+  was renamed in #393). Accepted: the call is an accelerator over the existing signals,
   not a replacement for them.
 - **The call is orthogonal to status.** A calling session keeps whatever status it
   has; nothing in the status vocabulary changes.

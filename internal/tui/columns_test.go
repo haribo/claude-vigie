@@ -124,3 +124,26 @@ func TestColumnLayoutTOMLRoundTrip(t *testing.T) {
 		t.Errorf("layout round-trip: order=%v hidden=%v", f.ColumnOrder, f.ColumnHidden)
 	}
 }
+
+// TestMigrateColumnKeys guards the #393 rename: a layout saved before it keeps
+// the old key, and without migration the column would drop out of the operator's
+// custom order — and reappear if they had hidden it.
+func TestMigrateColumnKeys(t *testing.T) {
+	got := migrateColumnKeys([]string{"name", "doing", "status"})
+	want := []string{"name", "detail", "status"}
+	if len(got) != len(want) {
+		t.Fatalf("migrateColumnKeys = %v, want %v", got, want)
+	}
+	for i := range want {
+		if got[i] != want[i] {
+			t.Fatalf("migrateColumnKeys = %v, want %v (position must be kept)", got, want)
+		}
+	}
+	// A layout already migrated, or holding both names, must not duplicate.
+	if got := migrateColumnKeys([]string{"doing", "detail"}); len(got) != 1 || got[0] != "detail" {
+		t.Errorf("migrateColumnKeys(both names) = %v, want [detail]", got)
+	}
+	if got := migrateColumnKeys(nil); got != nil {
+		t.Errorf("migrateColumnKeys(nil) = %v, want nil", got)
+	}
+}
