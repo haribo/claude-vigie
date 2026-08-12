@@ -25,6 +25,17 @@ function esc(s) {
 }
 const dash = (v) => (v === "" || v == null) ? "-" : v;
 const trim = (x) => x.toFixed(1).replace(/\.0$/, "");
+// A session-raised call (ADR-0010). call_at is what marks it: the message is
+// optional, and a call with none is still a call.
+function hasCall(s) { return Boolean(s && s.call_at); }
+
+// doingText is the Doing cell's content: a raised call takes it, because it is
+// the reason the row is pulsing and it outranks the tool that ran last.
+function doingText(s) {
+  if (hasCall(s)) return s.call_message ? esc(s.call_message) : "called you";
+  return s.activity ? esc(s.activity) : "-";
+}
+
 function humanTokens(n) { n = Number(n) || 0; if (n >= 1e6) return trim(n / 1e6) + "M"; if (n >= 1e3) return trim(n / 1e3) + "k"; return String(n); }
 function ageSec(rfc) { const t = Date.parse(rfc); return Number.isNaN(t) ? Infinity : Math.max(0, (Date.now() - t) / 1000); }
 function relAge(rfc) {
@@ -110,9 +121,9 @@ const COLS = [
   { key: "rc", label: "RC", cmp: (a, b) => (a.remote_control === b.remote_control ? 0 : a.remote_control ? -1 : 1),
     cell: (s) => `<td>${s.remote_control ? '<span class="rc-on" title="Remote control on">◉</span>' : '<span class="rc-off" title="Remote control off">○</span>'}</td>` },
   { key: "status", label: "Status", cmp: (a, b) => RANK[a.status] - RANK[b.status],
-    cell: (s) => { const st = STATUSES.includes(s.status) ? s.status : "idle"; const code = (s.status === "error" && s.api_error_status) ? ` <span class="code">${s.api_error_status}</span>` : ""; return `<td><span class="pill st-${st}"><span class="dot"></span>${st}${code}</span></td>`; } },
+    cell: (s) => { const st = STATUSES.includes(s.status) ? s.status : "idle"; const code = (s.status === "error" && s.api_error_status) ? ` <span class="code">${s.api_error_status}</span>` : ""; return `<td><span class="pill st-${st}${hasCall(s) ? " call" : ""}"><span class="dot"></span>${st}${code}</span></td>`; } },
   { key: "doing", label: "Doing", nosort: true,
-    cell: (s) => { const d = s.activity ? esc(s.activity) : "-"; return `<td class="${s.status === "waiting" ? "doing wait" : "doing"}" title="${d}">${d}</td>`; } },
+    cell: (s) => { const d = doingText(s); const cls = hasCall(s) ? "doing call" : (s.status === "waiting" ? "doing wait" : "doing"); return `<td class="${cls}" title="${d}">${d}</td>`; } },
   { key: "act", label: "", nosort: true,
     cell: () => `<td><button class="det-btn" aria-label="Open detail" title="Open detail"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg></button></td>` },
 ];
@@ -184,7 +195,12 @@ function renderSummary() {
   const shown = showEnded ? sessions : sessions.filter((s) => s.status !== "ended");
   const hidden = sessions.length - shown.length;
   let agg = []; shown.forEach((s) => (s.samples || []).forEach((v, i) => { agg[i] = (agg[i] || 0) + v; }));
-  const cnts = STATUSES.map((k) => `<span class="cnt st-${k}"><span class="dot"></span><b>${counts[k] || 0}</b><small>${k}</small></span>`).join("");
+  const calling = sessions.filter(hasCall).length;
+  // Shown only when non-zero, and first: a call is explicit where every other
+  // count is a status vigie inferred. It borrows the `waiting` colour rather
+  // than introducing a new one.
+  const callCnt = calling ? `<span class="cnt st-waiting"><span class="dot"></span><b>${calling}</b><small>call</small></span>` : "";
+  const cnts = callCnt + STATUSES.map((k) => `<span class="cnt st-${k}"><span class="dot"></span><b>${counts[k] || 0}</b><small>${k}</small></span>`).join("");
   return `<div class="summary">
     <div class="grp">${cnts}</div>
     <div class="div"></div>
@@ -206,9 +222,12 @@ function renderSessions() {
   }).join("");
   const rows = visibleSessions().map((s) => {
     const st = STATUSES.includes(s.status) ? s.status : "idle";
-    const attn = (s.status === "waiting" || s.status === "stalled") ? " attn" : "";
+    // A call reuses the attention mechanism — the left border in --st — and adds
+    // a faint tint of the same colour. No new colour anywhere (ADR-0010).
+    const attn = (hasCall(s) || s.status === "waiting" || s.status === "stalled") ? " attn" : "";
+    const call = hasCall(s) ? " call" : "";
     const cells = cols.map((c) => c.cell(s)).join("");
-    return `<tr class="st-${st}${attn}" data-id="${esc(s.id)}" tabindex="0">${cells}</tr>`;
+    return `<tr class="st-${st}${attn}${call}" data-id="${esc(s.id)}" tabindex="0">${cells}</tr>`;
   }).join("");
   const empty = visibleSessions().length ? "" : '<div class="empty">No sessions in view.</div>';
   $("tab-sessions").innerHTML = renderSummary() +
@@ -351,7 +370,7 @@ function openDetail(id) {
     field("Session id", esc(s.id), "mut"), field("User", esc(dash(s.user)), "mut"), field("Machine", esc(s.machine)),
     field("Directory", esc(dash(s.project_dir)), "mut"), field("Branch", s.git_branch ? esc(s.git_branch) : "—"),
     field("Model", esc(dash(shortModel(s.model))), s.model ? "" : "mut"), field("Effort", esc(dash(s.effort)), s.effort ? "" : "mut"),
-    field("Doing", esc(dash(s.activity)), doingWait ? "wait" : "mut"),
+    field("Doing", doingText(s), hasCall(s) ? "call" : (doingWait ? "wait" : "mut")),
     field("Remote control", s.remote_control ? "on ◉" : "off ○", "mut"),
     s.remote_url ? field("Remote", `<a href="${esc(s.remote_url)}" target="_blank" rel="noopener noreferrer">${esc(s.remote_url)}</a>`) : "",
     field("Last tool", esc(dash(s.last_tool)), "mut"),
@@ -368,7 +387,7 @@ function openDetail(id) {
         <div class="fact"><span class="k">Seen</span><span class="v">${relAge(s.last_seen_at)}</span></div>
         <div class="fact"><span class="k">Remote ctl</span><span class="v">${s.remote_control ? "on" : "off"}</span></div>
       </div></div>
-      <div class="h-right"><span class="pill st-${st}"><span class="dot"></span>${st}${code}</span></div></div>
+      <div class="h-right"><span class="pill st-${st}${hasCall(s) ? " call" : ""}"><span class="dot"></span>${st}${code}</span></div></div>
     <div class="d-grid">
       <div class="card"><h3>Context</h3>${ctx}<h3>Timeline</h3>${times}</div>
       <div class="card"><h3>Tokens</h3>
