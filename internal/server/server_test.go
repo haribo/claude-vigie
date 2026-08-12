@@ -86,6 +86,7 @@ func TestEveryAPIRouteRejectsUnauthenticated(t *testing.T) {
 		{http.MethodPost, "/api/usage"},
 		{http.MethodPost, "/api/usage/lease"},
 		{http.MethodGet, "/api/watcher"},
+		{http.MethodPost, "/api/watcher/heartbeat"},
 		{http.MethodGet, "/api/settings"},
 		{http.MethodPost, "/api/settings"},
 		{http.MethodGet, "/api/stats"},
