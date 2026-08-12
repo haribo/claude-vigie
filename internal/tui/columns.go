@@ -34,6 +34,32 @@ func columnKeys() []string {
 	return keys
 }
 
+// legacyColumnKeys maps a key persisted under an older name to its current one.
+// Without it a saved layout silently loses the renamed column: it falls out of the
+// operator's custom order, and if it had been hidden it reappears. `doing` became
+// `detail` in #393.
+var legacyColumnKeys = map[string]string{"doing": "detail"}
+
+// migrateColumnKeys rewrites persisted keys to their current names, dropping
+// duplicates a rename may have produced.
+func migrateColumnKeys(keys []string) []string {
+	if len(keys) == 0 {
+		return keys
+	}
+	seen := make(map[string]bool, len(keys))
+	out := make([]string, 0, len(keys))
+	for _, k := range keys {
+		if cur, ok := legacyColumnKeys[k]; ok {
+			k = cur
+		}
+		if !seen[k] {
+			out = append(out, k)
+			seen[k] = true
+		}
+	}
+	return out
+}
+
 // fullOrder is every column's key in display order: the saved order (unknown keys
 // dropped), with any column missing from it appended in the built-in order — so a
 // layout survives added/removed columns. Empty order → the built-in default.

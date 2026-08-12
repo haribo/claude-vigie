@@ -115,7 +115,7 @@ column_order = %s
 column_hidden = %s
 
 # Blink the status dot of a session that has called you (vigie call). Off leaves
-# the call readable only in the DOING column.
+# the call readable only in the DETAIL column.
 blink = %t
 
 # Glyph for a calling session's dot. Must be exactly one terminal cell wide: a
@@ -206,8 +206,9 @@ func loadPrefs() prefs {
 	if f.Notify != nil { // absent keeps the default (on)
 		p.notify = *f.Notify
 	}
-	p.columnOrder = f.ColumnOrder
-	p.columnHidden = f.ColumnHidden
+	// A layout saved before a column rename keeps its old key (#393).
+	p.columnOrder = migrateColumnKeys(f.ColumnOrder)
+	p.columnHidden = migrateColumnKeys(f.ColumnHidden)
 	if f.Blink != nil { // absent keeps the default (on)
 		p.blink = *f.Blink
 	}
