@@ -9,6 +9,8 @@ file is the single source of truth, not a second narrative.
 
 ## [Unreleased]
 
+## [0.5.0] - 2026-08-13
+
 ### Added
 
 - `vigie` now installs a personal Agent Skill (`~/.claude/skills/vigie-call/`) so
@@ -262,7 +264,8 @@ across machines — it reads and reports session state; it never drives a sessio
 - The API binds `127.0.0.1` by default; every `/api/*` route is behind a
   constant-time shared-token check; request bodies are size-capped.
 
-[Unreleased]: https://github.com/haribo/claude-vigie/compare/v0.4.1...HEAD
+[Unreleased]: https://github.com/haribo/claude-vigie/compare/v0.5.0...HEAD
+[0.5.0]: https://github.com/haribo/claude-vigie/compare/v0.4.1...v0.5.0
 [0.4.1]: https://github.com/haribo/claude-vigie/compare/v0.4.0...v0.4.1
 [0.4.0]: https://github.com/haribo/claude-vigie/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/haribo/claude-vigie/compare/v0.2.0...v0.3.0
