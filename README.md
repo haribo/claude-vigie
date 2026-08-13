@@ -23,6 +23,33 @@
   </picture>
 </p>
 
+## Features
+
+- **Every session, every machine, one board** — nine live statuses, grouped and filtered as you like.
+- **A session can call you** when its work is done.
+- **Desktop notifications** when a session starts waiting on you (libnotify), and `n` to jump straight to it.
+- **Terminal and browser** — a TUI, and a read-only web mirror served by the daemon itself.
+- **Per-session insight** — tokens, context fill, reasoning effort, permission mode, `/rc` link.
+- **Usage and history** — subscription usage, plus daily rollups of tokens and of where your time went.
+- **Observe-only** — vigie never writes into a session, and stores nothing about how *you* handled one.
+
+### A session can call you
+
+Ask in plain language — *"when you're finished, tell me in vigie"* — and the
+session raises a call as its turn ends.
+
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="docs/assets/session-call-dark.svg">
+    <img src="docs/assets/session-call.svg" alt="A Claude Code session is asked to report when finished; the vigie board then shows that session calling, its status dot blinking and the message in DETAIL" width="820">
+  </picture>
+</p>
+
+vigie installs and keeps a small Agent Skill current so Claude knows the command
+exists — nothing to run, nothing to set up per project. Your next message in that
+session clears the call. It is best-effort: if Claude does not run the command,
+nothing is raised.
+
 ## How it works
 
 Claude Vigie is a central server and a client you install on every machine. Each
@@ -61,23 +88,6 @@ you install on every machine running Claude Code sessions. See
 The daemon also serves a **read-only web dashboard** at its root URL — a browser
 mirror of the TUI. Open it, paste the server token, and watch every machine
 from a phone or laptop. No extra process: it is embedded in `vigied`.
-
-## Ask a session to call you
-
-Tell Claude, in plain language, to let you know when it is done:
-
-> when you're finished, tell me in vigie
-
-It runs `vigie call "backfill done — 12k rows"` at the end of its turn, and that
-session's dot starts blinking on your board with the message beside it. Sending
-your next message in that session clears the call — there is nothing to
-acknowledge or dismiss in vigie
-([ADR-0007](docs/adr/0007-read-only-to-operator.md)).
-
-`vigie init` installs a small Agent Skill so Claude knows the command exists;
-there is nothing to set up per project. It is **best-effort**: if Claude does not
-run it, nothing is raised and the board reads exactly as it did before
-([ADR-0010](docs/adr/0010-session-raised-operator-call.md)).
 
 ## Design choices
 
