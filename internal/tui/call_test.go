@@ -144,7 +144,7 @@ func TestCallNotifies(t *testing.T) {
 	notifyFn = func(name, status string) { fired = append(fired, name+":"+status) }
 	t.Cleanup(func() { notifyFn = orig })
 
-	m := model{prefs: prefs{notify: true}, focused: false,
+	m := model{prefs: prefs{notify: true}, focus: focusOff,
 		sess: sessionsView{prevStatus: map[string]string{}, prevCall: map[string]bool{}}}
 
 	// First observation: a call already raised must stay silent.

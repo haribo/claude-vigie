@@ -62,7 +62,7 @@ func (m model) withNotifiedTransitions(next []api.SessionView) model {
 	for _, s := range next {
 		_, known := prev[s.ID] // a session first seen at startup never notifies
 		calling := hasCall(s)
-		if !m.focused && m.prefs.notify {
+		if !m.focus.suppressesNotifications() && m.prefs.notify {
 			switch {
 			case known && calling && !prevCall[s.ID]:
 				// A raised call is exactly what this notification is for (#260).
@@ -77,6 +77,16 @@ func (m model) withNotifiedTransitions(next []api.SessionView) model {
 	return m
 }
 
+// displayEnv returns the graphical session this process can reach, or "".
+//
+//nolint:forbidigo // DISPLAY/WAYLAND_DISPLAY are a platform probe, not config
+func displayEnv() string {
+	if d := os.Getenv("DISPLAY"); d != "" {
+		return d
+	}
+	return os.Getenv("WAYLAND_DISPLAY")
+}
+
 // notifyFn is the notification sink, indirected so tests can capture transitions
 // without spawning notify-send.
 var notifyFn = notifySend
@@ -87,9 +97,9 @@ var notifyFn = notifySend
 // render loop can never fail because of it.
 func notifySend(name, status string) {
 	// Graphical-session detection, not app config, so the notifier no-ops under
-	// SSH/headless; reading these directly is intentional here.
-	//nolint:forbidigo // DISPLAY/WAYLAND_DISPLAY are a platform probe, not config
-	if os.Getenv("DISPLAY") == "" && os.Getenv("WAYLAND_DISPLAY") == "" {
+	// SSH/headless. Shared with the availability probe (#411) so what the Settings
+	// tab reports and what the notifier actually does cannot drift apart.
+	if displayEnv() == "" {
 		return
 	}
 	// Fixed argv, no shell: name/status are notify-send's title/body text, not a

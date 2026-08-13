@@ -28,7 +28,7 @@ func TestNotifyTransitions(t *testing.T) {
 	t.Cleanup(func() { notifyFn = orig })
 
 	base := func() model {
-		return model{prefs: prefs{notify: true}, focused: false, sess: sessionsView{prevStatus: map[string]string{}}}
+		return model{prefs: prefs{notify: true}, focus: focusOff, sess: sessionsView{prevStatus: map[string]string{}}}
 	}
 	sess := func(id, status string) api.SessionView {
 		return api.SessionView{ID: id, Title: id, Status: status}
@@ -53,7 +53,7 @@ func TestNotifyTransitions(t *testing.T) {
 	// Focus suppresses; a fresh working→error transition must stay silent.
 	fired = nil
 	mf := base()
-	mf.focused = true
+	mf.focus = focusOn
 	mf = mf.withNotifiedTransitions([]api.SessionView{sess("c", "working")})
 	mf = mf.withNotifiedTransitions([]api.SessionView{sess("c", "error")})
 	if len(fired) != 0 {
