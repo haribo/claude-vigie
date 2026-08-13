@@ -9,6 +9,17 @@ file is the single source of truth, not a second narrative.
 
 ## [Unreleased]
 
+### Changed
+
+- `vigie init` now **asks** for the server URL and the token instead of requiring
+  them as flags, and reads the token **without echo** — a flag put the shared
+  secret into the shell history of every machine, permanently, which is the same
+  reason it has no place in a systemd unit. The values are resolved in order:
+  `--server`/`--token` if given, else `VIGIE_SERVER`/`VIGIE_TOKEN` from the
+  environment, else a prompt. A non-interactive run that supplied neither fails
+  with a message naming all three ways rather than hanging on a question nobody
+  can answer, so containers and provisioning keep working (#407).
+
 ## [0.5.0] - 2026-08-13
 
 ### Added

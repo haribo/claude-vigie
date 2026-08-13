@@ -20,8 +20,8 @@ var defaultEvents = []string{"SessionStart", "UserPromptSubmit", "PostToolUse", 
 
 func runInit(args []string) int {
 	fs := flag.NewFlagSet("init", flag.ContinueOnError)
-	server := fs.String("server", "", "fleet server URL to report to")
-	token := fs.String("token", "", "shared auth token")
+	server := fs.String("server", "", "fleet server URL (else $VIGIE_SERVER, else asked)")
+	token := fs.String("token", "", "shared auth token (else $VIGIE_TOKEN, else asked without echo)")
 	machine := fs.String("machine", "", "machine name (defaults to the hostname)")
 	uninstall := fs.Bool("uninstall", false, "remove vigie hooks and stop reporting")
 	if err := fs.Parse(args); err != nil {
@@ -38,8 +38,9 @@ func runInit(args []string) int {
 		return 0
 	}
 
-	if *server == "" || *token == "" {
-		fmt.Fprintln(os.Stderr, "init: --server and --token are required")
+	srv, tok, err := resolveEndpoint(*server, *token)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "init: %v\n", err)
 		return 2
 	}
 
@@ -49,7 +50,7 @@ func runInit(args []string) int {
 			mach = h
 		}
 	}
-	cfg := &config.Config{ServerURL: *server, Token: *token, Machine: mach}
+	cfg := &config.Config{ServerURL: srv, Token: tok, Machine: mach}
 
 	if err := testConnection(cfg); err != nil {
 		fmt.Fprintf(os.Stderr, "init: cannot reach server: %v\n", err)
