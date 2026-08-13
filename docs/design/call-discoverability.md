@@ -38,9 +38,10 @@ The skill directory is **owned entirely by vigie**. The file says so in its own
 header, because Claude Code has no versioning or conflict detection for skills: a
 refresh overwrites, and a local edit would be lost silently otherwise.
 
-It is written by `vigie init` and `vigie hooks install`, refreshed by
-`vigie watch` at startup beside the hooks refresh, and removed by
-`vigie hooks uninstall`.
+It is written by `vigie hooks install`, refreshed by `vigie watch` at startup
+beside the hooks refresh, and removed by `vigie hooks uninstall`. `vigie init`
+does **not** write it: it only records the config, so that the hooks and the skill
+have a single owner (#415).
 
 Refreshing at watcher startup **extends [ADR-0009](../adr/0009-watcher-managed-hooks.md)**
 from one artefact to two, for the same reason it gave: an install predating a

@@ -360,7 +360,7 @@
       <div class="install-grid">
         <ol class="steps">
           <li><h4>Download from Releases</h4><p>Grab <span class="mono">vigie_*_linux_amd64.tar.gz</span> from the <a href="https://github.com/haribo/claude-vigie/releases">Releases page</a>.</p></li>
-          <li><h4>Point it at your server</h4><p><span class="mono">vigie init</span> asks for your server URL and token, then writes the config and installs the hooks into Claude Code.</p></li>
+          <li><h4>Point it at your server</h4><p><span class="mono">vigie init</span> asks for your server URL and token and writes the config. The watcher wires Claude Code when it starts.</p></li>
           <li><h4>Watch</h4><p><span class="mono">vigie watch</span> streams this machine; <span class="mono">vigie tui</span> or the web page shows the board.</p></li>
         </ol>
         <div>

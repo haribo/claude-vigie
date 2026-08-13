@@ -9,6 +9,20 @@ file is the single source of truth, not a second narrative.
 
 ## [Unreleased]
 
+### Changed
+
+- `vigie init` now writes the config and nothing else. The reporting hooks and the
+  call skill had **three** writers — `init`, `vigie hooks install` and `vigie
+  watch` — and only the watcher's copy self-heals, which is the whole point of
+  [ADR-0009](docs/adr/0009-watcher-managed-hooks.md). They now have one owner: the
+  watcher installs them at startup and keeps them matching the running binary.
+  `init` ends by saying what is left to do — start the watcher, **or restart it**
+  if one is already running, since it reads the config only at startup. This also
+  removes a trap: `init` used to rewrite the *production* hooks even when
+  `VIGIE_CONFIG` pointed at a dev leg. A machine that runs no watcher still wires
+  itself with `vigie hooks install`; `vigie init --uninstall` keeps working but is
+  deprecated in favour of `vigie hooks uninstall` (#415).
+
 ### Fixed
 
 - Desktop notifications could be **impossible with nothing saying so**. The TUI
