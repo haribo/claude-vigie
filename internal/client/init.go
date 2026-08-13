@@ -10,7 +10,6 @@ import (
 	"time"
 
 	"github.com/haribo/claude-vigie/internal/config"
-	"github.com/haribo/claude-vigie/internal/install"
 )
 
 func runInit(args []string) int {
@@ -18,23 +17,8 @@ func runInit(args []string) int {
 	server := fs.String("server", "", "fleet server URL (else $VIGIE_SERVER, else asked)")
 	token := fs.String("token", "", "shared auth token (else $VIGIE_TOKEN, else asked without echo)")
 	machine := fs.String("machine", "", "machine name (defaults to the hostname)")
-	uninstall := fs.Bool("uninstall", false, "remove vigie hooks and stop reporting")
 	if err := fs.Parse(args); err != nil {
 		return 2
-	}
-
-	if *uninstall {
-		// Kept working so a documented flag does not vanish under users, but the
-		// hooks are no longer init's business: `vigie hooks uninstall` is the
-		// command, and it also removes the call skill (#415).
-		fmt.Fprintln(os.Stderr, "init: --uninstall is deprecated; use `vigie hooks uninstall`")
-		path, err := install.Uninstall("")
-		if err != nil {
-			fmt.Fprintf(os.Stderr, "init: %v\n", err)
-			return 1
-		}
-		fmt.Printf("removed vigie hooks from %s\n", path)
-		return 0
 	}
 
 	srv, tok, err := resolveEndpoint(*server, *token)
