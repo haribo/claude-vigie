@@ -28,9 +28,9 @@ func sampleModel(t tab) model {
 			LastSeenAt: "2026-08-04T15:00:00Z", Usage: api.Usage{OutputTokens: out},
 		})
 	}
-	add("plain-note", "note", "working", 1_280_100_000, true)
-	add("melonia", "nomsters", "working", 2_821_800_000, true)
-	add("shellf", "shellf", "working", 1_421_500_000, true)
+	add("api-gateway", "gateway", "working", 1_280_100_000, true)
+	add("web-app", "web-app", "working", 2_821_800_000, true)
+	add("data-pipeline", "data-pipeline", "working", 1_421_500_000, true)
 	for i := 0; i < 7; i++ {
 		add("idle-"+string(rune('a'+i)), "raccoon", "idle", int64(i)*1000, i < 4)
 	}
