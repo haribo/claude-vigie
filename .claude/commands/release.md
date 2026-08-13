@@ -19,14 +19,25 @@ a tag yourself.
 - On `develop`, clean working tree, synced with `origin/develop`.
 - `develop` CI is green (`gh run list --branch develop --event push --limit 1`).
 - `CHANGELOG.md` has content under `## [Unreleased]` (nothing to release otherwise).
+- **The docs cover what `[Unreleased]` announces.** A feature that ships without
+  its README and site entry is not released, it is leaked — and a tag cannot be
+  quietly amended afterwards. Blocking: get the docs onto `develop` first.
+- **No orphan version section.** Every `## [X.Y.Z]` below `[Unreleased]` must have
+  a matching tag on the remote (`git ls-remote --tags origin`). One that does not
+  is a roll whose release was withdrawn: fold `[Unreleased]` **into** it and keep
+  its number, rather than renumbering and leaving behind a version nobody can ever
+  install. Reusing the number is safe only if the Go module proxy never cached the
+  tag — `https://proxy.golang.org/<module>/@v/vX.Y.Z.info` must answer 404, since a
+  cached tag is immutable and re-tagging another commit breaks checksums forever.
 - Resolve `X.Y.Z` (argument, or proposed from the entries and confirmed).
 
 ### 2. Roll the changelog (a normal PR to develop)
 
-- On a branch `chore/changelog-vX.Y.Z`: in `CHANGELOG.md`, rename `## [Unreleased]`
-  to `## [X.Y.Z] - YYYY-MM-DD` (today), add a fresh empty `## [Unreleased]` above
-  it, and update the link footer (`[Unreleased]` compare → `vX.Y.Z...HEAD`, add
-  `[X.Y.Z]` → the release tag URL).
+- On a branch `chore/changelog-vX-Y-Z` — hyphens, not dots: `.githooks/pre-push`
+  matches `[a-z0-9-]+` and refuses a branch name carrying the version's dots. In
+  `CHANGELOG.md`, rename `## [Unreleased]` to `## [X.Y.Z] - YYYY-MM-DD` (today),
+  add a fresh empty `## [Unreleased]` above it, and update the link footer
+  (`[Unreleased]` compare → `vX.Y.Z...HEAD`, add `[X.Y.Z]` → the release tag URL).
 - Commit via `/git-commit` (`chore(changelog): roll vX.Y.Z`), open a PR with
   `/gh-pr-create`, and merge it with `/gh-merge-develop`. `develop` now carries the
   rolled changelog.
