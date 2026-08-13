@@ -24,6 +24,18 @@ var stdinIsTerminal = func() bool { return term.IsTerminal(os.Stdin.Fd()) }
 // promptFn reads one answer. Indirected for the same reason.
 var promptFn = ask
 
+// The prompt labels are constants so the tests assert against the same strings
+// the operator sees. The token says its input is hidden: showing nothing is what
+// sudo, ssh and gh do, but only saying so tells a newcomer their keystrokes are
+// registering. Masking with asterisks was rejected — it leaks the secret's length
+// and needs hand-rolled raw-mode editing whose failure mode is a terminal left
+// with no echo.
+const (
+	labelServer = "Server URL (e.g. http://localhost:8080)"
+	//nolint:gosec // G101 fires on the identifier: this is a prompt label, not a credential
+	labelToken = "Token (input hidden)"
+)
+
 // errNoEndpoint is returned when nothing supplied the values and nothing can ask.
 var errNoEndpoint = errors.New("no server URL or token: pass --server and --token, " +
 	"set VIGIE_SERVER and VIGIE_TOKEN, or run `vigie init` from a terminal")
@@ -48,14 +60,14 @@ func resolveEndpoint(server, token string) (string, string, error) {
 
 	var err error
 	if server == "" {
-		if server, err = promptFn("Server URL (e.g. http://localhost:8080)", false); err != nil {
+		if server, err = promptFn(labelServer, false); err != nil {
 			return "", "", err
 		}
 	}
 	if token == "" {
 		// Read without echo: a prompt that displays the token merely moves the
 		// secret from the shell history to the terminal scrollback.
-		if token, err = promptFn("Token", true); err != nil {
+		if token, err = promptFn(labelToken, true); err != nil {
 			return "", "", err
 		}
 	}

@@ -90,7 +90,7 @@ func TestResolveEndpointNonInteractiveFails(t *testing.T) {
 func TestResolveEndpointAsksForWhatIsMissing(t *testing.T) {
 	t.Setenv("VIGIE_SERVER", "")
 	t.Setenv("VIGIE_TOKEN", "")
-	p := &stubPrompt{answers: map[string]string{"Token": "typed-token"}}
+	p := &stubPrompt{answers: map[string]string{labelToken: "typed-token"}}
 	withPrompt(t, true, p)
 
 	srv, tok, err := resolveEndpoint("http://from-flag:8080", "")
@@ -100,7 +100,7 @@ func TestResolveEndpointAsksForWhatIsMissing(t *testing.T) {
 	if srv != "http://from-flag:8080" || tok != "typed-token" {
 		t.Errorf("got %q/%q", srv, tok)
 	}
-	if len(p.asked) != 1 || p.asked[0] != "Token" {
+	if len(p.asked) != 1 || p.asked[0] != labelToken {
 		t.Fatalf("asked %v, want only the token", p.asked)
 	}
 	if !p.secrets[0] {
@@ -113,8 +113,8 @@ func TestResolveEndpointAsksForBoth(t *testing.T) {
 	t.Setenv("VIGIE_SERVER", "")
 	t.Setenv("VIGIE_TOKEN", "")
 	p := &stubPrompt{answers: map[string]string{
-		"Server URL (e.g. http://localhost:8080)": "http://typed:8080",
-		"Token": "typed-token",
+		labelServer: "http://typed:8080",
+		labelToken:  "typed-token",
 	}}
 	withPrompt(t, true, p)
 
