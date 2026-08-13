@@ -110,8 +110,8 @@ and expose them — systemd, containers, TLS front — is the deployer's call; s
 # on the host: run the server
 vigied serve --addr :8080 --db vigie.db
 
-# on each machine running Claude Code: connect (writes config + installs hooks)
-vigie init --server http://host:8080 --token <token> --machine "$(hostname)"
+# on each machine running Claude Code: connect (asks for the server and token)
+vigie init
 
 # cover already-open sessions too (run this as a service):
 vigie watch
