@@ -32,6 +32,21 @@ func (s *Server) handleReport(w http.ResponseWriter, r *http.Request) {
 	}
 
 	ctx := r.Context()
+
+	// A drifted watcher may not write session state (#384). Its build travels in
+	// every watch report (#356), so the daemon — the authority on its own build —
+	// arbitrates here, where an outdated client cannot bypass the check. The
+	// machine's presence and its faulty build are still recorded, so the fleet can
+	// see which machine to upgrade; only the session data is refused. Hook reports
+	// declare no build and stay ungated on purpose: they run inside the operator's
+	// Claude session (docs/design/version-consistency.md).
+	if req.Event == "watch" && !watcherBuildMatches(req) {
+		s.recordWatchHeartbeat(ctx, req)
+		metricReportsRejected.WithLabelValues("version_drift").Inc()
+		s.writeError(w, http.StatusConflict, driftMessage(req))
+		return
+	}
+
 	existing, err := s.store.GetSession(ctx, req.SessionID)
 	isNew := errors.Is(err, store.ErrNotFound)
 	if err != nil && !isNew {
@@ -159,9 +174,10 @@ func (s *Server) maybeSample(ctx context.Context, sessionID, at string, output i
 // wasted (#258).
 func visibleSignature(s store.Session) string {
 	u := s.Usage
-	return fmt.Sprintf("%s|%s|%s|%s|%s|%s|%s|%s|%s|%s|%t|%s|%d|%d|%d|%d|%d",
-		s.Status, s.StatusChangedAt, s.Activity, s.Title, s.User, s.Machine, s.Model,
+	return fmt.Sprintf("%s|%s|%s|%s|%s|%s|%s|%s|%s|%s|%t|%s|%d|%s|%s|%d|%d|%d|%d",
+		s.Status, s.StatusChangedAt, s.Detail, s.Title, s.User, s.Machine, s.Model,
 		s.GitBranch, s.ProjectDir, s.LastTool, s.RemoteControl, s.RemoteURL, s.APIErrorStatus,
+		s.CallAt, s.CallMessage, // raising or clearing a call must reach the dashboards (#388)
 		u.InputTokens, u.OutputTokens, u.CacheCreationTokens, u.CacheReadTokens)
 }
 
@@ -204,6 +220,9 @@ func applyReport(sess store.Session, isNew bool, req api.ReportRequest) store.Se
 		sess.StartedAt = req.Timestamp
 	}
 	sess.LastSeenAt = req.Timestamp
+
+	sess = applyCall(sess, req)
+
 	sess = applyStatus(sess, req)
 	if req.Event == "SessionEnd" {
 		sess.EndedAt = req.Timestamp
@@ -226,9 +245,44 @@ func applyReport(sess store.Session, isNew bool, req api.ReportRequest) store.Se
 	return sess
 }
 
+// applyCall folds a call into the session (ADR-0010). The session raises it, and
+// the session clears it — by resuming work or by ending. No action on vigie is
+// ever involved, which is what keeps the call on the right side of ADR-0007.
+//
+// Clearing keys on these events rather than on the session merely being
+// `working`: Claude is still inside an active turn when it raises the call, so a
+// status-based rule would erase the call the instant it was made.
+func applyCall(sess store.Session, req api.ReportRequest) store.Session {
+	switch req.Event {
+	case "call":
+		sess.CallMessage, sess.CallAt = req.CallMessage, req.Timestamp
+	case "UserPromptSubmit", "SessionEnd":
+		sess.CallMessage, sess.CallAt = "", ""
+	}
+	return sess
+}
+
+// reportDetail is the report's contextual detail, accepting the pre-#393 field
+// name from a reporter that predates the rename (the hook reporter is
+// deliberately ungated by the version check, so it can lag the daemon).
+func reportDetail(req api.ReportRequest) string {
+	if req.Detail != "" {
+		return req.Detail
+	}
+	return req.Activity
+}
+
 // applyStatus folds the report's status into the session: the reconciled status
 // and its owner, when it last changed, and the transient activity message.
 func applyStatus(sess store.Session, req api.ReportRequest) store.Session {
+	// A call carries no status and is orthogonal to it (ADR-0010), so it must
+	// neither derive one nor take ownership of it: deriving would invent "working"
+	// for a session that has none yet, and stamping the source "hook" would let a
+	// watcher-set state latch — the watcher could no longer retract its own (the
+	// #201 failure mode).
+	if req.Event == "call" {
+		return sess
+	}
 	prev := sess.Status
 	if req.Status != "" {
 		if !holdsWaiting(sess, req) {
@@ -246,15 +300,16 @@ func applyStatus(sess store.Session, req api.ReportRequest) store.Session {
 	// clear it on idle/ended, take a fresh message when the report has one, else
 	// drop a stale one on any status change so a new episode never shows the old
 	// "doing".
+	detail := reportDetail(req)
 	switch {
-	case sess.Status == "idle" && req.Activity == "shell":
-		sess.Activity = "shell" // a shell session is idle but not free: keep it in DOING (#280)
+	case sess.Status == "idle" && detail == "shell":
+		sess.Detail = "shell" // a shell session is idle but not free: keep it in DETAIL (#280)
 	case sess.Status == "idle" || sess.Status == "ended":
-		sess.Activity = "" // clears once the shell ends (the report no longer carries "shell")
-	case req.Activity != "":
-		sess.Activity = req.Activity
+		sess.Detail = "" // clears once the shell ends (the report no longer carries "shell")
+	case detail != "":
+		sess.Detail = detail
 	case sess.Status != prev:
-		sess.Activity = ""
+		sess.Detail = ""
 	}
 	return sess
 }

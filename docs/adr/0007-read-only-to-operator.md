@@ -60,3 +60,6 @@ If yes, the feature is forbidden — the handling belongs in the session.
 ## Related
 
 - [ADR-0005](0005-observe-only.md) — the outbound half (no control channel into sessions).
+- [ADR-0010](0010-session-raised-operator-call.md) — a session-authored signal tested
+  against the litmus above and allowed: it is set *and* cleared by the session, so
+  no action on vigie is ever required.

@@ -8,7 +8,7 @@ import (
 )
 
 // TestRefineStatusInterrupted is the #351 refinement: an idle session whose last
-// message is the interrupt marker keeps the base idle but shows DOING
+// message is the interrupt marker keeps the base idle but shows DETAIL
 // "interrupted"; a non-idle base is untouched, and the flag only overrides the
 // activity when set.
 func TestRefineStatusInterrupted(t *testing.T) {

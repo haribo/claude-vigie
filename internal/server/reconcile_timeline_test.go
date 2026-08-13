@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/haribo/claude-vigie/internal/api"
+	"github.com/haribo/claude-vigie/internal/version"
 )
 
 // TestStatusReconcileTimeline replays both observers — hook events and watcher
@@ -34,7 +35,9 @@ func TestStatusReconcileTimeline(t *testing.T) {
 		}
 	}
 	hook := func(id, event string) { report(id, api.ReportRequest{Event: event}) }
-	watch := func(id, status string) { report(id, api.ReportRequest{Event: "watch", Status: status}) }
+	watch := func(id, status string) {
+		report(id, api.ReportRequest{Event: "watch", WatcherVersion: version.Version, WatcherCommit: version.Commit, Status: status})
+	}
 
 	viewOf := func(id string) api.SessionView {
 		t.Helper()
@@ -59,7 +62,7 @@ func TestStatusReconcileTimeline(t *testing.T) {
 	}
 	assertActivity := func(id, want string) {
 		t.Helper()
-		if got := viewOf(id).Activity; got != want {
+		if got := viewOf(id).Detail; got != want {
 			t.Errorf("[%s] activity = %q, want %q", id, got, want)
 		}
 	}
@@ -117,10 +120,10 @@ func TestStatusReconcileTimeline(t *testing.T) {
 	report("block", api.ReportRequest{Event: "Notification"}) // waiting; StatusChangedAt = now
 	assert("block", "waiting")
 	stale := now.Add(-2 * time.Second).UTC().Format(time.RFC3339)
-	report("block", api.ReportRequest{Event: "watch", Status: "working", Timestamp: stale})
+	report("block", api.ReportRequest{Event: "watch", WatcherVersion: version.Version, WatcherCommit: version.Commit, Status: "working", Timestamp: stale})
 	assert("block", "waiting") // frozen transcript → held
 	advance(5 * time.Second)
-	report("block", api.ReportRequest{Event: "watch", Status: "working"}) // transcript moved (approval)
+	report("block", api.ReportRequest{Event: "watch", WatcherVersion: version.Version, WatcherCommit: version.Commit, Status: "working"}) // transcript moved (approval)
 	assert("block", "working")
 
 	// error — a watcher observation wins and clears on recovery.
@@ -133,7 +136,7 @@ func TestStatusReconcileTimeline(t *testing.T) {
 	// #236 — a resting session never carries a "doing". A PostToolUse leaves an
 	// activity behind; once the session goes idle the message is gone, and an
 	// idle_prompt (idle, no status change) leaves no residual message either.
-	report("act", api.ReportRequest{Event: "PostToolUse", Activity: "Bash: run tests"})
+	report("act", api.ReportRequest{Event: "PostToolUse", Detail: "Bash: run tests"})
 	assertActivity("act", "Bash: run tests")
 	hook("act", "Stop")
 	assertActivity("act", "")

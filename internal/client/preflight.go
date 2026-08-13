@@ -120,22 +120,15 @@ func fetchWatcherStatus(cfg *config.Config) (api.WatcherStatus, error) {
 	return ws, nil
 }
 
-// versionsMatch reports whether a client and daemon build are compatible: strict
-// version-string equality for releases, and commit equality when either side is a
-// dev build — a "dev" == "dev" string match across two commits is a false pass
-// (#357).
+// versionsMatch reports whether a client and daemon build are compatible. The
+// rule itself lives in internal/version, shared with the daemon's watcher gate so
+// the fleet has one implementation, not two that drift (#384).
 func versionsMatch(local, daemon api.VersionInfo) bool {
-	if local.Version == "dev" || daemon.Version == "dev" {
-		return local.Commit == daemon.Commit
-	}
-	return local.Version == daemon.Version
+	return version.Match(local.Version, local.Commit, daemon.Version, daemon.Commit)
 }
 
 func describeVersion(v api.VersionInfo) string {
-	if v.Commit != "" && v.Commit != "none" {
-		return fmt.Sprintf("%s (commit %s)", v.Version, v.Commit)
-	}
-	return v.Version
+	return version.Describe(v.Version, v.Commit)
 }
 
 func fetchDaemonVersion(cfg *config.Config) (api.VersionInfo, error) {

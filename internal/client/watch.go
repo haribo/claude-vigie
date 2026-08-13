@@ -28,6 +28,24 @@ func refreshHooks() {
 		return
 	}
 	fmt.Fprintf(os.Stderr, "watch: hooks refreshed in %s\n", path)
+	refreshSkill()
+}
+
+// refreshSkill rewrites the personal skill that teaches Claude the `vigie call`
+// command, so an install predating a release does not keep a stale description
+// forever (#391). It extends the ADR-0009 rationale from one artifact to two and
+// is best-effort for the same reason: a skill problem must never stop the watch.
+// Production leg only — the dev leg touches no production artifact.
+func refreshSkill() {
+	if config.EnvConfigPath() != "" {
+		return
+	}
+	path, err := install.InstallSkill()
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "watch: refreshing the call skill failed (continuing): %v\n", err)
+		return
+	}
+	fmt.Fprintf(os.Stderr, "watch: call skill refreshed in %s\n", path)
 }
 
 func runWatch(args []string) int {

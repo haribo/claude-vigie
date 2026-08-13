@@ -6,10 +6,27 @@ import (
 	"strings"
 	"time"
 
+	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 
 	"github.com/haribo/claude-vigie/internal/api"
 )
+
+// statsView is the Stats tab's own state: the time granularity the buckets are
+// rolled into (#379). The daily rows it renders are shared, fetched data on the
+// model; only the chosen period is the tab's.
+type statsView struct {
+	period period
+}
+
+// handleKey folds a period-switch key (d w m y t) into the tab state, ignoring
+// any other key.
+func (v statsView) handleKey(msg tea.KeyMsg) statsView {
+	if p, ok := periodFromKey(msg.String()); ok {
+		v.period = p
+	}
+	return v
+}
 
 // period is the time granularity of the Stats view: daily rollups are bucketed
 // client-side into day/week/month/year/total (switched with d w m y t).
@@ -188,7 +205,7 @@ func (m model) renderStats() string {
 	parts := make([]string, periodCount)
 	for p := period(0); p < periodCount; p++ {
 		lbl := " " + periodNames[p] + " "
-		if p == m.statsPeriod {
+		if p == m.stat.period {
 			parts[p] = cursorStyle.Render(lbl)
 		} else {
 			parts[p] = dimStyle.Render(lbl)
@@ -202,7 +219,7 @@ func (m model) renderStats() string {
 		return b.String()
 	}
 
-	buckets := bucketStats(daily, m.statsPeriod)
+	buckets := bucketStats(daily, m.stat.period)
 	models := statModels(daily)
 
 	var totTok, totWork, totWait, totIdle int64

@@ -73,14 +73,23 @@ func runInit(args []string) int {
 		return 1
 	}
 
+	// The skill teaches Claude that `vigie call` exists, so a session can tell you
+	// it is done (#391). Best-effort: it must not fail the configuration.
+	skillPath, sErr := install.InstallSkill()
+	if sErr != nil {
+		fmt.Fprintf(os.Stderr, "init: installing the call skill failed (continuing): %v\n", sErr)
+		skillPath = "not installed"
+	}
+
 	fmt.Printf(`vigie configured:
   config:   %s
   hooks:    %s
+  skill:    %s
   server:   %s
   machine:  %s
 
 New Claude Code sessions on this machine will report to the fleet.
-`, cfgPath, settingsPath, cfg.ServerURL, mach)
+`, cfgPath, settingsPath, skillPath, cfg.ServerURL, mach)
 	return 0
 }
 

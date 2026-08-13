@@ -9,7 +9,10 @@ import (
 )
 
 // TestWatcherVersionRoundTrip is the #356 pipeline: a watch report's version is
-// stored per machine and surfaced in GET /api/watcher.
+// stored per machine and surfaced in GET /api/watcher. The build here (0.3.0)
+// does not match the test daemon, so the report is refused (409, #384) — and the
+// version must round-trip anyway: that is the visibility guarantee, the operator
+// has to see which machine is drifted and to what.
 func TestWatcherVersionRoundTrip(t *testing.T) {
 	srv := newTestServer(t)
 
@@ -18,8 +21,8 @@ func TestWatcherVersionRoundTrip(t *testing.T) {
 		WatcherVersion: "0.3.0", WatcherCommit: "abc1234",
 		Timestamp: "2026-08-07T10:00:00Z",
 	})
-	if rec := do(t, srv, http.MethodPost, "/api/report", report, true); rec.Code != http.StatusNoContent && rec.Code != http.StatusOK {
-		t.Fatalf("report = %d", rec.Code)
+	if rec := do(t, srv, http.MethodPost, "/api/report", report, true); rec.Code != http.StatusConflict {
+		t.Fatalf("drifted report = %d, want 409", rec.Code)
 	}
 
 	rec := do(t, srv, http.MethodGet, "/api/watcher", nil, true)

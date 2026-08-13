@@ -24,7 +24,7 @@ func sampleModel(t tab) model {
 	add := func(title, dir, status string, out int64, rc bool) {
 		sessions = append(sessions, api.SessionView{
 			Title: title, Machine: "minet-dev", User: "nico", ProjectDir: "/home/nico/" + dir,
-			Status: status, RemoteControl: rc, Activity: "editing " + dir,
+			Status: status, RemoteControl: rc, Detail: "editing " + dir,
 			LastSeenAt: "2026-08-04T15:00:00Z", Usage: api.Usage{OutputTokens: out},
 		})
 	}
@@ -41,7 +41,7 @@ func sampleModel(t tab) model {
 		tab:      t,
 		prefs:    defaultPrefs(),
 		sessions: sessions,
-		history:  []int{0, 1, 2, 1, 3, 2, 4, 3, 2, 1, 2, 3}, // populates the "activity" sparkline
+		sess:     sessionsView{history: []int{0, 1, 2, 1, 3, 2, 4, 3, 2, 1, 2, 3}}, // populates the "activity" sparkline
 		usage: api.UsageReport{
 			FiveHourPct: 28, FiveHourReset: "2026-08-04T16:00:00Z",
 			SevenDayPct: 69, SevenDayReset: "2026-08-07T15:00:00Z",
