@@ -135,7 +135,7 @@ type model struct {
 	conn            <-chan bool      // server-connection state pushed by the SSE loop
 	sseLive         bool             // is the SSE stream currently connected
 	clock           func() time.Time // injected wall clock; defaults to clock.Now
-	focused         bool             // terminal has focus → suppress desktop notifications
+	focus           focusState       // what we know of the terminal focus (#411)
 }
 
 // sessionsView is the Sessions tab's private state — the cursor and selection,
@@ -377,9 +377,9 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.height = msg.Height
 		return m.scrollToCursor(), nil
 	case tea.FocusMsg:
-		m.focused = true // operator is watching → suppress desktop notifications
+		m.focus = focusOn // operator is watching → suppress desktop notifications
 	case tea.BlurMsg:
-		m.focused = false
+		m.focus = focusOff
 	case tea.KeyMsg:
 		return m.handleKey(msg)
 	case retentionDoneMsg:
@@ -791,7 +791,7 @@ func (m model) renderSettings() string {
 		{"Hide ended sessions", onOffLabel(m.prefs.hideEnded), false},
 		{"Hide idle after", idleLabel(m.prefs.idleHideAfter), false},
 		{"Session retention", retentionLabel(m.serverRetention), true},
-		{"Desktop notifications", onOffLabel(m.prefs.notify), false},
+		{"Desktop notifications", notifyAvailability(m.prefs.notify).label(), false},
 	}
 	for i, r := range rows {
 		gutter := "  "
