@@ -1,8 +1,12 @@
 package client
 
 import (
+	"errors"
+	"os"
 	"strings"
 	"testing"
+
+	"github.com/charmbracelet/x/term"
 )
 
 // drive feeds a byte sequence through the editor and returns what was typed, what
@@ -106,5 +110,122 @@ func TestSecretEditorAcceptsPastedBytes(t *testing.T) {
 	typed, _, _ := drive("aB3-_=+/é\r")
 	if typed != "aB3-_=+/é" {
 		t.Errorf("typed = %q", typed)
+	}
+}
+
+// fakeTerminal stubs raw mode so the read loop can run on a pipe, and records
+// whether the terminal was handed back.
+type fakeTerminal struct {
+	rawFailed bool
+	restored  bool
+	password  string
+	passErr   error
+}
+
+func (ft *fakeTerminal) install(t *testing.T) {
+	t.Helper()
+	oR, oS, oP := makeRaw, restoreTerm, readPassword
+	makeRaw = func(uintptr) (*term.State, error) {
+		if ft.rawFailed {
+			return nil, errors.New("not a terminal")
+		}
+		return &term.State{}, nil
+	}
+	restoreTerm = func(uintptr, *term.State) error { ft.restored = true; return nil }
+	readPassword = func(uintptr) ([]byte, error) { return []byte(ft.password), ft.passErr }
+	t.Cleanup(func() { makeRaw, restoreTerm, readPassword = oR, oS, oP })
+}
+
+// pipeWith returns a readable file preloaded with in, closed so the loop sees EOF.
+func pipeWith(t *testing.T, in string) *os.File {
+	t.Helper()
+	r, w, err := os.Pipe()
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = r.Close() })
+	go func() { _, _ = w.WriteString(in); _ = w.Close() }()
+	return r
+}
+
+// TestReadMaskedEchoesAndRestores covers the loop that the pure editor cannot:
+// the secret comes back whole, only asterisks are written, and — the guarantee
+// that matters most — the terminal is handed back.
+func TestReadMaskedEchoesAndRestores(t *testing.T) {
+	ft := &fakeTerminal{}
+	ft.install(t)
+	var echo strings.Builder
+
+	got, err := readMasked(pipeWith(t, "s3cr3t\r"), &echo)
+	if err != nil {
+		t.Fatalf("readMasked: %v", err)
+	}
+	if got != "s3cr3t" {
+		t.Errorf("secret = %q", got)
+	}
+	if echo.String() != "******\r\n" {
+		t.Errorf("echo = %q, want six stars", echo.String())
+	}
+	if strings.Contains(echo.String(), "s3cr3t") {
+		t.Error("the secret leaked into the echo")
+	}
+	if !ft.restored {
+		t.Error("the terminal was left in raw mode")
+	}
+}
+
+// TestReadMaskedRestoresOnCancel: leaving a terminal raw would give the operator
+// a shell with no echo, so restoring must not depend on the happy path.
+func TestReadMaskedRestoresOnCancel(t *testing.T) {
+	ft := &fakeTerminal{}
+	ft.install(t)
+	var echo strings.Builder
+
+	if _, err := readMasked(pipeWith(t, "abc\x03"), &echo); !errors.Is(err, errSecretCanceled) {
+		t.Errorf("err = %v, want canceled", err)
+	}
+	if !ft.restored {
+		t.Error("the terminal was left in raw mode after Ctrl-C")
+	}
+}
+
+// TestReadMaskedFallsBackWithoutRawMode: with no terminal, it must fall back to an
+// echo-less read rather than echoing the secret in cooked mode.
+func TestReadMaskedFallsBackWithoutRawMode(t *testing.T) {
+	ft := &fakeTerminal{rawFailed: true, password: "from-fallback"}
+	ft.install(t)
+	var echo strings.Builder
+
+	got, err := readMasked(pipeWith(t, "ignored\r"), &echo)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got != "from-fallback" {
+		t.Errorf("secret = %q, want the fallback read", got)
+	}
+	if echo.String() != "" {
+		t.Errorf("the fallback echoed %q; a secret must never be echoed", echo.String())
+	}
+	if ft.restored {
+		t.Error("restored a terminal that was never put in raw mode")
+	}
+}
+
+// TestReadMaskedAcceptsInputEndingWithoutNewline: a pasted value whose stream ends
+// at EOF must not be lost.
+func TestReadMaskedAcceptsInputEndingWithoutNewline(t *testing.T) {
+	ft := &fakeTerminal{}
+	ft.install(t)
+	var echo strings.Builder
+
+	got, err := readMasked(pipeWith(t, "no-newline"), &echo)
+	if err != nil {
+		t.Fatalf("readMasked: %v", err)
+	}
+	if got != "no-newline" {
+		t.Errorf("secret = %q", got)
+	}
+	if !ft.restored {
+		t.Error("the terminal was left in raw mode")
 	}
 }

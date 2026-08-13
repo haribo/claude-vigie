@@ -98,6 +98,16 @@ func (e *secretEditor) key(b byte) (echo string, action secretAction) {
 	return "*", secretContinue
 }
 
+// Terminal seams. readMasked is the one place that touches raw mode, and raw mode
+// cannot be entered on a pipe — without these the loop below is untestable and
+// the guarantee that matters most (the terminal is always restored) rests on
+// nothing but review.
+var (
+	makeRaw      = term.MakeRaw
+	restoreTerm  = term.Restore
+	readPassword = term.ReadPassword
+)
+
 // readMasked reads a secret from f, echoing asterisks to w. The terminal is put
 // in raw mode and **always** restored — leaving it raw would give the operator a
 // shell with no echo, which is a far worse outcome than any prompt.
@@ -105,12 +115,12 @@ func (e *secretEditor) key(b byte) (echo string, action secretAction) {
 // When raw mode is unavailable (not a terminal, or unsupported) it falls back to
 // an echo-less read rather than echoing the secret in cooked mode.
 func readMasked(f *os.File, w io.Writer) (string, error) {
-	state, err := term.MakeRaw(f.Fd())
+	state, err := makeRaw(f.Fd())
 	if err != nil {
-		b, perr := term.ReadPassword(f.Fd())
+		b, perr := readPassword(f.Fd())
 		return string(b), perr
 	}
-	defer func() { _ = term.Restore(f.Fd(), state) }()
+	defer func() { _ = restoreTerm(f.Fd(), state) }()
 
 	var ed secretEditor
 	one := make([]byte, 1)
