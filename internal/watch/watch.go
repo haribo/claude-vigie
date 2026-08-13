@@ -7,6 +7,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -73,20 +74,37 @@ func Run(ctx context.Context, cfg *config.Config, opts Options) error {
 
 	go runUsageLoop(ctx, cfg, opts.UsageInterval)
 
+	// Name a build mismatch up front rather than letting it surface as refused
+	// reports minutes later (#384).
+	reportDaemonDrift(cfg)
+
 	ticker := time.NewTicker(opts.Interval)
 	defer ticker.Stop()
 
 	sc := newScanner()
 	lastGC := clock.Now()
+	var drifted, beatFailing bool
+	var lastBeat time.Time
 	for {
-		reports, err := sc.scan(root, cfg.Machine, opts.MaxAge, clock.Now())
-		if err != nil {
-			fmt.Fprintf(os.Stderr, "watch: %v\n", err)
+		// Liveness is claimed on its own, never as a side effect of session data: a
+		// watcher with nothing to report is still running, and a machine with no
+		// live session used to read as watcher-less (#386). The answer also carries
+		// the drift verdict, so it is what ends a drifted state (#384).
+		if clock.Now().Sub(lastBeat) >= heartbeatInterval {
+			drifted, beatFailing = beat(cfg, drifted, beatFailing)
+			lastBeat = clock.Now()
 		}
-		for _, r := range reports {
-			if err := post(cfg, r); err != nil {
-				fmt.Fprintf(os.Stderr, "watch: reporting %s: %v\n", r.SessionID, err)
+
+		// A drifted watcher goes inert rather than exiting: the packaged unit uses
+		// Restart=on-failure, so exiting would crash-loop every few seconds and cost
+		// the machine all observability. It keeps beating, so it stays visible, and
+		// resumes by itself once the builds realign.
+		if !drifted {
+			reports, err := sc.scan(root, cfg.Machine, opts.MaxAge, clock.Now())
+			if err != nil {
+				fmt.Fprintf(os.Stderr, "watch: %v\n", err)
 			}
+			drifted = postReports(cfg, reports, drifted)
 		}
 		if time.Since(lastGC) > gcInterval {
 			collectDeadMappings(opts.MaxAge)
@@ -98,6 +116,69 @@ func Run(ctx context.Context, cfg *config.Config, opts Options) error {
 		case <-ticker.C:
 		}
 	}
+}
+
+// heartbeatInterval is how often the watcher claims liveness. It sits well inside
+// the 15 s staleness threshold the TUI and the Machines tab use, and is decoupled
+// from the scan interval so a fast scan does not multiply requests (#386).
+const heartbeatInterval = 5 * time.Second
+
+// beat claims liveness and folds the daemon's answer into the drift state. It
+// announces transitions only — into drift, out of it, and in and out of a
+// transport failure — so a persistent condition never fills the journal (#386).
+func beat(cfg *config.Config, drifted, failing bool) (newDrifted, newFailing bool) {
+	err := postJSON(cfg, "/api/watcher/heartbeat", api.HeartbeatRequest{
+		Machine:        cfg.Machine,
+		WatcherVersion: version.Version,
+		WatcherCommit:  version.Commit,
+	}, nil)
+	switch {
+	case err == nil:
+		if drifted {
+			fmt.Fprintln(os.Stderr, "watch: build now matches the daemon — resuming session reports")
+		}
+		if failing {
+			fmt.Fprintln(os.Stderr, "watch: heartbeat is reaching the server again")
+		}
+		return false, false
+	case isDrift(err):
+		if !drifted {
+			fmt.Fprintf(os.Stderr, "watch: %v; session reports stay refused until this machine is upgraded\n", err)
+		}
+		return true, false
+	default:
+		// A transport failure is not drift — including the 404 an older daemon
+		// answers, which the startup version probe has already explained.
+		if !failing {
+			fmt.Fprintf(os.Stderr, "watch: heartbeat: %v\n", err)
+		}
+		return drifted, true
+	}
+}
+
+// postReports sends each report and returns whether this watcher is drifted — the
+// daemon refusing its build. It stops at the first refusal, so a drifted watcher
+// makes one rejected request rather than one per session, and it announces the
+// transition into drift exactly once (#384).
+func postReports(cfg *config.Config, reports []api.ReportRequest, drifted bool) bool {
+	for _, r := range reports {
+		err := post(cfg, r)
+		switch {
+		case err == nil:
+			if drifted {
+				fmt.Fprintln(os.Stderr, "watch: build now matches the daemon — resuming session reports")
+				drifted = false
+			}
+		case isDrift(err):
+			if !drifted {
+				fmt.Fprintf(os.Stderr, "watch: %v; session reports stay refused until this machine is upgraded\n", err)
+			}
+			return true
+		default:
+			fmt.Fprintf(os.Stderr, "watch: reporting %s: %v\n", r.SessionID, err)
+		}
+	}
+	return drifted
 }
 
 // collectDeadMappings removes presence mappings for sessions whose process died
@@ -233,7 +314,7 @@ func (s *scanner) scan(root, machine string, maxAge time.Duration, now time.Time
 			RemoteURL:      remoteURL,
 			Usage:          &usage,
 			APIErrorStatus: apiErr,
-			Activity:       activity,
+			Detail:         activity,
 			WatcherVersion: version.Version, // report this watcher's build (#356)
 			WatcherCommit:  version.Commit,
 			Timestamp:      reportAt.UTC().Format(time.RFC3339),
@@ -322,9 +403,9 @@ func resolveStatus(reg map[string]sessionRecord, regByProc map[procID]string, id
 		base = withError(mapRegistryStatus(rec.Status), info.LastAPIError)
 		switch {
 		case rec.Status == "shell":
-			activity = "shell" // dropped to a shell: status stays idle, DOING says so (#280)
+			activity = "shell" // dropped to a shell: status stays idle, DETAIL says so (#280)
 		case base == "waiting" && activity == "" && rec.WaitingFor != "":
-			activity = capText(rec.WaitingFor, 80) // surface the ask in DOING
+			activity = capText(rec.WaitingFor, 80) // surface the ask in DETAIL
 		}
 	case superseded(id, regByProc):
 		return "ended", activity, reportAt // switched in place on the same process (e.g. /clear) (#367)
@@ -540,6 +621,76 @@ func post(cfg *config.Config, req api.ReportRequest) error {
 	return postJSON(cfg, "/api/report", req, nil)
 }
 
+// httpError carries a non-2xx response so callers can act on the status, not just
+// log it: the daemon answers 409 to a watch report whose build does not match its
+// own (#384).
+type httpError struct {
+	status     int
+	statusLine string
+	msg        string
+}
+
+func (e *httpError) Error() string {
+	if e.msg != "" {
+		return fmt.Sprintf("server returned %s: %s", e.statusLine, e.msg)
+	}
+	return fmt.Sprintf("server returned %s", e.statusLine)
+}
+
+// isDrift reports whether err is the daemon refusing this watcher's build (#384).
+func isDrift(err error) bool {
+	var he *httpError
+	return errors.As(err, &he) && he.status == http.StatusConflict
+}
+
+// serverErrorMessage extracts the daemon's {"error": "..."} message, or "" when
+// the body carries none.
+func serverErrorMessage(resp *http.Response) string {
+	var body struct {
+		Error string `json:"error"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&body); err != nil {
+		return ""
+	}
+	return body.Error
+}
+
+// getJSON GETs path from the server (with auth) and decodes it into out.
+func getJSON(cfg *config.Config, path string, out any) error {
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, strings.TrimRight(cfg.ServerURL, "/")+path, nil)
+	if err != nil {
+		return err
+	}
+	req.Header.Set("Authorization", "Bearer "+cfg.Token)
+	resp, err := httpClient.Do(req)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = resp.Body.Close() }()
+	if resp.StatusCode != http.StatusOK {
+		return &httpError{status: resp.StatusCode, statusLine: resp.Status}
+	}
+	return json.NewDecoder(resp.Body).Decode(out)
+}
+
+// reportDaemonDrift probes the daemon's build once at startup so a mismatch is
+// named immediately, with its remediation, instead of only surfacing later as
+// refused reports. Unknown is not drifted: an unreachable or erroring server
+// leaves the watcher running and lets the daemon arbitrate per report (#384).
+func reportDaemonDrift(cfg *config.Config) {
+	var v api.VersionInfo
+	if err := getJSON(cfg, "/api/version", &v); err != nil {
+		return
+	}
+	if version.Match(version.Version, version.Commit, v.Version, v.Commit) {
+		return
+	}
+	fmt.Fprintf(os.Stderr, "watch: this watcher is %s but the daemon is %s — session reports will be refused until this machine is upgraded\n",
+		version.Describe(version.Version, version.Commit), version.Describe(v.Version, v.Commit))
+}
+
 // postJSON POSTs body to path on the server (with auth) and, if out is
 // non-nil, decodes the response into it.
 func postJSON(cfg *config.Config, path string, body, out any) error {
@@ -564,7 +715,7 @@ func postJSON(cfg *config.Config, path string, body, out any) error {
 	}
 	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode >= http.StatusMultipleChoices {
-		return fmt.Errorf("server returned %s", resp.Status)
+		return &httpError{status: resp.StatusCode, statusLine: resp.Status, msg: serverErrorMessage(resp)}
 	}
 	if out != nil {
 		if err := json.NewDecoder(resp.Body).Decode(out); err != nil {

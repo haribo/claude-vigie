@@ -9,6 +9,106 @@ file is the single source of truth, not a second narrative.
 
 ## [Unreleased]
 
+## [0.5.0] - 2026-08-13
+
+### Added
+
+- `vigie` now installs a personal Agent Skill (`~/.claude/skills/vigie-call/`) so
+  Claude knows the `vigie call` command exists without any per-project setup — the
+  whole feature rests on the command actually being run when you ask to be told.
+  It is written by `vigie init` and `vigie hooks install`, refreshed by
+  `vigie watch` at startup so an install predating a release cannot keep a stale
+  description, and removed by `vigie hooks uninstall`. The production leg alone
+  owns it: a dev leg touches no production artefact. The skill states plainly that
+  the call is **best-effort** — if Claude does not run it, nothing is raised and
+  the session reads exactly as it does today
+  ([design](docs/design/call-discoverability.md), #391).
+- The web dashboard surfaces a session's call with the same grammar as the TUI —
+  the marker lives in the status, never in the Detail cell. The dot inside the
+  status pill **pulses** (a soft CSS fade, where the terminal is limited to two
+  hard states), the pill keeps its status color and label because a calling
+  session is still `idle`, the row takes the existing attention left-border plus a
+  faint tint of the same color, and the call message fills the Detail cell in that
+  color. No new color: everything derives from `--st`. `prefers-reduced-motion:
+  reduce` stops the pulse, and a call counter leads the summary strip when
+  non-zero ([ADR-0010](docs/adr/0010-session-raised-operator-call.md), #390).
+- The TUI now surfaces a session's call by **motion**: its status dot blinks in
+  its own status color, at 1 Hz (inside WCAG 2.3.1's three-flashes-per-second
+  ceiling), and the call message takes the `DETAIL` cell in that same color. No new
+  glyph, color or column — the dot is the one element in a row that can be
+  animated without destroying information, since the status word stays readable
+  beside it. A `● call N` counter leads the summary strip when non-zero, a raised
+  call reuses the desktop notification, and it jumps ahead of the inferred
+  attention states in the `n` queue — a call is explicit where `waiting` is a
+  deduction. The animation tick exists only while something is actually calling;
+  the ambient poll stays at 5 s. Two preferences in `tui.toml`: `blink = false`
+  stops the animation, and `call_marker` changes the glyph for fonts that lack it
+  — a marker wider than one terminal cell is rejected rather than allowed to shift
+  every column to its right ([ADR-0010](docs/adr/0010-session-raised-operator-call.md), #389).
+- A session can now raise an explicit **call** for the operator: ask for it in
+  plain language ("when you're finished, tell me in vigie") and Claude runs
+  `vigie call "backfill done — 12k rows"` at the end of its turn. vigie surfaces
+  the call until work resumes in that session. The call is set **and cleared by
+  the session** (`UserPromptSubmit`, `SessionEnd`), so no action on vigie is ever
+  required — it is an observed signal like status, not operator handling state,
+  which is what keeps it on the right side of
+  [ADR-0007](docs/adr/0007-read-only-to-operator.md)
+  ([ADR-0010](docs/adr/0010-session-raised-operator-call.md), #388). It is
+  orthogonal to status — a calling session keeps whatever status it has — and the
+  message is optional. Like the hooks it is fire-and-forget: it can never fail a
+  session. Rendering lands separately (TUI #389, web #390).
+- The sessions table now scrolls within a vertical viewport instead of spilling
+  off the bottom of the terminal. It tracks the terminal height (previously only
+  width was honored), keeps the tab bar, summary, column header, and usage/footer
+  pinned, and scrolls only the row band — continuous, cursor-driven, htop/k9s
+  style, with a 2-row look-ahead margin and a `rows a–b / n` indicator shown only
+  when the list overflows. Grouped views keep the current group's header pinned;
+  the detail panel scrolls the same way ([design](docs/design/tui-viewport.md),
+  #378).
+
+### Changed
+
+- The `DOING` column is now `DETAIL`, in the TUI and the web dashboard alike. The
+  name no longer described its contents: three of the five things it carries are
+  not actions (a permission prompt's subject, `shell`, a call message) and a
+  fourth is the negation of one (`interrupted`). It also removes a real ambiguity
+  — a *different* column was already called `ACT`/`Activity` (the token
+  sparkline). The API field follows: `GET /api/sessions` now returns `detail`
+  instead of `activity`. That is a contract change, and it is coordinated rather
+  than silent: the TUI and the daemon are already version-locked to each other
+  (the startup preflight), the web dashboard is served by the daemon itself, and
+  the report endpoint still accepts the old `activity` field from a hook reporter
+  that predates the rename — the one client deliberately exempt from the version
+  gate. A saved column layout is migrated, so a renamed column keeps its position
+  and stays hidden if you had hidden it (#393).
+- A watcher whose build does not match the daemon can no longer write session
+  state. Enforcement lives in the daemon — the watcher's build already travels in
+  every report (#356), and a rule applied only by the client can be skipped by
+  exactly the outdated client it must stop — which closes the gap where a machine
+  running a watcher but never a TUI drifted unchecked. A refused report answers
+  `409` and writes nothing, while the machine and its faulty build stay visible in
+  `GET /api/watcher` and the Machines tab, so the operator can see what to
+  upgrade. The watcher goes **inert** rather than exiting (the packaged unit uses
+  `Restart=on-failure`, so exiting would crash-loop): it logs the drift once,
+  retries a single report every 60 s, and resumes on its own once the builds
+  realign. Hook reports stay ungated on purpose — they run inside the operator's
+  Claude session ([design](docs/design/version-consistency.md), #384).
+
+### Fixed
+
+- A machine whose watcher is running but currently has **no session to report** no
+  longer reads as having no watcher. Liveness was a side effect of session data —
+  the server only refreshed a machine's heartbeat while handling a session report —
+  so a machine with nothing open (or nothing newer than `--max-age`) silently
+  dropped out of `GET /api/watcher`, showed as "hooks only" in the Machines tab,
+  and made the TUI preflight refuse to start while blaming the server. The watcher
+  now claims liveness on its own, every 5 s, over a dedicated
+  `POST /api/watcher/heartbeat` that is independent of sessions
+  ([design](docs/design/watcher-liveness.md), #386). That heartbeat also carries
+  the version verdict, replacing the 60 s report-retry probe from #384 — which
+  could never work on the machine this fixes, since a drifted watcher with no
+  sessions had no report to probe with.
+
 ## [0.4.1] - 2026-08-08
 
 ### Fixed
@@ -164,7 +264,8 @@ across machines — it reads and reports session state; it never drives a sessio
 - The API binds `127.0.0.1` by default; every `/api/*` route is behind a
   constant-time shared-token check; request bodies are size-capped.
 
-[Unreleased]: https://github.com/haribo/claude-vigie/compare/v0.4.1...HEAD
+[Unreleased]: https://github.com/haribo/claude-vigie/compare/v0.5.0...HEAD
+[0.5.0]: https://github.com/haribo/claude-vigie/compare/v0.4.1...v0.5.0
 [0.4.1]: https://github.com/haribo/claude-vigie/compare/v0.4.0...v0.4.1
 [0.4.0]: https://github.com/haribo/claude-vigie/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/haribo/claude-vigie/compare/v0.2.0...v0.3.0

@@ -71,7 +71,7 @@ type Info struct {
 	// Interrupted is true when the last non-system message is Claude Code's
 	// synthetic "[Request interrupted by user]" line — the operator killed the
 	// turn (Ctrl-C/Esc). The base status is still idle; the watcher only sets the
-	// DOING marker to "interrupted", cleared by the next real message (#351).
+	// DETAIL marker to "interrupted", cleared by the next real message (#351).
 	Interrupted bool
 }
 

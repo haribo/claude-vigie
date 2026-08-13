@@ -19,8 +19,8 @@ func TestStatsRollupAndEndpoint(t *testing.T) {
 	srv := newTestServer(t)
 
 	// Watch reports accrue output-token deltas (500, then +300 = 800).
-	postReport(t, srv, `{"event":"watch","session_id":"s1","machine":"m","model":"opus","status":"working","usage":{"output_tokens":500},"timestamp":"2026-07-29T10:00:00Z"}`)
-	postReport(t, srv, `{"event":"watch","session_id":"s1","machine":"m","model":"opus","status":"working","usage":{"output_tokens":800},"timestamp":"2026-07-29T10:01:00Z"}`)
+	postReport(t, srv, `{"event":"watch",`+watchBuildJSON()+`"session_id":"s1","machine":"m","model":"opus","status":"working","usage":{"output_tokens":500},"timestamp":"2026-07-29T10:00:00Z"}`)
+	postReport(t, srv, `{"event":"watch",`+watchBuildJSON()+`"session_id":"s1","machine":"m","model":"opus","status":"working","usage":{"output_tokens":800},"timestamp":"2026-07-29T10:01:00Z"}`)
 
 	// Hook events accrue status seconds: working 10:02→10:04 (120s), then
 	// waiting 10:04→10:07 (180s).

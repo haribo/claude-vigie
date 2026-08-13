@@ -44,14 +44,24 @@ type Session struct {
 	// lets reconciliation keep a hook state while letting the watcher retract its
 	// own — see docs/design/session-status.md.
 	StatusSource string
-	// Activity is a short message describing what the session is doing (working)
-	// or waiting on (waiting): a tool call or a notification. Cleared on a status
-	// change so it never goes stale.
-	Activity string
+	// Detail is the contextual detail of the current state: the running tool, what
+	// a permission prompt is asking about, `shell`, `interrupted`, a call message.
+	// Cleared on a status change so it never goes stale. Persisted in the column
+	// still named `activity`: renaming a stored column for cosmetics would be risk
+	// without benefit (#393).
+	Detail string
 	// StatusChangedAt is when Status last changed (RFC3339, the reporting event's
 	// timestamp). It lets a hook `waiting` outlive a stale watcher `working`: the
 	// watcher only clears it once the transcript moves past this time.
 	StatusChangedAt string
+	// CallMessage and CallAt hold a call the session raised for the operator
+	// (ADR-0010): the message (may be empty — a call with no message is still a
+	// call) and when it was raised (RFC3339). A call is active iff CallAt is
+	// non-empty. Orthogonal to Status: a calling session keeps its own status. Set
+	// by the session and cleared by it resuming work (UserPromptSubmit) or ending
+	// (SessionEnd) — never by an action on vigie (ADR-0007).
+	CallMessage string
+	CallAt      string
 }
 
 // Usage holds cumulative token counters for a session.

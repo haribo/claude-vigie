@@ -29,6 +29,8 @@ func Run(args []string) int {
 		return runHooks(rest)
 	case "report":
 		return runReport(rest)
+	case "call":
+		return runCall(rest)
 	case "watch":
 		return runWatch(rest)
 	case "tui":
@@ -56,6 +58,7 @@ Commands:
   init       Install hooks and write the client config
   hooks      Install/remove reporting hooks for one leg (VIGIE_CONFIG-selected)
   report     Report a session event (invoked by Claude Code hooks)
+  call       Raise a call for the operator from the current session
   watch      Watch local transcripts and report all sessions
   tui        Run the terminal dashboard client
   version    Print version information

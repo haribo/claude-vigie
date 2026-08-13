@@ -44,7 +44,7 @@ dashboard shows that same shared snapshot.
 
 ---
 
-## Appendix — doc conventions (from tribnest)
+## Appendix — doc conventions
 
 `docs/design/` = the *what* (user-observable); `docs/adr/` = decisions with
 rationale; code = the *how*. Docs never paraphrase code. Adding/modifying design

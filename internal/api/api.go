@@ -26,8 +26,15 @@ type ReportRequest struct {
 	// NotificationType is the Claude Code Notification hook's notification_type
 	// (e.g. permission_prompt vs idle_prompt); it splits waiting from idle.
 	NotificationType string `json:"notification_type,omitempty"`
-	// Activity is a short human message describing what the session is doing
-	// (working) or waiting on (waiting) — a tool call or a notification message.
+	// Detail is the contextual detail of the session's current state: the running
+	// tool, what a permission prompt is asking about, `shell`, `interrupted`. Named
+	// `activity` before #393.
+	Detail string `json:"detail,omitempty"`
+	// Activity is the pre-#393 name of Detail, still read from a reporter that
+	// predates the rename. The hook reporter is deliberately ungated by the version
+	// check (docs/design/version-consistency.md), so it can lag the daemon; without
+	// this fallback its detail would be dropped silently. Removable once no such
+	// client remains.
 	Activity       string `json:"activity,omitempty"`
 	Status         string `json:"status,omitempty"`           // explicit status (watcher); empty = derive from event
 	RemoteControl  *bool  `json:"remote_control,omitempty"`   // detected /rc state (watcher); nil = no info
@@ -38,7 +45,11 @@ type ReportRequest struct {
 	// so the server can track each machine's watcher version (#356).
 	WatcherVersion string `json:"watcher_version,omitempty"`
 	WatcherCommit  string `json:"watcher_commit,omitempty"`
-	Timestamp      string `json:"timestamp"` // RFC3339, event time
+	// CallMessage rides Event=="call": the message a session raised for the
+	// operator (ADR-0010). Optional — a call with no message is still a call, so
+	// the event, not this field, is what raises it.
+	CallMessage string `json:"call_message,omitempty"`
+	Timestamp   string `json:"timestamp"` // RFC3339, event time
 }
 
 // Usage holds token counters.
@@ -73,14 +84,29 @@ type SessionView struct {
 	RemoteControl   bool    `json:"remote_control"`
 	RemoteURL       string  `json:"remote_url,omitempty"`        // /rc resume URL while remote control is active
 	APIErrorStatus  int     `json:"api_error_status,omitempty"`  // HTTP code when Status == "error", else 0
-	Activity        string  `json:"activity,omitempty"`          // short "doing"/"waiting on" message
+	Detail          string  `json:"detail,omitempty"`            // contextual detail of the current state (#393)
 	StatusChangedAt string  `json:"status_changed_at,omitempty"` // RFC3339, when Status last changed
 	Samples         []int64 `json:"samples,omitempty"`           // recent output-token samples, oldest first
+	// CallAt/CallMessage carry a call the session raised for the operator
+	// (ADR-0010). The call is active iff CallAt is non-empty; the message may be
+	// empty. Orthogonal to Status — a calling session keeps its own status.
+	CallAt      string `json:"call_at,omitempty"`
+	CallMessage string `json:"call_message,omitempty"`
 }
 
 // Settings are the server-wide settings (read/written at /api/settings).
 type Settings struct {
 	SessionRetention string `json:"session_retention"` // Go duration; "" = disabled
+}
+
+// HeartbeatRequest is a watcher's liveness claim: it is alive on this machine,
+// running this build. Liveness is deliberately independent of session reports —
+// a watcher with nothing to report is still running
+// (docs/design/watcher-liveness.md, #386).
+type HeartbeatRequest struct {
+	Machine        string `json:"machine"`
+	WatcherVersion string `json:"watcher_version,omitempty"`
+	WatcherCommit  string `json:"watcher_commit,omitempty"`
 }
 
 // LeaseRequest asks for the usage-fetch lease.

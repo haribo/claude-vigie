@@ -32,6 +32,7 @@ type Store interface {
 	ListSamples(ctx context.Context, sessionID, since string, limit int) ([]int64, error)
 	AcquireLease(ctx context.Context, holder string, ttl time.Duration, now time.Time) (bool, string, error)
 	GetMeta(ctx context.Context, key string) (string, bool, error)
+	ListMeta(ctx context.Context) (map[string]string, error)
 	SetMeta(ctx context.Context, key, value string) error
 }
 
@@ -71,6 +72,7 @@ func (s *Server) Handler() http.Handler {
 	mux.Handle("GET /api/usage", s.auth(http.HandlerFunc(s.handleGetUsage)))
 	mux.Handle("GET /api/events", s.auth(http.HandlerFunc(s.handleEvents)))
 	mux.Handle("GET /api/watcher", s.auth(http.HandlerFunc(s.handleWatcher)))
+	mux.Handle("POST /api/watcher/heartbeat", s.auth(http.HandlerFunc(s.handleWatcherHeartbeat)))
 	mux.Handle("GET /api/status", s.auth(http.HandlerFunc(s.handleGetPlatform)))
 	mux.Handle("GET /api/version", s.auth(http.HandlerFunc(s.handleGetVersion)))
 	mux.Handle("GET /api/stats", s.auth(http.HandlerFunc(s.handleStats)))

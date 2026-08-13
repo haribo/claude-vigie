@@ -35,12 +35,12 @@ func TestJoinLR(t *testing.T) {
 }
 
 func TestSummaryRightAndFilterLine(t *testing.T) {
-	m := model{sortKey: sortTokens, groupBy: groupMachine, sseLive: true, clock: fixedClock}
+	m := model{sess: sessionsView{sortKey: sortTokens, groupBy: groupMachine}, sseLive: true, clock: fixedClock}
 	right := m.summaryRight()
 	if !strings.Contains(right, "sort") || !strings.Contains(right, sortNames[sortTokens]) || !strings.Contains(right, "group") {
 		t.Errorf("summaryRight = %q", right)
 	}
-	fl := model{filter: "auth", filtering: true}.filterLine()
+	fl := sessionsView{filter: "auth", filtering: true}.filterLine()
 	if !strings.Contains(fl, "auth") || !strings.Contains(fl, "▌") {
 		t.Errorf("filterLine = %q", fl)
 	}

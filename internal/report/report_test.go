@@ -146,7 +146,7 @@ func TestRunReportsHookContract(t *testing.T) {
 	if err := Run("Notification", strings.NewReader(payload)); err != nil {
 		t.Fatalf("Run Notification: %v", err)
 	}
-	if got.Event != "Notification" || got.NotificationType != "permission_prompt" || got.Activity != "Allow Bash(git push)?" {
+	if got.Event != "Notification" || got.NotificationType != "permission_prompt" || got.Detail != "Allow Bash(git push)?" {
 		t.Errorf("Notification report = %+v", got)
 	}
 
@@ -156,7 +156,7 @@ func TestRunReportsHookContract(t *testing.T) {
 	if err := Run("PostToolUse", strings.NewReader(post)); err != nil {
 		t.Fatalf("Run PostToolUse: %v", err)
 	}
-	if got.Event != "PostToolUse" || got.Activity == "" {
+	if got.Event != "PostToolUse" || got.Detail == "" {
 		t.Errorf("PostToolUse report = %+v (want a non-empty activity)", got)
 	}
 }

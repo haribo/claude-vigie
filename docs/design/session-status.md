@@ -83,15 +83,15 @@ hooks aren't installed). It derives status from two signals — is the session's
 The watcher can see `working`, `thinking`, `idle`, `stalled`, `ended`, and
 `error`. It **cannot** see `waiting`.
 
-**DOING refinements (no status change).** A few signals annotate the activity
+**DETAIL refinements (no status change).** A few signals annotate the activity
 column without touching the base status — a lighter touch than a full status when
 the state itself is unchanged:
 
-- a `shell` registry status keeps the session `idle` and sets DOING to `shell`
+- a `shell` registry status keeps the session `idle` and sets DETAIL to `shell`
   (dropped to a shell prompt) (#280);
 - a synthetic `[Request interrupted by user]` / `[Request interrupted by user for
   tool use]` `user` line — the last non-system message — keeps the base `idle`
-  but sets DOING to `interrupted`, so a turn the operator killed mid-flight is
+  but sets DETAIL to `interrupted`, so a turn the operator killed mid-flight is
   distinguishable from one that finished cleanly. It clears with no timer: the
   next real user prompt or assistant message replaces it (#351). The synthetic
   line carries its `content` as a block array, where a typed prompt is a plain
@@ -177,7 +177,7 @@ always a near-miss, not a misleading state.
 
 ---
 
-## Appendix — doc conventions (from tribnest)
+## Appendix — doc conventions
 
 `docs/design/` = the *what* (user-observable); `docs/adr/` = decisions with
 rationale; code = the *how*. Docs never paraphrase code. Adding/modifying design

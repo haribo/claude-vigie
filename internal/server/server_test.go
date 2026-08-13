@@ -3,6 +3,7 @@ package server
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"path/filepath"
@@ -11,9 +12,18 @@ import (
 
 	"github.com/haribo/claude-vigie/internal/api"
 	"github.com/haribo/claude-vigie/internal/store"
+	"github.com/haribo/claude-vigie/internal/version"
 )
 
 const testToken = "test-token"
+
+// watchBuildJSON is the build a watch report must declare to pass the daemon's
+// version gate (#384), as a JSON fragment for raw-body fixtures. It reads the
+// running test build rather than hard-coding it, so the fixtures stay correct if
+// the defaults change.
+func watchBuildJSON() string {
+	return fmt.Sprintf(`"watcher_version":%q,"watcher_commit":%q,`, version.Version, version.Commit)
+}
 
 func newTestServer(t *testing.T) *Server {
 	t.Helper()
@@ -76,6 +86,7 @@ func TestEveryAPIRouteRejectsUnauthenticated(t *testing.T) {
 		{http.MethodPost, "/api/usage"},
 		{http.MethodPost, "/api/usage/lease"},
 		{http.MethodGet, "/api/watcher"},
+		{http.MethodPost, "/api/watcher/heartbeat"},
 		{http.MethodGet, "/api/settings"},
 		{http.MethodPost, "/api/settings"},
 		{http.MethodGet, "/api/stats"},
@@ -230,7 +241,7 @@ func TestReportExplicitStatusWins(t *testing.T) {
 
 	// A watcher report carries an explicit status and must not append an event.
 	body, _ := json.Marshal(api.ReportRequest{
-		Event: "watch", SessionID: "s1", Machine: "m", ProjectDir: "/p",
+		Event: "watch", WatcherVersion: version.Version, WatcherCommit: version.Commit, SessionID: "s1", Machine: "m", ProjectDir: "/p",
 		Status: "waiting", Timestamp: "2026-07-26T10:00:00Z",
 	})
 	if rec := do(t, srv, http.MethodPost, "/api/report", body, true); rec.Code != http.StatusNoContent {
@@ -253,7 +264,7 @@ func TestRemoteURLSurfacedAndCleared(t *testing.T) {
 
 	// A watch report with remote control active carries the resume URL.
 	body, _ := json.Marshal(api.ReportRequest{
-		Event: "watch", SessionID: "s1", Machine: "m", ProjectDir: "/p",
+		Event: "watch", WatcherVersion: version.Version, WatcherCommit: version.Commit, SessionID: "s1", Machine: "m", ProjectDir: "/p",
 		Status: "working", RemoteControl: &on, RemoteURL: "https://claude.ai/code/session_01AB",
 		Timestamp: "2026-07-26T10:00:00Z",
 	})
@@ -274,7 +285,7 @@ func TestRemoteURLSurfacedAndCleared(t *testing.T) {
 
 	// When /rc is switched off the URL is cleared with the flag.
 	off2, _ := json.Marshal(api.ReportRequest{
-		Event: "watch", SessionID: "s1", Machine: "m", ProjectDir: "/p",
+		Event: "watch", WatcherVersion: version.Version, WatcherCommit: version.Commit, SessionID: "s1", Machine: "m", ProjectDir: "/p",
 		Status: "working", RemoteControl: &off, RemoteURL: "", Timestamp: "2026-07-26T10:01:00Z",
 	})
 	if rec := do(t, srv, http.MethodPost, "/api/report", off2, true); rec.Code != http.StatusNoContent {
@@ -290,7 +301,7 @@ func TestWatcherStatusPerMachine(t *testing.T) {
 
 	// alpha reports through the watcher; beta has a session but reports on hooks alone.
 	watch, _ := json.Marshal(api.ReportRequest{
-		Event: "watch", SessionID: "a1", Machine: "alpha", ProjectDir: "/p",
+		Event: "watch", WatcherVersion: version.Version, WatcherCommit: version.Commit, SessionID: "a1", Machine: "alpha", ProjectDir: "/p",
 	})
 	if rec := do(t, srv, http.MethodPost, "/api/report", watch, true); rec.Code != http.StatusNoContent {
 		t.Fatalf("alpha watch report = %d", rec.Code)
@@ -324,7 +335,7 @@ func TestReportContextTokens(t *testing.T) {
 	srv := newTestServer(t)
 
 	body, _ := json.Marshal(api.ReportRequest{
-		Event: "watch", SessionID: "s1", Machine: "m", ProjectDir: "/p",
+		Event: "watch", WatcherVersion: version.Version, WatcherCommit: version.Commit, SessionID: "s1", Machine: "m", ProjectDir: "/p",
 		Status: "working", ContextTokens: ctxPtr(123456), Timestamp: "2026-07-26T10:00:00Z",
 	})
 	if rec := do(t, srv, http.MethodPost, "/api/report", body, true); rec.Code != http.StatusNoContent {
@@ -345,7 +356,7 @@ func TestReportPermissionMode(t *testing.T) {
 	srv := newTestServer(t)
 
 	body, _ := json.Marshal(api.ReportRequest{
-		Event: "watch", SessionID: "s1", Machine: "m", ProjectDir: "/p",
+		Event: "watch", WatcherVersion: version.Version, WatcherCommit: version.Commit, SessionID: "s1", Machine: "m", ProjectDir: "/p",
 		Status: "working", PermissionMode: "plan", Timestamp: "2026-07-26T10:00:00Z",
 	})
 	if rec := do(t, srv, http.MethodPost, "/api/report", body, true); rec.Code != http.StatusNoContent {
@@ -386,7 +397,7 @@ func TestSSEDeltaGating(t *testing.T) {
 	report := func(status, ts string, out int64) {
 		t.Helper()
 		body, _ := json.Marshal(api.ReportRequest{
-			Event: "watch", SessionID: "s1", Machine: "m", ProjectDir: "/p",
+			Event: "watch", WatcherVersion: version.Version, WatcherCommit: version.Commit, SessionID: "s1", Machine: "m", ProjectDir: "/p",
 			Status: status, Usage: &api.Usage{OutputTokens: out}, Timestamp: ts,
 		})
 		if rec := do(t, srv, http.MethodPost, "/api/report", body, true); rec.Code != http.StatusNoContent {
