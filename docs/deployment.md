@@ -147,18 +147,12 @@ against the OS trust store — no client-side TLS code, no flags.
 - **Private / internal CA:** trust it at the OS level (or export `SSL_CERT_FILE` /
   `SSL_CERT_DIR`); Go respects it. There is deliberately **no** `--insecure`
   option — skipping verification would defeat the TLS entirely.
-- `vigie init` writes the client config, which the watcher and TUI read. Run
-  interactively it asks for the server URL and the token, reading the token
-  without echo so it never lands in the shell history. For an unattended install,
-  supply them without a prompt — `VIGIE_SERVER` and `VIGIE_TOKEN` in the
-  environment, which keeps the token off the command line and out of `ps`:
-
-  ```bash
-  VIGIE_SERVER=https://fleet.example.com VIGIE_TOKEN=<token> vigie init
-  ```
-
-  `--server` / `--token` still work and win over the environment, but a flag puts
-  the token in the process table and in the shell history.
+- `vigie init` asks for the server URL, the token and this machine's name, checks
+  the connection and writes the client config — and only that; the watcher
+  installs the hooks and the call skill when it starts. The watcher and TUI read
+  the config. It takes **no flags**: the token is read without echo, so it never
+  reaches the shell history or `ps`. It needs a terminal, and says so rather than
+  blocking when it has none.
 
 ## Recommended for dynamic client IPs
 

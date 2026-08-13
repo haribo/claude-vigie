@@ -59,15 +59,6 @@ func envConfigPath() string {
 	return os.Getenv("FLEET_CONFIG")
 }
 
-// EnvServer and EnvToken are the non-interactive way to supply the two values
-// `vigie init` needs, for containers, ansible and cloud-init — where a flag would
-// put the token on a command line and a prompt has nobody to answer it. Empty
-// when unset (#407).
-func EnvServer() string { return os.Getenv("VIGIE_SERVER") }
-
-// EnvToken returns the shared token from the environment, or "".
-func EnvToken() string { return os.Getenv("VIGIE_TOKEN") }
-
 // Path returns the config file path. VIGIE_CONFIG (or the deprecated
 // FLEET_CONFIG), when set, overrides it with an explicit file (used by dev runs
 // to target a local server without touching the installed production config).

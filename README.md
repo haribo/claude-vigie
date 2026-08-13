@@ -122,8 +122,11 @@ vigie tui
 # ...or in a browser: open http://host:8080 and paste the token
 ```
 
-Hooks cover sessions started *after* `init`; the watcher guarantees coverage by
-scanning `~/.claude/projects/`. `vigie init --uninstall` removes the hooks.
+`vigie init` only writes the config. The **watcher** installs the reporting hooks
+and the call skill when it starts, and keeps them matching the running binary —
+so an upgrade needs no re-install, just a service restart. A machine that runs no
+watcher can wire itself with `vigie hooks install`; `vigie hooks uninstall`
+removes both.
 The client reads `~/.config/vigie/config.toml` (override the path with
 `VIGIE_CONFIG`, or the deprecated `FLEET_CONFIG`).
 

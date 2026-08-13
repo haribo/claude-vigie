@@ -9,6 +9,22 @@ file is the single source of truth, not a second narrative.
 
 ## [Unreleased]
 
+### Changed
+
+- `vigie init` now writes the config and nothing else. The reporting hooks and the
+  call skill had **three** writers — `init`, `vigie hooks install` and `vigie
+  watch` — and only the watcher's copy self-heals, which is the whole point of
+  [ADR-0009](docs/adr/0009-watcher-managed-hooks.md). They now have one owner: the
+  watcher installs them at startup and keeps them matching the running binary.
+  `init` ends by saying what is left to do — start the watcher, **or restart it**
+  if one is already running, since it reads the config only at startup. This also
+  removes a trap: `init` used to rewrite the *production* hooks even when
+  `VIGIE_CONFIG` pointed at a dev leg. A machine that runs no watcher still wires
+  itself with `vigie hooks install`, and `vigie hooks uninstall` removes both.
+  **Breaking:** `vigie init --uninstall` is removed — it undid something `init` no
+  longer does. `vigie hooks uninstall` replaces it and is strictly more complete,
+  since it also removes the call skill (#415).
+
 ### Fixed
 
 - Desktop notifications could be **impossible with nothing saying so**. The TUI
@@ -24,14 +40,14 @@ file is the single source of truth, not a second narrative.
 
 ### Changed
 
-- `vigie init` now **asks** for the server URL and the token instead of requiring
-  them as flags, and reads the token **without echo** — a flag put the shared
-  secret into the shell history of every machine, permanently, which is the same
-  reason it has no place in a systemd unit. The values are resolved in order:
-  `--server`/`--token` if given, else `VIGIE_SERVER`/`VIGIE_TOKEN` from the
-  environment, else a prompt. A non-interactive run that supplied neither fails
-  with a message naming all three ways rather than hanging on a question nobody
-  can answer, so containers and provisioning keep working (#407).
+- `vigie init` now **asks** for the server URL, the token and this machine's name,
+  and takes **no flags at all**. The token is read **without echo**, so the shared
+  secret no longer lands in the shell history of every machine — the same reason it
+  has no place in a systemd unit. The machine name defaults to the hostname, which
+  is right most of the time and wrong exactly where it matters: a container's is a
+  random hash, and the prompt is where you can correct it. Without a terminal it
+  fails with a clear message rather than blocking on a question nobody can answer
+  (#407, #415).
 
 ## [0.5.0] - 2026-08-13
 
