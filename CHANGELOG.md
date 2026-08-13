@@ -9,6 +9,19 @@ file is the single source of truth, not a second narrative.
 
 ## [Unreleased]
 
+### Fixed
+
+- Desktop notifications could be **impossible with nothing saying so**. The TUI
+  assumed it had focus until the terminal said otherwise, so a terminal or
+  multiplexer that never reports focus events suppressed every notification
+  forever — correct settings, working desktop, and nothing ever arriving. Focus is
+  now three-valued and *not knowing* no longer counts as "you are watching": a
+  notification while you are already looking is a small annoyance, never receiving
+  one is a broken feature. The Settings tab also now says **why** notifications
+  cannot be delivered — `on — notify-send not installed`, `on — no graphical
+  session` — instead of showing a cheerful `on` on a machine where nothing can
+  work (#411).
+
 ### Changed
 
 - `vigie init` now **asks** for the server URL and the token instead of requiring
