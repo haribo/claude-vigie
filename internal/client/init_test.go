@@ -3,6 +3,8 @@ package client
 import (
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -35,5 +37,33 @@ func TestConnectionStatuses(t *testing.T) {
 		case !c.wantErr && err != nil:
 			t.Errorf("status %d: want nil, got %v", c.code, err)
 		}
+	}
+}
+
+// TestInitWritesOnlyTheConfig is the #415 contract: one artifact, one owner. init
+// connects the machine; the watcher owns the hooks and the skill and keeps them
+// current (ADR-0009). If init installed them again they would age here, and a
+// dev-leg run would silently rewrite the production hooks.
+func TestInitWritesOnlyTheConfig(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv("XDG_CONFIG_HOME", filepath.Join(home, ".config"))
+	t.Setenv("VIGIE_CONFIG", "")
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer srv.Close()
+
+	if code := runInit([]string{"--server", srv.URL, "--token", "tok", "--machine", "box"}); code != 0 {
+		t.Fatalf("runInit = %d, want 0", code)
+	}
+
+	if _, err := os.Stat(filepath.Join(home, ".config", "vigie", "config.toml")); err != nil {
+		t.Errorf("the config was not written: %v", err)
+	}
+	// Nothing under ~/.claude: no hooks, no skill.
+	if _, err := os.Stat(filepath.Join(home, ".claude")); !os.IsNotExist(err) {
+		t.Errorf("init touched ~/.claude; the watcher owns those artifacts (err = %v)", err)
 	}
 }

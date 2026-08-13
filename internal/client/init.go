@@ -13,11 +13,6 @@ import (
 	"github.com/haribo/claude-vigie/internal/install"
 )
 
-// defaultEvents are the hooks installed by default. PostToolUse is included so
-// the dashboard can show a live "doing" message and an activity heartbeat; it
-// fires per tool use, which is the intended trade-off.
-var defaultEvents = []string{"SessionStart", "UserPromptSubmit", "PostToolUse", "Notification", "Stop", "PreCompact", "SessionEnd"}
-
 func runInit(args []string) int {
 	fs := flag.NewFlagSet("init", flag.ContinueOnError)
 	server := fs.String("server", "", "fleet server URL (else $VIGIE_SERVER, else asked)")
@@ -29,6 +24,10 @@ func runInit(args []string) int {
 	}
 
 	if *uninstall {
+		// Kept working so a documented flag does not vanish under users, but the
+		// hooks are no longer init's business: `vigie hooks uninstall` is the
+		// command, and it also removes the call skill (#415).
+		fmt.Fprintln(os.Stderr, "init: --uninstall is deprecated; use `vigie hooks uninstall`")
 		path, err := install.Uninstall("")
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "init: %v\n", err)
@@ -63,34 +62,18 @@ func runInit(args []string) int {
 		return 1
 	}
 
-	binPath, err := os.Executable()
-	if err != nil {
-		binPath = "vigie"
-	}
-
-	settingsPath, err := install.Install(defaultEvents, binPath, "", 5)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "init: %v\n", err)
-		return 1
-	}
-
-	// The skill teaches Claude that `vigie call` exists, so a session can tell you
-	// it is done (#391). Best-effort: it must not fail the configuration.
-	skillPath, sErr := install.InstallSkill()
-	if sErr != nil {
-		fmt.Fprintf(os.Stderr, "init: installing the call skill failed (continuing): %v\n", sErr)
-		skillPath = "not installed"
-	}
-
 	fmt.Printf(`vigie configured:
   config:   %s
-  hooks:    %s
-  skill:    %s
   server:   %s
   machine:  %s
 
-New Claude Code sessions on this machine will report to the fleet.
-`, cfgPath, settingsPath, skillPath, cfg.ServerURL, mach)
+Now start the watcher — or restart it if one is already running, since it reads
+this config only at startup:
+
+  systemctl --user restart vigie-watch    # or: vigie watch
+
+It installs the reporting hooks and the call skill, and keeps them current.
+`, cfgPath, cfg.ServerURL, mach)
 	return 0
 }
 
