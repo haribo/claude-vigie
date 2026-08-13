@@ -20,8 +20,10 @@ file is the single source of truth, not a second narrative.
   if one is already running, since it reads the config only at startup. This also
   removes a trap: `init` used to rewrite the *production* hooks even when
   `VIGIE_CONFIG` pointed at a dev leg. A machine that runs no watcher still wires
-  itself with `vigie hooks install`; `vigie init --uninstall` keeps working but is
-  deprecated in favour of `vigie hooks uninstall` (#415).
+  itself with `vigie hooks install`, and `vigie hooks uninstall` removes both.
+  **Breaking:** `vigie init --uninstall` is removed — it undid something `init` no
+  longer does. `vigie hooks uninstall` replaces it and is strictly more complete,
+  since it also removes the call skill (#415).
 
 ### Fixed
 
