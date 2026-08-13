@@ -28,123 +28,72 @@ func withPrompt(t *testing.T, tty bool, p *stubPrompt) {
 	t.Cleanup(func() { stdinIsTerminal, promptFn = origTTY, origAsk })
 }
 
-// TestResolveEndpointPrefersFlags: an explicit flag must never be overridden by
-// the environment, and must never trigger a question.
-func TestResolveEndpointPrefersFlags(t *testing.T) {
-	t.Setenv("VIGIE_SERVER", "http://from-env:8080")
-	t.Setenv("VIGIE_TOKEN", "env-token")
-	p := &stubPrompt{}
+// TestAskSetupAsksForEverything: init takes no flags and reads no environment, so
+// the three values come from the three questions — and the token is asked for as a
+// secret, since echoing it would merely move it from the shell history to the
+// terminal scrollback.
+func TestAskSetupAsksForEverything(t *testing.T) {
+	p := &stubPrompt{answers: map[string]string{
+		labelServer:              "http://typed:8080",
+		labelToken:               "typed-token",
+		labelMachine + " [host]": "typed-box",
+	}}
 	withPrompt(t, true, p)
 
-	srv, tok, err := resolveEndpoint("http://from-flag:8080", "flag-token")
+	got, err := askSetup("host")
 	if err != nil {
 		t.Fatal(err)
 	}
-	if srv != "http://from-flag:8080" || tok != "flag-token" {
-		t.Errorf("got %q/%q, want the flag values", srv, tok)
+	if got.server != "http://typed:8080" || got.token != "typed-token" || got.machine != "typed-box" {
+		t.Errorf("got %+v", got)
 	}
-	if len(p.asked) != 0 {
-		t.Errorf("asked %v with both flags given", p.asked)
+	if len(p.asked) != 3 {
+		t.Fatalf("asked %v, want three questions", p.asked)
+	}
+	if p.secrets[0] || !p.secrets[1] || p.secrets[2] {
+		t.Errorf("only the token may be read without echo, got %v", p.secrets)
 	}
 }
 
-// TestResolveEndpointFallsBackToEnv covers the automation path: containers and
-// provisioning supply the values without putting the token on a command line.
-func TestResolveEndpointFallsBackToEnv(t *testing.T) {
-	t.Setenv("VIGIE_SERVER", "http://from-env:8080")
-	t.Setenv("VIGIE_TOKEN", "env-token")
-	p := &stubPrompt{}
-	withPrompt(t, false, p) // no terminal: this must still work
+// TestAskSetupKeepsTheHostnameOnEnter: the default exists so the usual answer is
+// one keystroke.
+func TestAskSetupKeepsTheHostnameOnEnter(t *testing.T) {
+	p := &stubPrompt{answers: map[string]string{
+		labelServer: "http://typed:8080",
+		labelToken:  "typed-token",
+	}} // the machine answer is empty: the operator just pressed enter
+	withPrompt(t, true, p)
 
-	srv, tok, err := resolveEndpoint("", "")
+	got, err := askSetup("my-host")
 	if err != nil {
 		t.Fatal(err)
 	}
-	if srv != "http://from-env:8080" || tok != "env-token" {
-		t.Errorf("got %q/%q, want the environment values", srv, tok)
-	}
-	if len(p.asked) != 0 {
-		t.Errorf("asked %v without a terminal", p.asked)
+	if got.machine != "my-host" {
+		t.Errorf("machine = %q, want the hostname default", got.machine)
 	}
 }
 
-// TestResolveEndpointNonInteractiveFails is the one that keeps a provisioning run
-// from hanging forever on a prompt nobody can answer.
-func TestResolveEndpointNonInteractiveFails(t *testing.T) {
-	t.Setenv("VIGIE_SERVER", "")
-	t.Setenv("VIGIE_TOKEN", "")
+// TestAskSetupNeedsATerminal keeps a scripted run from blocking forever on a
+// question nobody can answer.
+func TestAskSetupNeedsATerminal(t *testing.T) {
 	p := &stubPrompt{}
 	withPrompt(t, false, p)
 
-	if _, _, err := resolveEndpoint("", ""); !errors.Is(err, errNoEndpoint) {
-		t.Errorf("err = %v, want errNoEndpoint", err)
+	if _, err := askSetup("host"); !errors.Is(err, errNoTerminal) {
+		t.Errorf("err = %v, want errNoTerminal", err)
 	}
 	if len(p.asked) != 0 {
 		t.Errorf("asked %v with no terminal", p.asked)
 	}
 }
 
-// TestResolveEndpointAsksForWhatIsMissing: only the missing value is asked for,
-// and the token is read as a secret — echoing it would merely move the token from
-// the shell history to the terminal scrollback.
-func TestResolveEndpointAsksForWhatIsMissing(t *testing.T) {
-	t.Setenv("VIGIE_SERVER", "")
-	t.Setenv("VIGIE_TOKEN", "")
-	p := &stubPrompt{answers: map[string]string{labelToken: "typed-token"}}
+// TestAskSetupRejectsEmptyAnswers: pressing enter through the prompts must not
+// write a config that cannot work.
+func TestAskSetupRejectsEmptyAnswers(t *testing.T) {
+	p := &stubPrompt{answers: map[string]string{}}
 	withPrompt(t, true, p)
 
-	srv, tok, err := resolveEndpoint("http://from-flag:8080", "")
-	if err != nil {
-		t.Fatal(err)
-	}
-	if srv != "http://from-flag:8080" || tok != "typed-token" {
-		t.Errorf("got %q/%q", srv, tok)
-	}
-	if len(p.asked) != 1 || p.asked[0] != labelToken {
-		t.Fatalf("asked %v, want only the token", p.asked)
-	}
-	if !p.secrets[0] {
-		t.Error("the token was asked for with echo on")
-	}
-}
-
-// TestResolveEndpointAsksForBoth: nothing supplied, but somebody is there.
-func TestResolveEndpointAsksForBoth(t *testing.T) {
-	t.Setenv("VIGIE_SERVER", "")
-	t.Setenv("VIGIE_TOKEN", "")
-	p := &stubPrompt{answers: map[string]string{
-		labelServer: "http://typed:8080",
-		labelToken:  "typed-token",
-	}}
-	withPrompt(t, true, p)
-
-	srv, tok, err := resolveEndpoint("", "")
-	if err != nil {
-		t.Fatal(err)
-	}
-	if srv != "http://typed:8080" || tok != "typed-token" {
-		t.Errorf("got %q/%q", srv, tok)
-	}
-	if len(p.asked) != 2 {
-		t.Fatalf("asked %v, want both", p.asked)
-	}
-	if p.secrets[0] {
-		t.Error("the server URL is not a secret and should echo")
-	}
-	if !p.secrets[1] {
-		t.Error("the token was asked for with echo on")
-	}
-}
-
-// TestResolveEndpointRejectsEmptyAnswers: pressing enter twice must not write a
-// config that cannot work.
-func TestResolveEndpointRejectsEmptyAnswers(t *testing.T) {
-	t.Setenv("VIGIE_SERVER", "")
-	t.Setenv("VIGIE_TOKEN", "")
-	p := &stubPrompt{answers: map[string]string{}} // every answer empty
-	withPrompt(t, true, p)
-
-	if _, _, err := resolveEndpoint("", ""); err == nil {
+	if _, err := askSetup("host"); err == nil {
 		t.Error("empty answers should not produce a config")
 	}
 }

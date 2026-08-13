@@ -55,7 +55,13 @@ func TestInitWritesOnlyTheConfig(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	if code := runInit([]string{"--server", srv.URL, "--token", "tok", "--machine", "box"}); code != 0 {
+	// init takes no flags: it asks. The answers are stubbed, not typed.
+	withPrompt(t, true, &stubPrompt{answers: map[string]string{
+		labelServer: srv.URL,
+		labelToken:  "tok",
+	}}) // the machine answer is empty, so the hostname default applies
+
+	if code := runInit(nil); code != 0 {
 		t.Fatalf("runInit = %d, want 0", code)
 	}
 

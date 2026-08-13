@@ -14,26 +14,23 @@ import (
 
 func runInit(args []string) int {
 	fs := flag.NewFlagSet("init", flag.ContinueOnError)
-	server := fs.String("server", "", "fleet server URL (else $VIGIE_SERVER, else asked)")
-	token := fs.String("token", "", "shared auth token (else $VIGIE_TOKEN, else asked without echo)")
-	machine := fs.String("machine", "", "machine name (defaults to the hostname)")
+	fs.Usage = func() {
+		fmt.Fprint(fs.Output(), "usage: vigie init\n\n"+
+			"Connects this machine: asks for the server URL, the token and the machine\n"+
+			"name, checks the connection, and writes the client config. Nothing else —\n"+
+			"the watcher installs the reporting hooks and the call skill when it starts.\n")
+	}
 	if err := fs.Parse(args); err != nil {
 		return 2
 	}
 
-	srv, tok, err := resolveEndpoint(*server, *token)
+	host, _ := os.Hostname()
+	in, err := askSetup(host)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "init: %v\n", err)
 		return 2
 	}
-
-	mach := *machine
-	if mach == "" {
-		if h, err := os.Hostname(); err == nil {
-			mach = h
-		}
-	}
-	cfg := &config.Config{ServerURL: srv, Token: tok, Machine: mach}
+	cfg := &config.Config{ServerURL: in.server, Token: in.token, Machine: in.machine}
 
 	if err := testConnection(cfg); err != nil {
 		fmt.Fprintf(os.Stderr, "init: cannot reach server: %v\n", err)
@@ -57,7 +54,7 @@ this config only at startup:
   systemctl --user restart vigie-watch    # or: vigie watch
 
 It installs the reporting hooks and the call skill, and keeps them current.
-`, cfgPath, cfg.ServerURL, mach)
+`, cfgPath, cfg.ServerURL, cfg.Machine)
 	return 0
 }
 

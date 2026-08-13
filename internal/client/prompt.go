@@ -7,15 +7,17 @@ import (
 	"strings"
 
 	"github.com/charmbracelet/x/term"
-
-	"github.com/haribo/claude-vigie/internal/config"
 )
 
-// `vigie init` needs two values it cannot invent: the server URL and the shared
-// token. Passing them as flags writes the token into the shell history of every
-// machine, permanently — the same reason it has no place in a systemd unit. So
-// they are resolved in order of decreasing ceremony, and only asked for when
-// there is somebody to answer (#407).
+// `vigie init` needs three values it cannot invent: the server URL, the shared
+// token, and the name this machine shows under. It asks for all three.
+//
+// There are no flags and no environment variables for them. Passing a token as a
+// flag writes it into the shell history of every machine, permanently; and the
+// non-interactive path they existed for had no user — nothing in this repository
+// ever installed vigie unattended (#415). Adding an input back the day one appears
+// costs nothing and breaks nobody; carrying it meanwhile costs documentation,
+// tests, and a command that looks harder than the two questions it asks.
 
 // stdinIsTerminal is a seam: tests drive the non-interactive branches without a
 // pty, and the interactive one without a human.
@@ -30,48 +32,51 @@ var promptFn = ask
 const (
 	labelServer = "Server URL (e.g. http://localhost:8080)"
 	//nolint:gosec // G101 fires on the identifier: this is a prompt label, not a credential
-	labelToken = "Token"
+	labelToken   = "Token"
+	labelMachine = "Machine name"
 )
 
-// errNoEndpoint is returned when nothing supplied the values and nothing can ask.
-var errNoEndpoint = errors.New("no server URL or token: pass --server and --token, " +
-	"set VIGIE_SERVER and VIGIE_TOKEN, or run `vigie init` from a terminal")
+// errNoTerminal is returned when there is nobody to answer the questions.
+var errNoTerminal = errors.New("`vigie init` asks for the server URL and token, " +
+	"so it needs a terminal — run it from one")
 
-// resolveEndpoint fills the server URL and token from, in order: the flags, the
-// environment, then an interactive prompt. A non-interactive caller that supplied
-// neither gets errNoEndpoint rather than a prompt nobody can answer — which would
-// hang a container or a provisioning run forever.
-func resolveEndpoint(server, token string) (string, string, error) {
-	if server == "" {
-		server = config.EnvServer()
-	}
-	if token == "" {
-		token = config.EnvToken()
-	}
-	if server != "" && token != "" {
-		return server, token, nil
-	}
+// setup is what init asks for and writes.
+type setup struct {
+	server  string
+	token   string
+	machine string
+}
+
+// askSetup asks the three questions. Without a terminal it fails rather than
+// blocking on a prompt nobody can answer, which would hang a scripted run forever.
+func askSetup(defaultMachine string) (setup, error) {
 	if !stdinIsTerminal() {
-		return "", "", errNoEndpoint
+		return setup{}, errNoTerminal
 	}
-
-	var err error
-	if server == "" {
-		if server, err = promptFn(labelServer, false); err != nil {
-			return "", "", err
-		}
+	server, err := promptFn(labelServer, false)
+	if err != nil {
+		return setup{}, err
 	}
-	if token == "" {
-		// Read without echo: a prompt that displays the token merely moves the
-		// secret from the shell history to the terminal scrollback.
-		if token, err = promptFn(labelToken, true); err != nil {
-			return "", "", err
-		}
+	// Read without echo: a prompt that displays the token merely moves the secret
+	// from the shell history to the terminal scrollback.
+	token, err := promptFn(labelToken, true)
+	if err != nil {
+		return setup{}, err
+	}
+	// The hostname is right most of the time and wrong exactly where it matters —
+	// a container's is a random hash, which would land on the board as-is. Asking
+	// with it as the default costs one keystroke and lets it be corrected.
+	machine, err := promptFn(labelMachine+" ["+defaultMachine+"]", false)
+	if err != nil {
+		return setup{}, err
+	}
+	if machine == "" {
+		machine = defaultMachine
 	}
 	if server == "" || token == "" {
-		return "", "", errors.New("server URL and token are both required")
+		return setup{}, errors.New("the server URL and the token are both required")
 	}
-	return server, token, nil
+	return setup{server: server, token: token, machine: machine}, nil
 }
 
 // ask writes the label to stderr — stdout stays clean for anything piping this
