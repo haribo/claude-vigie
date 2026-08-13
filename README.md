@@ -49,6 +49,7 @@ vigied token     # server: print/generate the shared auth token
 vigie  init      # client: install hooks + write the config
 vigie  hooks     # client: add/remove reporting hooks (one leg per VIGIE_CONFIG)
 vigie  report    # client: reporter invoked by Claude Code hooks
+vigie  call      # client: raise a call for the operator, from inside a session
 vigie  watch     # client: watcher — scans transcripts, covers all sessions
 vigie  tui       # client: terminal dashboard
 ```
@@ -60,6 +61,23 @@ you install on every machine running Claude Code sessions. See
 The daemon also serves a **read-only web dashboard** at its root URL — a browser
 mirror of the TUI. Open it, paste the server token, and watch every machine
 from a phone or laptop. No extra process: it is embedded in `vigied`.
+
+## Ask a session to call you
+
+Tell Claude, in plain language, to let you know when it is done:
+
+> when you're finished, tell me in vigie
+
+It runs `vigie call "backfill done — 12k rows"` at the end of its turn, and that
+session's dot starts blinking on your board with the message beside it. Sending
+your next message in that session clears the call — there is nothing to
+acknowledge or dismiss in vigie
+([ADR-0007](docs/adr/0007-read-only-to-operator.md)).
+
+`vigie init` installs a small Agent Skill so Claude knows the command exists;
+there is nothing to set up per project. It is **best-effort**: if Claude does not
+run it, nothing is raised and the board reads exactly as it did before
+([ADR-0010](docs/adr/0010-session-raised-operator-call.md)).
 
 ## Design choices
 
