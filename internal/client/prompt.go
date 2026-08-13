@@ -25,15 +25,12 @@ var stdinIsTerminal = func() bool { return term.IsTerminal(os.Stdin.Fd()) }
 var promptFn = ask
 
 // The prompt labels are constants so the tests assert against the same strings
-// the operator sees. The token says its input is hidden: showing nothing is what
-// sudo, ssh and gh do, but only saying so tells a newcomer their keystrokes are
-// registering. Masking with asterisks was rejected — it leaks the secret's length
-// and needs hand-rolled raw-mode editing whose failure mode is a terminal left
-// with no echo.
+// the operator sees. The token is echoed as asterisks (see secret.go), which is
+// why the label needs no "input hidden" hint.
 const (
 	labelServer = "Server URL (e.g. http://localhost:8080)"
 	//nolint:gosec // G101 fires on the identifier: this is a prompt label, not a credential
-	labelToken = "Token (input hidden)"
+	labelToken = "Token"
 )
 
 // errNoEndpoint is returned when nothing supplied the values and nothing can ask.
@@ -82,12 +79,11 @@ func resolveEndpoint(server, token string) (string, string, error) {
 func ask(label string, secret bool) (string, error) {
 	fmt.Fprintf(os.Stderr, "%s: ", label)
 	if secret {
-		b, err := term.ReadPassword(os.Stdin.Fd())
-		fmt.Fprintln(os.Stderr) // ReadPassword swallows the newline the user typed
+		v, err := readMasked(os.Stdin, os.Stderr)
 		if err != nil {
 			return "", fmt.Errorf("reading the token: %w", err)
 		}
-		return strings.TrimSpace(string(b)), nil
+		return strings.TrimSpace(v), nil
 	}
 	line, err := readLine(os.Stdin)
 	if err != nil {
