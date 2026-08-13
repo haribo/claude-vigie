@@ -1,7 +1,6 @@
 package client
 
 import (
-	"bufio"
 	"errors"
 	"fmt"
 	"os"
@@ -78,9 +77,35 @@ func ask(label string, secret bool) (string, error) {
 		}
 		return strings.TrimSpace(string(b)), nil
 	}
-	line, err := bufio.NewReader(os.Stdin).ReadString('\n')
+	line, err := readLine(os.Stdin)
 	if err != nil {
 		return "", fmt.Errorf("reading %s: %w", label, err)
 	}
 	return strings.TrimSpace(line), nil
+}
+
+// readLine reads one line **unbuffered**. A bufio.Reader reads ahead by up to its
+// buffer size and would swallow the following line — here the token that
+// term.ReadPassword is about to ask for, leaving it waiting forever for input
+// already consumed. A human typing one line at a time never triggers it; a pipe
+// or a fast paste always does. A prompt reads a handful of bytes, so
+// byte-at-a-time costs nothing and cannot over-read.
+func readLine(f *os.File) (string, error) {
+	var out []byte
+	buf := make([]byte, 1)
+	for {
+		n, err := f.Read(buf)
+		if n > 0 {
+			if buf[0] == '\n' {
+				return string(out), nil
+			}
+			out = append(out, buf[0])
+		}
+		if err != nil {
+			if len(out) > 0 {
+				return string(out), nil // a final line with no trailing newline
+			}
+			return "", err
+		}
+	}
 }

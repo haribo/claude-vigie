@@ -2,6 +2,8 @@ package client
 
 import (
 	"errors"
+	"io"
+	"os"
 	"testing"
 )
 
@@ -144,5 +146,38 @@ func TestResolveEndpointRejectsEmptyAnswers(t *testing.T) {
 
 	if _, _, err := resolveEndpoint("", ""); err == nil {
 		t.Error("empty answers should not produce a config")
+	}
+}
+
+// TestReadLineDoesNotOverRead is the regression for a defect the first
+// implementation shipped with: reading the prompt through a bufio.Reader
+// swallowed the *following* line, so term.ReadPassword then waited forever for a
+// token that had already been consumed. A human typing one line at a time never
+// hits it; a pipe or a fast paste always does.
+func TestReadLineDoesNotOverRead(t *testing.T) {
+	r, w, err := os.Pipe()
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = r.Close() })
+	if _, err := w.WriteString("http://example:8080\nthe-secret-token\n"); err != nil {
+		t.Fatal(err)
+	}
+	_ = w.Close()
+
+	first, err := readLine(r)
+	if err != nil {
+		t.Fatalf("readLine: %v", err)
+	}
+	if first != "http://example:8080" {
+		t.Errorf("first line = %q", first)
+	}
+	// The second line must still be there for the password reader.
+	rest, err := io.ReadAll(r)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(rest) != "the-secret-token\n" {
+		t.Errorf("the next line was consumed: remaining = %q", rest)
 	}
 }
