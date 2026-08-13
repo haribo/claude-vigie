@@ -65,7 +65,7 @@ func TestCallDot(t *testing.T) {
 // render to the same width, or the whole table would jitter once a second.
 func TestBlinkKeepsRowWidth(t *testing.T) {
 	s := api.SessionView{
-		Title: "melonia", Machine: "m", ProjectDir: "/p", Status: "idle",
+		Title: "web-app", Machine: "m", ProjectDir: "/p", Status: "idle",
 		CallAt: "2026-08-12T10:00:00Z", CallMessage: "backfill done",
 	}
 	cols := visibleColumns(columns, 200)

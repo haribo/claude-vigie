@@ -60,7 +60,7 @@ summary strip.
 
 - **Fuzzy match** (default): the typed characters must appear *in order*
   (case-insensitive subsequence) anywhere across a session's name, machine,
-  project, branch, and status. `plnt` matches `plain-note`.
+  project, branch, and status. `wbp` matches `web-app`.
 - **`rc`** is a special filter: typing exactly `rc` isolates the
   remotely-controlled sessions instead of fuzzy-matching.
 
@@ -79,7 +79,7 @@ applied after sorting, so the order within each group still follows § 2.
 
 ---
 
-## Appendix — doc conventions (from tribnest)
+## Appendix — doc conventions
 
 `docs/design/` = the *what* (user-observable); `docs/adr/` = decisions with
 rationale; code = the *how*. Docs never paraphrase code. Adding/modifying design
