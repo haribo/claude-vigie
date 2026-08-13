@@ -22,17 +22,17 @@ file is the single source of truth, not a second narrative.
   the session reads exactly as it does today
   ([design](docs/design/call-discoverability.md), #391).
 - The web dashboard surfaces a session's call with the same grammar as the TUI —
-  the marker lives in the status, never in the Doing cell. The dot inside the
+  the marker lives in the status, never in the Detail cell. The dot inside the
   status pill **pulses** (a soft CSS fade, where the terminal is limited to two
   hard states), the pill keeps its status color and label because a calling
   session is still `idle`, the row takes the existing attention left-border plus a
-  faint tint of the same color, and the call message fills the Doing cell in that
+  faint tint of the same color, and the call message fills the Detail cell in that
   color. No new color: everything derives from `--st`. `prefers-reduced-motion:
   reduce` stops the pulse, and a call counter leads the summary strip when
   non-zero ([ADR-0010](docs/adr/0010-session-raised-operator-call.md), #390).
 - The TUI now surfaces a session's call by **motion**: its status dot blinks in
   its own status color, at 1 Hz (inside WCAG 2.3.1's three-flashes-per-second
-  ceiling), and the call message takes the `DOING` cell in that same color. No new
+  ceiling), and the call message takes the `DETAIL` cell in that same color. No new
   glyph, color or column — the dot is the one element in a row that can be
   animated without destroying information, since the status word stays readable
   beside it. A `● call N` counter leads the summary strip when non-zero, a raised
@@ -55,21 +55,14 @@ file is the single source of truth, not a second narrative.
   orthogonal to status — a calling session keeps whatever status it has — and the
   message is optional. Like the hooks it is fire-and-forget: it can never fail a
   session. Rendering lands separately (TUI #389, web #390).
-
-### Fixed
-
-- A machine whose watcher is running but currently has **no session to report** no
-  longer reads as having no watcher. Liveness was a side effect of session data —
-  the server only refreshed a machine's heartbeat while handling a session report —
-  so a machine with nothing open (or nothing newer than `--max-age`) silently
-  dropped out of `GET /api/watcher`, showed as "hooks only" in the Machines tab,
-  and made the TUI preflight refuse to start while blaming the server. The watcher
-  now claims liveness on its own, every 5 s, over a dedicated
-  `POST /api/watcher/heartbeat` that is independent of sessions
-  ([design](docs/design/watcher-liveness.md), #386). That heartbeat also carries
-  the version verdict, replacing the 60 s report-retry probe from #384 — which
-  could never work on the machine this fixes, since a drifted watcher with no
-  sessions had no report to probe with.
+- The sessions table now scrolls within a vertical viewport instead of spilling
+  off the bottom of the terminal. It tracks the terminal height (previously only
+  width was honored), keeps the tab bar, summary, column header, and usage/footer
+  pinned, and scrolls only the row band — continuous, cursor-driven, htop/k9s
+  style, with a 2-row look-ahead margin and a `rows a–b / n` indicator shown only
+  when the list overflows. Grouped views keep the current group's header pinned;
+  the detail panel scrolls the same way ([design](docs/design/tui-viewport.md),
+  #378).
 
 ### Changed
 
@@ -99,16 +92,22 @@ file is the single source of truth, not a second narrative.
   realign. Hook reports stay ungated on purpose — they run inside the operator's
   Claude session ([design](docs/design/version-consistency.md), #384).
 
-### Added
+### Fixed
 
-- The sessions table now scrolls within a vertical viewport instead of spilling
-  off the bottom of the terminal. It tracks the terminal height (previously only
-  width was honored), keeps the tab bar, summary, column header, and usage/footer
-  pinned, and scrolls only the row band — continuous, cursor-driven, htop/k9s
-  style, with a 2-row look-ahead margin and a `rows a–b / n` indicator shown only
-  when the list overflows. Grouped views keep the current group's header pinned;
-  the detail panel scrolls the same way ([design](docs/design/tui-viewport.md),
-  #378).
+- A machine whose watcher is running but currently has **no session to report** no
+  longer reads as having no watcher. Liveness was a side effect of session data —
+  the server only refreshed a machine's heartbeat while handling a session report —
+  so a machine with nothing open (or nothing newer than `--max-age`) silently
+  dropped out of `GET /api/watcher`, showed as "hooks only" in the Machines tab,
+  and made the TUI preflight refuse to start while blaming the server. The watcher
+  now claims liveness on its own, every 5 s, over a dedicated
+  `POST /api/watcher/heartbeat` that is independent of sessions
+  ([design](docs/design/watcher-liveness.md), #386). That heartbeat also carries
+  the version verdict, replacing the 60 s report-retry probe from #384 — which
+  could never work on the machine this fixes, since a drifted watcher with no
+  sessions had no report to probe with.
+
+## [0.4.1] - 2026-08-08
 
 ### Fixed
 
