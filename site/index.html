@@ -370,7 +370,7 @@
 sha256sum --ignore-missing -c checksums.txt
 tar xzf vigie_*_linux_amd64.tar.gz && install -m755 vigie ~/.local/bin/
 
-vigie <span class="k">init</span> -server https://vigie.example.com -token $VIGIE_TOKEN
+vigie <span class="k">init</span>           <span class="c"># asks for the server, token and machine name</span>
 vigie <span class="k">watch</span>          <span class="c"># stream this machine</span>
 vigie <span class="k">tui</span>            <span class="c"># or open the web dashboard</span></pre>
           </div>

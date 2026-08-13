@@ -40,14 +40,14 @@ file is the single source of truth, not a second narrative.
 
 ### Changed
 
-- `vigie init` now **asks** for the server URL and the token instead of requiring
-  them as flags, and reads the token **without echo** — a flag put the shared
-  secret into the shell history of every machine, permanently, which is the same
-  reason it has no place in a systemd unit. The values are resolved in order:
-  `--server`/`--token` if given, else `VIGIE_SERVER`/`VIGIE_TOKEN` from the
-  environment, else a prompt. A non-interactive run that supplied neither fails
-  with a message naming all three ways rather than hanging on a question nobody
-  can answer, so containers and provisioning keep working (#407).
+- `vigie init` now **asks** for the server URL, the token and this machine's name,
+  and takes **no flags at all**. The token is read **without echo**, so the shared
+  secret no longer lands in the shell history of every machine — the same reason it
+  has no place in a systemd unit. The machine name defaults to the hostname, which
+  is right most of the time and wrong exactly where it matters: a container's is a
+  random hash, and the prompt is where you can correct it. Without a terminal it
+  fails with a clear message rather than blocking on a question nobody can answer
+  (#407, #415).
 
 ## [0.5.0] - 2026-08-13
 
