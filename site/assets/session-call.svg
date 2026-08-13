@@ -1,0 +1,56 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 820 436" width="820" height="436" role="img" aria-label="A Claude Code session is asked to report when finished; the vigie board then shows that session calling, its status dot blinking.">
+<style>
+  .m { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 12.0px; }
+  .b { font-weight: 600; }
+  .cur { fill: #0284c7; }
+  /* Static by default: the outcome is shown, so the asset is informative with no
+     motion at all. Animation is opt-in via the user's own preference. */
+  .phase2 { opacity: 0; }
+  .phase3 { opacity: 1; }
+  .before { opacity: 0; }
+  .after { opacity: 1; }
+  .tw1 { width: 420px; }
+  .tw2 { width: 340px; }
+  .cur { opacity: 0; }
+  @media (prefers-reduced-motion: no-preference) {
+    .tw1 { width: 0; animation: t1 14s linear infinite; }
+    .tw2 { width: 0; animation: t2 14s linear infinite; }
+    .cur { animation: cursor 14s steps(1) infinite; }
+    .phase1 { animation: p1 14s steps(1) infinite; }
+    .phase2 { animation: p2 14s steps(1) infinite; }
+    .phase3 { animation: p3 14s steps(1) infinite; }
+    .before { animation: bf 14s steps(1) infinite; }
+    .after  { animation: af 14s steps(1) infinite; }
+    .blink  { animation: bl 14s steps(1) infinite; }
+  }
+  @keyframes t1 { 0% { width: 0 } 11.4% { width: 400px } 100% { width: 400px } }
+  @keyframes t2 { 0%,11.4% { width: 0 } 22.8% { width: 340px } 100% { width: 340px } }
+  /* The cursor only appears once the request is fully typed, and leaves when it
+     is submitted: during typing the growing text is the motion. */
+  @keyframes cursor { 0%,22.7% { opacity: 0 } 22.8%,28.4% { opacity: 1 } 28.5%,100% { opacity: 0 } }
+  @keyframes p1 { 0% { opacity: 1 } 100% { opacity: 1 } }
+  @keyframes p2 { 0%,28.5% { opacity: 0 } 28.6%,49.9% { opacity: 1 } 50% { opacity: 0 } 100% { opacity: 0 } }
+  @keyframes p3 { 0%,49.9% { opacity: 0 } 50% { opacity: 1 } 100% { opacity: 1 } }
+  @keyframes bf { 0% { opacity: 1 } 49.9% { opacity: 1 } 50% { opacity: 0 } 100% { opacity: 0 } }
+  @keyframes af { 0% { opacity: 0 } 49.9% { opacity: 0 } 50% { opacity: 1 } 100% { opacity: 1 } }
+  @keyframes bl { 0%,49.9% { opacity: 1 } 50.00% { opacity: 0 } 53.57% { opacity: 1 } 57.14% { opacity: 0 } 60.71% { opacity: 1 } 64.29% { opacity: 0 } 67.86% { opacity: 1 } 71.43% { opacity: 0 } 75.00% { opacity: 1 } 78.57% { opacity: 0 } 82.14% { opacity: 1 } 85.71% { opacity: 0 } 89.29% { opacity: 1 } 92.86% { opacity: 0 } 95% { opacity: 1 } 100% { opacity: 1 } }
+</style>
+<rect width="820" height="436" fill="#ffffff"/>
+<rect x="16" y="16" width="788" height="150" rx="10" fill="#f8fafc" stroke="#e2e8f0"/>
+<circle cx="36" cy="34" r="4" fill="#cbd5e1"/>
+<circle cx="50" cy="34" r="4" fill="#cbd5e1"/>
+<circle cx="64" cy="34" r="4" fill="#cbd5e1"/>
+<text xml:space="preserve" x="86.0" y="38.0" class="m"><tspan fill="#94a3b8">claude — ~/web-app</tspan></text>
+<line x1="16" y1="50" x2="804" y2="50" stroke="#e2e8f0"/>
+<clipPath id="c1-light"><rect class="tw1" x="46" y="60" width="0" height="16"/></clipPath>
+<text xml:space="preserve" x="30.0" y="72.0" class="m"><tspan fill="#0284c7">&gt; </tspan></text>
+<g class="type1"><g clip-path="url(#c1-light)"><text xml:space="preserve" x="46.0" y="72.0" class="m"><tspan fill="#0f172a">analyse the project and tell me the entry points.</tspan></text></g></g>
+<clipPath id="c2-light"><rect class="tw2" x="46" y="78.0" width="0" height="16"/></clipPath>
+<g class="type2"><g clip-path="url(#c2-light)"><text xml:space="preserve" x="46.0" y="90.0" class="m"><tspan fill="#0f172a" class="b">when you're finished, tell me in vigie</tspan></text></g></g>
+<rect class="cur" x="319.6" y="79.0" width="7" height="14"/>
+<g class="phase2"><text xml:space="preserve" x="30.0" y="114.0" class="m"><tspan fill="#94a3b8">⏵ Analysing project structure…</tspan></text></g>
+<g class="phase3"><text xml:space="preserve" x="30.0" y="114.0" class="m"><tspan fill="#16a34a">✓ Done — 3 entry points</tspan></text><text xml:space="preserve" x="46.0" y="132.0" class="m"><tspan fill="#94a3b8">↳ vigie call "analysis done — 3 entry points"</tspan></text></g>
+<rect x="16" y="192" width="788" height="228" rx="10" fill="#f8fafc" stroke="#e2e8f0"/>
+<g class="before"><text xml:space="preserve" x="28.0" y="214.0" class="m"><tspan fill="#0284c7" class="b">Sessions</tspan><tspan fill="#94a3b8">   Stats   Machines   Settings</tspan></text><text xml:space="preserve" x="28.0" y="232.0" class="m"><tspan fill="#0284c7">━━━━━━━━</tspan><tspan fill="#e2e8f0">────────────────────────────────────────────────────────────────────────────────────────────</tspan></text><text xml:space="preserve" x="28.0" y="250.0" class="m"><tspan fill="#16a34a">● working 2</tspan><tspan fill="#94a3b8">   </tspan><tspan fill="#b45309">● waiting 1</tspan><tspan fill="#94a3b8">   </tspan><tspan fill="#2563eb">● idle 0</tspan><tspan fill="#94a3b8">   </tspan><tspan fill="#94a3b8">● ended 0</tspan></text><text xml:space="preserve" x="28.0" y="268.0" class="m"><tspan fill="#e2e8f0">────────────────────────────────────────────────────────────────────────────────────────────────────</tspan></text><text xml:space="preserve" x="28.0" y="286.0" class="m"><tspan fill="#94a3b8" class="b">  NAME                    DIR               STATUS        DETAIL</tspan></text><text xml:space="preserve" x="28.0" y="304.0" class="m"><tspan fill="#e2e8f0">────────────────────────────────────────────────────────────────────────────────────────────────────</tspan></text><text xml:space="preserve" x="28.0" y="322.0" class="m"><tspan fill="#0284c7">▎ </tspan><tspan fill="#16a34a">api-gateway           </tspan><tspan fill="#0f172a">  api-gateway       </tspan><tspan fill="#16a34a">●</tspan><tspan fill="#16a34a"> working   </tspan><tspan fill="#0f172a">  </tspan><tspan fill="#94a3b8">Edit internal/router.go</tspan></text><text xml:space="preserve" x="28.0" y="340.0" class="m"><tspan fill="#0284c7">  </tspan><tspan fill="#16a34a">web-app               </tspan><tspan fill="#0f172a">  web-app           </tspan><tspan fill="#16a34a">●</tspan><tspan fill="#16a34a"> working   </tspan><tspan fill="#0f172a">  </tspan><tspan fill="#94a3b8">Analysing project structure</tspan></text><text xml:space="preserve" x="28.0" y="358.0" class="m"><tspan fill="#0284c7">  </tspan><tspan fill="#b45309">data-pipeline         </tspan><tspan fill="#0f172a">  data-pipeline     </tspan><tspan fill="#b45309">●</tspan><tspan fill="#b45309"> waiting   </tspan><tspan fill="#0f172a">  </tspan><tspan fill="#94a3b8">Bash: git push --force ?</tspan></text><text xml:space="preserve" x="28.0" y="376.0" class="m"><tspan fill="#e2e8f0">────────────────────────────────────────────────────────────────────────────────────────────────────</tspan></text><text xml:space="preserve" x="28.0" y="394.0" class="m"><tspan fill="#94a3b8">usage  5h ▓▓░░░░░░░░  28%    7d ▓▓▓▓▓▓░░░░  69%</tspan></text></g>
+<g class="after"><text xml:space="preserve" x="28.0" y="214.0" class="m"><tspan fill="#0284c7" class="b">Sessions</tspan><tspan fill="#94a3b8">   Stats   Machines   Settings</tspan></text><text xml:space="preserve" x="28.0" y="232.0" class="m"><tspan fill="#0284c7">━━━━━━━━</tspan><tspan fill="#e2e8f0">────────────────────────────────────────────────────────────────────────────────────────────</tspan></text><text xml:space="preserve" x="28.0" y="250.0" class="m"><tspan fill="#b45309">● call 1</tspan><tspan fill="#94a3b8">   </tspan><tspan fill="#16a34a">● working 1</tspan><tspan fill="#94a3b8">   </tspan><tspan fill="#b45309">● waiting 1</tspan><tspan fill="#94a3b8">   </tspan><tspan fill="#2563eb">● idle 1</tspan><tspan fill="#94a3b8">   </tspan><tspan fill="#94a3b8">● ended 0</tspan></text><text xml:space="preserve" x="28.0" y="268.0" class="m"><tspan fill="#e2e8f0">────────────────────────────────────────────────────────────────────────────────────────────────────</tspan></text><text xml:space="preserve" x="28.0" y="286.0" class="m"><tspan fill="#94a3b8" class="b">  NAME                    DIR               STATUS        DETAIL</tspan></text><text xml:space="preserve" x="28.0" y="304.0" class="m"><tspan fill="#e2e8f0">────────────────────────────────────────────────────────────────────────────────────────────────────</tspan></text><text xml:space="preserve" x="28.0" y="322.0" class="m"><tspan fill="#0284c7">▎ </tspan><tspan fill="#16a34a">api-gateway           </tspan><tspan fill="#0f172a">  api-gateway       </tspan><tspan fill="#16a34a">●</tspan><tspan fill="#16a34a"> working   </tspan><tspan fill="#0f172a">  </tspan><tspan fill="#94a3b8">Edit internal/router.go</tspan></text><text xml:space="preserve" x="28.0" y="340.0" class="m"><tspan fill="#0284c7">  </tspan><tspan fill="#2563eb">web-app               </tspan><tspan fill="#0f172a">  web-app           </tspan><tspan fill="#2563eb" class="blink">●</tspan><tspan fill="#2563eb"> idle      </tspan><tspan fill="#0f172a">  </tspan><tspan fill="#2563eb">analysis done — 3 entry points</tspan></text><text xml:space="preserve" x="28.0" y="358.0" class="m"><tspan fill="#0284c7">  </tspan><tspan fill="#b45309">data-pipeline         </tspan><tspan fill="#0f172a">  data-pipeline     </tspan><tspan fill="#b45309">●</tspan><tspan fill="#b45309"> waiting   </tspan><tspan fill="#0f172a">  </tspan><tspan fill="#94a3b8">Bash: git push --force ?</tspan></text><text xml:space="preserve" x="28.0" y="376.0" class="m"><tspan fill="#e2e8f0">────────────────────────────────────────────────────────────────────────────────────────────────────</tspan></text><text xml:space="preserve" x="28.0" y="394.0" class="m"><tspan fill="#94a3b8">usage  5h ▓▓░░░░░░░░  28%    7d ▓▓▓▓▓▓░░░░  69%</tspan></text></g>
+</svg>

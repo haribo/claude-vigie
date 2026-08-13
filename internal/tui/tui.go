@@ -38,7 +38,6 @@ func Run(cfg *config.Config) error {
 		events:   events,
 		conn:     conn,
 		clock:    clock.Now,
-		focused:  true, // assume focused at start; blur/focus events correct it
 	}
 	// WithReportFocus lets the terminal tell us focus/blur, so desktop
 	// notifications stay silent while the operator is watching the TUI (#260).

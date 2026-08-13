@@ -10,46 +10,27 @@ import (
 	"time"
 
 	"github.com/haribo/claude-vigie/internal/config"
-	"github.com/haribo/claude-vigie/internal/install"
 )
-
-// defaultEvents are the hooks installed by default. PostToolUse is included so
-// the dashboard can show a live "doing" message and an activity heartbeat; it
-// fires per tool use, which is the intended trade-off.
-var defaultEvents = []string{"SessionStart", "UserPromptSubmit", "PostToolUse", "Notification", "Stop", "PreCompact", "SessionEnd"}
 
 func runInit(args []string) int {
 	fs := flag.NewFlagSet("init", flag.ContinueOnError)
-	server := fs.String("server", "", "fleet server URL to report to")
-	token := fs.String("token", "", "shared auth token")
-	machine := fs.String("machine", "", "machine name (defaults to the hostname)")
-	uninstall := fs.Bool("uninstall", false, "remove vigie hooks and stop reporting")
+	fs.Usage = func() {
+		fmt.Fprint(fs.Output(), "usage: vigie init\n\n"+
+			"Connects this machine: asks for the server URL, the token and the machine\n"+
+			"name, checks the connection, and writes the client config. Nothing else —\n"+
+			"the watcher installs the reporting hooks and the call skill when it starts.\n")
+	}
 	if err := fs.Parse(args); err != nil {
 		return 2
 	}
 
-	if *uninstall {
-		path, err := install.Uninstall("")
-		if err != nil {
-			fmt.Fprintf(os.Stderr, "init: %v\n", err)
-			return 1
-		}
-		fmt.Printf("removed vigie hooks from %s\n", path)
-		return 0
-	}
-
-	if *server == "" || *token == "" {
-		fmt.Fprintln(os.Stderr, "init: --server and --token are required")
+	host, _ := os.Hostname()
+	in, err := askSetup(host)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "init: %v\n", err)
 		return 2
 	}
-
-	mach := *machine
-	if mach == "" {
-		if h, err := os.Hostname(); err == nil {
-			mach = h
-		}
-	}
-	cfg := &config.Config{ServerURL: *server, Token: *token, Machine: mach}
+	cfg := &config.Config{ServerURL: in.server, Token: in.token, Machine: in.machine}
 
 	if err := testConnection(cfg); err != nil {
 		fmt.Fprintf(os.Stderr, "init: cannot reach server: %v\n", err)
@@ -62,34 +43,18 @@ func runInit(args []string) int {
 		return 1
 	}
 
-	binPath, err := os.Executable()
-	if err != nil {
-		binPath = "vigie"
-	}
-
-	settingsPath, err := install.Install(defaultEvents, binPath, "", 5)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "init: %v\n", err)
-		return 1
-	}
-
-	// The skill teaches Claude that `vigie call` exists, so a session can tell you
-	// it is done (#391). Best-effort: it must not fail the configuration.
-	skillPath, sErr := install.InstallSkill()
-	if sErr != nil {
-		fmt.Fprintf(os.Stderr, "init: installing the call skill failed (continuing): %v\n", sErr)
-		skillPath = "not installed"
-	}
-
 	fmt.Printf(`vigie configured:
   config:   %s
-  hooks:    %s
-  skill:    %s
   server:   %s
   machine:  %s
 
-New Claude Code sessions on this machine will report to the fleet.
-`, cfgPath, settingsPath, skillPath, cfg.ServerURL, mach)
+Now start the watcher — or restart it if one is already running, since it reads
+this config only at startup:
+
+  systemctl --user restart vigie-watch    # or: vigie watch
+
+It installs the reporting hooks and the call skill, and keeps them current.
+`, cfgPath, cfg.ServerURL, cfg.Machine)
 	return 0
 }
 

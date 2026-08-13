@@ -254,6 +254,22 @@
           <h3>Observe-only</h3>
           <p>It watches; it can't start, stop, or steer a session.</p>
         </div>
+        <div class="does">
+          <h3>A session can call you</h3>
+          <p>Ask in plain language — it raises a call on the board when its work is done.</p>
+        </div>
+        <div class="does">
+          <h3>Notified when it matters</h3>
+          <p>A desktop notification when a session starts waiting on you, and a key to jump to it.</p>
+        </div>
+      </div>
+
+      <div class="shot-wrap">
+        <div class="shot">
+          <div class="sd-light"><img src="assets/session-call.svg" alt="A Claude Code session is asked to report when finished; the vigie board then shows that session calling, its status dot blinking and the message in DETAIL"></div>
+          <div class="sd-dark"><img src="assets/session-call-dark.svg" alt="A Claude Code session is asked to report when finished; the vigie board then shows that session calling, its status dot blinking and the message in DETAIL (dark)"></div>
+        </div>
+        <p class="shot-cap">tell a session to report back — it calls you when the work is done</p>
       </div>
     </div>
   </section>
@@ -344,7 +360,7 @@
       <div class="install-grid">
         <ol class="steps">
           <li><h4>Download from Releases</h4><p>Grab <span class="mono">vigie_*_linux_amd64.tar.gz</span> from the <a href="https://github.com/haribo/claude-vigie/releases">Releases page</a>.</p></li>
-          <li><h4>Point it at your server</h4><p><span class="mono">vigie init</span> writes the config and installs the hooks into Claude Code.</p></li>
+          <li><h4>Point it at your server</h4><p><span class="mono">vigie init</span> asks for your server URL and token and writes the config. The watcher wires Claude Code when it starts.</p></li>
           <li><h4>Watch</h4><p><span class="mono">vigie watch</span> streams this machine; <span class="mono">vigie tui</span> or the web page shows the board.</p></li>
         </ol>
         <div>
@@ -354,7 +370,7 @@
 sha256sum --ignore-missing -c checksums.txt
 tar xzf vigie_*_linux_amd64.tar.gz && install -m755 vigie ~/.local/bin/
 
-vigie <span class="k">init</span> -server https://vigie.example.com -token $VIGIE_TOKEN
+vigie <span class="k">init</span>           <span class="c"># asks for the server, token and machine name</span>
 vigie <span class="k">watch</span>          <span class="c"># stream this machine</span>
 vigie <span class="k">tui</span>            <span class="c"># or open the web dashboard</span></pre>
           </div>

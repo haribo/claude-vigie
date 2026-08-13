@@ -23,15 +23,15 @@ A session is remotely controlled **iff its Claude session file has a non-empty
 `bridgeSessionId`**.
 
 - Source: `~/.claude/sessions/<pid>.json`, written by Claude Code, e.g.
-  `{"sessionId": "...", "name": "tribnest", "status": "idle", "bridgeSessionId": "session_014wi…"}`.
+  `{"sessionId": "...", "name": "web-app", "status": "idle", "bridgeSessionId": "session_014wi…"}`.
 - `bridgeSessionId` present → `/rc` active; absent/empty → not.
 - The **resume URL** is `https://claude.ai/code/<bridgeSessionId>` — the same link
   Claude prints in the session and writes verbatim as the `url` field of the
   transcript's `bridge_status` lines. It is surfaced (§ 3) so the operator can open
   the controlled session; it clears with the flag when `/rc` goes off (#253).
-- Verified: tribnest, plain-note, vigie carry a bridge (rc on); shellf,
-  melonia, sirius do not (rc off) — matching what the operator sees in each
-  session's terminal footer.
+- Verified against six live sessions: those carrying a bridge read `rc on`, those
+  without read `rc off` — matching what the operator sees in each session's
+  terminal footer.
 
 This **replaced** the earlier hand-set boolean flag (the `c` toggle), which was
 disconnected from reality: the watcher now reports the detected state on every
@@ -63,7 +63,7 @@ or the web / mobile app. vigie shows *that* it is on; it never toggles it.
 
 ---
 
-## Appendix — doc conventions (from tribnest)
+## Appendix — doc conventions
 
 `docs/design/` = the *what* (user-observable); `docs/adr/` = decisions with
 rationale; code = the *how*. Docs never paraphrase code. Adding/modifying design

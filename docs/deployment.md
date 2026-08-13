@@ -147,8 +147,12 @@ against the OS trust store — no client-side TLS code, no flags.
 - **Private / internal CA:** trust it at the OS level (or export `SSL_CERT_FILE` /
   `SSL_CERT_DIR`); Go respects it. There is deliberately **no** `--insecure`
   option — skipping verification would defeat the TLS entirely.
-- `vigie init --server https://fleet.example.com --token <token>` writes the
-  client config; the watcher and TUI read it.
+- `vigie init` asks for the server URL, the token and this machine's name, checks
+  the connection and writes the client config — and only that; the watcher
+  installs the hooks and the call skill when it starts. The watcher and TUI read
+  the config. It takes **no flags**: the token is read without echo, so it never
+  reaches the shell history or `ps`. It needs a terminal, and says so rather than
+  blocking when it has none.
 
 ## Recommended for dynamic client IPs
 
