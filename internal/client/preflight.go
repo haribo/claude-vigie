@@ -1,16 +1,13 @@
 package client
 
 import (
-	"context"
-	"encoding/json"
 	"fmt"
-	"net/http"
 	"os"
 	"path/filepath"
-	"strings"
 	"time"
 
 	"github.com/haribo/claude-vigie/internal/api"
+	"github.com/haribo/claude-vigie/internal/apiclient"
 	"github.com/haribo/claude-vigie/internal/clock"
 	"github.com/haribo/claude-vigie/internal/config"
 	"github.com/haribo/claude-vigie/internal/install"
@@ -97,27 +94,7 @@ func heartbeatFresh(seen string, now time.Time) bool {
 }
 
 func fetchWatcherStatus(cfg *config.Config) (api.WatcherStatus, error) {
-	url := strings.TrimRight(cfg.ServerURL, "/") + "/api/watcher"
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
-	if err != nil {
-		return api.WatcherStatus{}, err
-	}
-	req.Header.Set("Authorization", "Bearer "+cfg.Token)
-	resp, err := httpClient.Do(req)
-	if err != nil {
-		return api.WatcherStatus{}, err
-	}
-	defer func() { _ = resp.Body.Close() }()
-	if resp.StatusCode != http.StatusOK {
-		return api.WatcherStatus{}, fmt.Errorf("server returned %s", resp.Status)
-	}
-	var ws api.WatcherStatus
-	if err := json.NewDecoder(resp.Body).Decode(&ws); err != nil {
-		return api.WatcherStatus{}, fmt.Errorf("decoding watcher status: %w", err)
-	}
-	return ws, nil
+	return apiclient.Get[api.WatcherStatus](cfg, "/api/watcher", "watcher status")
 }
 
 // versionsMatch reports whether a client and daemon build are compatible. The
@@ -132,25 +109,5 @@ func describeVersion(v api.VersionInfo) string {
 }
 
 func fetchDaemonVersion(cfg *config.Config) (api.VersionInfo, error) {
-	url := strings.TrimRight(cfg.ServerURL, "/") + "/api/version"
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
-	if err != nil {
-		return api.VersionInfo{}, err
-	}
-	req.Header.Set("Authorization", "Bearer "+cfg.Token)
-	resp, err := httpClient.Do(req)
-	if err != nil {
-		return api.VersionInfo{}, err
-	}
-	defer func() { _ = resp.Body.Close() }()
-	if resp.StatusCode != http.StatusOK {
-		return api.VersionInfo{}, fmt.Errorf("server returned %s", resp.Status)
-	}
-	var v api.VersionInfo
-	if err := json.NewDecoder(resp.Body).Decode(&v); err != nil {
-		return api.VersionInfo{}, fmt.Errorf("decoding version: %w", err)
-	}
-	return v, nil
+	return apiclient.Get[api.VersionInfo](cfg, "/api/version", "version")
 }
