@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/haribo/claude-vigie/internal/api"
 )
@@ -158,8 +159,8 @@ func (info *Info) applyAssistant(l line, seen map[string]bool) {
 	}
 	info.Thinking = lastBlockIsThinking(m.Content)
 	info.Activity = lastToolActivity(m.Content)
-	if m.Model != "" {
-		info.Model = m.Model
+	if isRealModel(m.Model) {
+		info.Model = m.Model // a marker never becomes the session's model (#433)
 	}
 	if l.Effort != "" {
 		info.Effort = l.Effort // keep the last reported effort; a line without it does not clear it
@@ -182,6 +183,20 @@ func (info *Info) applyAssistant(l line, seen map[string]bool) {
 	info.Usage.OutputTokens += m.Usage.OutputTokens
 	info.Usage.CacheCreationTokens += m.Usage.CacheCreationInputTokens
 	info.Usage.CacheReadTokens += m.Usage.CacheReadInputTokens
+}
+
+// isRealModel reports whether an assistant line's `model` field names an actual
+// model. Claude Code writes bracketed markers there for lines it generated itself
+// rather than received from the API — `<synthetic>` is the one observed, on both
+// API-error lines and ordinary ones ("No response requested."). Letting a marker
+// through made it the session's model until the next real turn, and the daily
+// rollups key on that, so real output was attributed to a bucket that is not a
+// model (#433).
+//
+// The check is the bracket, not the error flag: of nine synthetic lines found
+// across one machine's transcripts, only five were flagged as API errors.
+func isRealModel(m string) bool {
+	return m != "" && !strings.HasPrefix(m, "<")
 }
 
 // lastBlockIsThinking reports whether an assistant message's content ends with a

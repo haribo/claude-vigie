@@ -1,6 +1,6 @@
 # Daily token rollup — Design Specification
 
-**Status:** Proposed (#432).
+**Status:** Proposed (#432, #433).
 
 Source of truth for how output tokens reach `stats_daily`, and for the rule that
 keeps that table's history trustworthy. Per-session usage is a different thing: it
@@ -136,7 +136,33 @@ regresses — false and unstated.
 
 The high-water mark needs no threshold. It is exact.
 
-## 6. Repairing a poisoned row
+## 6. The model a bucket is keyed by
+
+Both rollups key on the session's model, so what counts as a model decides which
+bucket real work lands in.
+
+**A marker is not a model.** Claude Code writes bracketed markers in an assistant
+line's `model` field for lines it generated itself rather than received from the
+API. `<synthetic>` is the one observed. Unfiltered, it became the session's model
+until the next real turn, and every token produced meanwhile was attributed to it —
+a production day held `<synthetic> / output_tokens = 12879`, real output taken from
+the real model. The parser now keeps the last *real* model instead (#433).
+
+The test is the bracket, not the API-error flag. Of nine synthetic lines found
+across one machine's transcripts, only five carried `isApiErrorMessage: true`; the
+other four are ordinary lines ("No response requested."), so an error-flag check
+would have missed them.
+
+**An unknown model stays its own bucket, `""`.** A session can report before any
+assistant line exists — nothing has named a model yet. That bucket is honest: it
+means "not yet known", and it carries real status time.
+
+It cannot distort token figures. Output tokens only come from assistant lines, and
+those carry a model, so an unknown model implies no tokens — verified across 314
+real transcripts: 18 have no model, and **none of them has a single output token**.
+Skipping the rollup instead would discard the status time for no gain.
+
+## 7. Repairing a poisoned row
 
 Since a day cannot be recomputed, correction is a deliberate operator act:
 
@@ -148,7 +174,7 @@ It sets one `(day, model)` row's output tokens to a stated value, prints what it
 replaced, and touches nothing else. There is no automatic detection: a large day is
 not, by itself, wrong.
 
-## 7. Consequences
+## 8. Consequences
 
 - A day can now be **under**-counted — a session whose total regresses stops
   contributing until it climbs past its previous peak. That is the deliberate side
