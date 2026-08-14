@@ -136,8 +136,8 @@ Requires Go 1.26+ and [`just`](https://github.com/casey/just).
 
 ```bash
 just dev-setup      # configure git hooks
-just tool-install   # install golangci-lint + goimports into ./bin
-just code-check     # fmt + lint + build + test (run before every PR)
+just tool-install   # install golangci-lint + goimports + govulncheck into ./bin
+just code-check     # fmt + lint + build + test + vulnerability scan (run before every PR)
 ```
 
 Run the current source against a throwaway local server, fully isolated from any
