@@ -1,6 +1,6 @@
 # Transcript reads — Design Specification
 
-**Status:** Proposed (#420).
+**Status:** Accepted (#420).
 
 Source of truth for **who reads a session's transcript, and how much of it**. The
 watcher's incremental scan is specified here too, because the rule that matters is

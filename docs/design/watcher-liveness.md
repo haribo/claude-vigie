@@ -1,6 +1,6 @@
 # Watcher liveness — Design Specification
 
-**Status:** Proposed (#386).
+**Status:** Accepted (#386).
 
 Source of truth for how the fleet knows a machine's watcher is **running**. Version
 consistency — whether that watcher is *allowed* to write — lives in
