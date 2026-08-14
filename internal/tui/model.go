@@ -102,14 +102,18 @@ func groupByName(name string) groupBy {
 }
 
 type model struct {
-	fetch           func() ([]api.SessionView, error)
-	fetchUsage      func() (api.UsageReport, error)
-	fetchWatcher    func() (api.WatcherStatus, error)
-	fetchSettings   func() (api.Settings, error)
-	fetchStats      func() (api.StatsResponse, error)
-	fetchPlatform   func() (api.PlatformStatus, error)
-	fetchVersion    func() (api.VersionInfo, error)
-	setRetention    func(v string) error
+	fetch         func() ([]api.SessionView, error)
+	fetchUsage    func() (api.UsageReport, error)
+	fetchWatcher  func() (api.WatcherStatus, error)
+	fetchSettings func() (api.Settings, error)
+	fetchStats    func() (api.StatsResponse, error)
+	fetchPlatform func() (api.PlatformStatus, error)
+	fetchVersion  func() (api.VersionInfo, error)
+	setRetention  func(v string) error
+
+	// refreshFailed records which sources failed their last refresh, so a panel
+	// says it is showing figures it could not refresh (#449).
+	refreshFailed   map[string]bool
 	serverURL       string // read-only; set via `vigie init`
 	serverRetention time.Duration
 	stats           api.StatsResponse
@@ -439,18 +443,22 @@ func (m model) applyDataMsg(msg tea.Msg) model {
 	case sessionsMsg:
 		return m.applySessions(msg)
 	case usageMsg:
+		m.markRefresh(srcUsage, msg.err)
 		if msg.err == nil {
 			m.usage = msg.usage
 		}
 	case platformMsg:
+		m.markRefresh(srcPlatform, msg.err)
 		if msg.err == nil {
 			m.platform = msg.ps
 		}
 	case versionMsg:
+		m.markRefresh(srcVersion, msg.err)
 		if msg.err == nil {
 			m.daemonVersion = msg.v
 		}
 	case watcherMsg:
+		m.markRefresh(srcWatcher, msg.err)
 		if msg.err == nil {
 			m.watcherSeen = msg.seen
 			m.watcherMachines = msg.machines
@@ -458,10 +466,12 @@ func (m model) applyDataMsg(msg tea.Msg) model {
 			m.gotWatcher = true
 		}
 	case statsMsg:
+		m.markRefresh(srcStats, msg.err)
 		if msg.err == nil {
 			m.stats = msg.stats
 		}
 	case settingsMsg:
+		m.markRefresh(srcSettings, msg.err)
 		if msg.err == nil {
 			m.serverRetention = 0
 			if d, err := time.ParseDuration(msg.retention); err == nil {
@@ -692,6 +702,7 @@ func (m model) View() string {
 	case tabStats:
 		b.WriteString(m.renderStats())
 	case tabMachines:
+		b.WriteString(m.staleNote(srcWatcher))
 		b.WriteString(renderMachines(m.sessions, m.watcherMachines, m.watcherVersions, m.width))
 	case tabSettings:
 		b.WriteString(m.renderSettings())
@@ -771,6 +782,7 @@ func (m model) renderBuild() string {
 
 func (m model) renderSettings() string {
 	var b strings.Builder
+	b.WriteString(m.staleNote(srcSettings, srcVersion))
 
 	// Connection is read-only here: it is set per machine by `vigie init`
 	// and shared with the watcher/reporter. Editing it from the TUI would only
@@ -931,7 +943,8 @@ func (m model) viewSessions() string {
 	} else {
 		b.WriteString(m.renderTableBand(m.sessionsBand(bodyHeight)))
 	}
-	b.WriteString("\n" + rule(m.width) + "\n" + usageStrip(m.usage, m.platform, m.width))
+	b.WriteString("\n" + rule(m.width) + "\n" + usageStrip(m.usage, m.platform, m.width) +
+		m.staleMark(srcUsage, srcPlatform))
 	return b.String()
 }
 
