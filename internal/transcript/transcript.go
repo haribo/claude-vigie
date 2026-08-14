@@ -74,6 +74,11 @@ type Info struct {
 	// turn (Ctrl-C/Esc). The base status is still idle; the watcher only sets the
 	// DETAIL marker to "interrupted", cleared by the next real message (#351).
 	Interrupted bool
+	// HasTurns reports whether the transcript holds any exchange at all. Claude
+	// Code writes a metadata-only sidecar (title, mode, agent name…) next to the
+	// conversation, and a renamed or moved project leaves one behind with no turn
+	// in it — not a session, though it looks like one from the outside (#448).
+	HasTurns bool
 }
 
 type usage struct {
