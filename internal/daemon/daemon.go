@@ -26,6 +26,8 @@ func Run(args []string) int {
 		return runServe(rest)
 	case "token":
 		return runToken(rest)
+	case "stats-repair":
+		return runStatsRepair(rest)
 	case "version", "--version", "-v":
 		fmt.Println(version.String("vigied"))
 		return 0
@@ -48,6 +50,7 @@ Usage:
 Commands:
   serve      Run the fleet server and web dashboard
   token      Print the fleet auth token (from the database)
+  stats-repair  Correct one day's output-token figure in the analytics table
   version    Print version information
   help       Print this help
 
