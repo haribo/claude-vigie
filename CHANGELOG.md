@@ -11,6 +11,22 @@ file is the single source of truth, not a second narrative.
 
 ### Fixed
 
+- A synthetic assistant line no longer becomes the session's model. Claude Code
+  writes `"model":"<synthetic>"` on lines it generates itself instead of receiving
+  from the API; nothing filtered it, so the session showed `<synthetic>` as its
+  model in the TUI and the dashboard until the next real turn — and because the
+  daily rollups key on the session's model, every token produced meanwhile was
+  attributed to a bucket that is not a model. One production day held
+  `<synthetic> / output_tokens = 12879`: real output taken from the real model,
+  and `stats_daily` is never pruned, so it stayed. The parser now keeps the last
+  real model. The test is the bracketed marker rather than the API-error flag,
+  which would have been wrong: of the nine synthetic lines found across one
+  machine's transcripts, only five were flagged as errors — the rest are ordinary
+  ("No response requested."). An unknown model remains its own `""` bucket, which
+  cannot distort token figures: output only comes from assistant lines and those
+  name a model, verified across 314 transcripts where all 18 with no model carry
+  zero tokens ([design](docs/design/token-rollup.md), #433).
+
 - Daily token stats could be inflated by orders of magnitude, permanently. The
   rollup counted the *growth* of the session's own token counter, so any time that
   counter regressed, the next report added the session's **entire lifetime total**
