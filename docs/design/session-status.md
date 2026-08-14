@@ -9,7 +9,7 @@ vigie, status is **detected**, never operator-set
 
 ---
 
-## 1. The eight statuses
+## 1. The nine statuses
 
 Every session shows exactly one status. What each tells the operator:
 
