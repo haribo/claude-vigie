@@ -1,6 +1,6 @@
 # Daily token rollup — Design Specification
 
-**Status:** Proposed (#432, #433).
+**Status:** Accepted (#432, #433).
 
 Source of truth for how output tokens reach `stats_daily`, and for the rule that
 keeps that table's history trustworthy. Per-session usage is a different thing: it

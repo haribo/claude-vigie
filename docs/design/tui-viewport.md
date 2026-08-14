@@ -1,6 +1,6 @@
 # TUI vertical viewport — Design Specification
 
-**Status:** Proposed (#378).
+**Status:** Accepted (#378).
 
 Source of truth for how the sessions table fits the terminal **height**. The TUI
 already refuses to scroll sideways — every layout guard fits the **width**
