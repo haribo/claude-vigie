@@ -293,6 +293,17 @@ func (s *scanner) scan(root, machine string, maxAge time.Duration, now time.Time
 			continue
 		}
 
+		// A transcript with no exchange in it is a metadata sidecar, not a session
+		// — unless Claude Code still has it registered, which is what a session
+		// you have started and not typed into looks like. That one is live and
+		// must be shown; an abandoned sidecar, left behind by a renamed or moved
+		// project, must not (#448).
+		if !info.HasTurns {
+			if _, live := reg[info.SessionID]; !live {
+				continue
+			}
+		}
+
 		// Prefer the last dated transcript line over the file mtime for "when did
 		// this session last really do something". A live Claude appends
 		// untimestamped metadata (last-prompt, bridge-session) roughly hourly,

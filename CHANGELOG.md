@@ -11,6 +11,17 @@ file is the single source of truth, not a second narrative.
 
 ### Fixed
 
+- An abandoned metadata file is no longer reported as a session. Claude Code writes
+  a sidecar next to each conversation — title, mode, permission mode, agent name
+  and color — under the project's working directory, so a renamed or moved project
+  leaves one behind holding no exchange at all. The watcher reported it as a
+  session, with a status: 8 of 148 transcripts on one machine are such files. The
+  filter is not "no conversation", because a session you have just started and not
+  typed into has none either and must stay visible; it is "no conversation **and**
+  not in Claude Code's session registry", the liveness source vigie already reads
+  every scan. A started session is registered from the start, and an ended
+  conversation still has its turns (#448).
+
 - A synthetic assistant line no longer becomes the session's model. Claude Code
   writes `"model":"<synthetic>"` on lines it generates itself instead of receiving
   from the API; nothing filtered it, so the session showed `<synthetic>` as its

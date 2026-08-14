@@ -57,6 +57,10 @@ func (p *Parser) foldLine(raw []byte) {
 	}
 	p.info.applyMeta(l, &p.titles)
 	switch l.Type {
+	case "assistant", "user":
+		p.info.HasTurns = true // an exchange, as opposed to a metadata sidecar (#448)
+	}
+	switch l.Type {
 	case "assistant":
 		p.info.applyAssistant(l, p.seen)
 		p.pending.addToolUses(l.Message.Content)
