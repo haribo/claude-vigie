@@ -121,25 +121,59 @@ const pruneInterval = time.Hour
 // pruneLoop garbage-collects sessions older than the configured retention, on
 // start and then hourly, so the database stays bounded. The retention lives in
 // a meta key (editable via /api/settings); the flag only seeds it on first run.
+// retention is what pruneLoop decides before touching the database: whether to
+// delete anything at all, and with what window.
+//
+// It is a pure function of the stored setting so the decision can be tested
+// without running a ticker — the branches below all end in rows being deleted, or
+// not, and every one of them used to be silent (#442).
+type retention struct {
+	window time.Duration
+	prune  bool
+	// warning is set when a stored value could not be used and the default was
+	// applied instead. Falling back is the long-standing behavior; saying nothing
+	// about it was not.
+	warning string
+}
+
+func decideRetention(stored string, storedOK bool, def time.Duration) retention {
+	window := def
+	switch {
+	case !storedOK:
+		// Nothing stored yet: the default governs.
+	case stored == "":
+		return retention{} // explicitly disabled by the operator
+	default:
+		d, err := time.ParseDuration(stored)
+		if err != nil {
+			return retention{window: def, prune: def > 0,
+				warning: fmt.Sprintf("retention setting %q is not a duration; using %s", stored, def)}
+		}
+		window = d
+	}
+	if window <= 0 {
+		return retention{} // a non-positive window disables pruning
+	}
+	return retention{window: window, prune: true}
+}
+
 func pruneLoop(st *store.Store, defaultRetention time.Duration, log *slog.Logger) {
 	ctx := context.Background()
 	if v, ok, _ := st.GetMeta(ctx, server.RetentionMetaKey); !ok || v == "" {
 		_ = st.SetMeta(ctx, server.RetentionMetaKey, defaultRetention.String())
 	}
+	lastWarning := ""
 	prune := func() {
-		retention := defaultRetention
-		if v, ok, _ := st.GetMeta(ctx, server.RetentionMetaKey); ok {
-			if v == "" {
-				return // disabled
-			}
-			if d, err := time.ParseDuration(v); err == nil {
-				retention = d
-			}
+		v, ok, _ := st.GetMeta(ctx, server.RetentionMetaKey)
+		r := decideRetention(v, ok, defaultRetention)
+		if r.warning != "" && r.warning != lastWarning {
+			log.Warn("retention", "problem", r.warning) // announce a transition only
 		}
-		if retention <= 0 {
+		lastWarning = r.warning
+		if !r.prune {
 			return
 		}
-		n, err := st.PruneSessions(ctx, retention, clock.Now())
+		n, err := st.PruneSessions(ctx, r.window, clock.Now())
 		if err != nil {
 			log.Error("pruning sessions", "error", err)
 		} else if n > 0 {
