@@ -11,6 +11,27 @@ file is the single source of truth, not a second narrative.
 
 ### Fixed
 
+- Daily token stats could be inflated by orders of magnitude, permanently. The
+  rollup counted the *growth* of the session's own token counter, so any time that
+  counter regressed, the next report added the session's **entire lifetime total**
+  again — and `stats_daily` is never pruned and never recomputed, so the wrong
+  figure poisoned the Week/Month/Year/Total aggregates for good. One production day
+  held 61 051 295 773 output tokens where the session reported 2 713 408: the whole
+  total re-added on nearly every 2 s scan for half a day. Two causes are fixed and
+  both are reproduced by tests: **one session written to two transcript files**
+  (Claude Code stores them under the working directory, so a renamed or moved
+  project yields two files with the same session id — the watcher now sends one
+  report per session, keeping the live file's), and **resuming a session older than
+  the retention window** (its row is gone, so the daemon re-counted it from zero).
+  The rollup now counts against a per-session high-water mark held outside the
+  session lifecycle, so a regression contributes nothing whatever its cause, and
+  real growth counts exactly once. `vigied stats-repair` corrects a bucket that was
+  already corrupted — daily stats cannot be recomputed, so the figure is the
+  operator's decision, never guessed
+  ([design](docs/design/token-rollup.md), #432).
+
+### Fixed
+
 - The GNOME extension no longer hides sessions. Its menu was built by iterating a
   hand-written list of four statuses, so a session that was `thinking`,
   `compacting`, `stalled`, `error` or `stale` matched no group and was dropped —
