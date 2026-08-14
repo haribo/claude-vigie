@@ -9,6 +9,25 @@ file is the single source of truth, not a second narrative.
 
 ## [Unreleased]
 
+### Fixed
+
+- The reporting hook no longer re-reads the whole transcript at the end of every
+  turn on a watched machine. `Stop` parsed the file from byte 0 to collect six
+  fields, inside a hook Claude Code waits on with a 5 s timeout — and transcripts
+  are append-only, so the cost grew with the session and never came back down.
+  Measured over the 357 transcripts of one machine: 0.2 MB at the median, but
+  62 MB at p99 (1.2 s per turn) and 585 MB at the maximum, where the parse took
+  **11.1 s** — past the timeout, so the report was lost *and* the session stalled
+  5 s after every turn. A local watcher already parses the same file incrementally
+  every ~2 s and reports a superset of those fields, so the hook now defers to it
+  and sends the report without them; the server already keeps the last known value
+  for any field a report omits. `vigie watch` publishes the mark the hook reads
+  (`~/.local/state/vigie/watcher`), refreshed on each scan and trusted for 15 s, so
+  a watcher that stops — or one gone inert on a version drift, which stops scanning
+  — makes hooks resume reading within one window. A machine running no watcher is
+  unchanged: it has no other source for these fields
+  ([design](docs/design/transcript-reads.md), #420).
+
 ## [0.5.0] - 2026-08-13
 
 ### Added

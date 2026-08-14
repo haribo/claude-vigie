@@ -21,6 +21,7 @@ import (
 	"github.com/haribo/claude-vigie/internal/clock"
 	"github.com/haribo/claude-vigie/internal/compaction"
 	"github.com/haribo/claude-vigie/internal/config"
+	"github.com/haribo/claude-vigie/internal/localwatch"
 	"github.com/haribo/claude-vigie/internal/presence"
 	"github.com/haribo/claude-vigie/internal/transcript"
 	"github.com/haribo/claude-vigie/internal/usage"
@@ -83,7 +84,7 @@ func Run(ctx context.Context, cfg *config.Config, opts Options) error {
 
 	sc := newScanner()
 	lastGC := clock.Now()
-	var drifted, beatFailing bool
+	var drifted, beatFailing, markFailing bool
 	var lastBeat time.Time
 	for {
 		// Liveness is claimed on its own, never as a side effect of session data: a
@@ -104,6 +105,12 @@ func Run(ctx context.Context, cfg *config.Config, opts Options) error {
 			if err != nil {
 				fmt.Fprintf(os.Stderr, "watch: %v\n", err)
 			}
+			// Claim the local mark only here, after a real scan. It tells the
+			// reporting hooks that transcripts on this machine are already being
+			// read incrementally, so they can skip their own full re-read (#420).
+			// A drifted watcher beats but never reaches this line: it stops
+			// scanning, so hooks must keep reading for themselves.
+			markFailing = markLocal(markFailing)
 			drifted = postReports(cfg, reports, drifted)
 		}
 		if time.Since(lastGC) > gcInterval {
@@ -116,6 +123,26 @@ func Run(ctx context.Context, cfg *config.Config, opts Options) error {
 		case <-ticker.C:
 		}
 	}
+}
+
+// markLocal refreshes the on-disk mark the reporting hooks read. Like beat, it
+// announces transitions only, so a persistent failure never fills the journal.
+//
+// A scan interval longer than localwatch.StaleAfter leaves the mark permanently
+// stale; that is safe by construction — hooks simply keep reading transcripts
+// themselves, which is exactly what they did before #420.
+func markLocal(failing bool) bool {
+	err := localwatch.Mark()
+	switch {
+	case err == nil:
+		if failing {
+			fmt.Fprintln(os.Stderr, "watch: local watcher mark is writable again")
+		}
+		return false
+	case !failing:
+		fmt.Fprintf(os.Stderr, "watch: cannot write the local watcher mark, hooks will read transcripts themselves: %v\n", err)
+	}
+	return true
 }
 
 // heartbeatInterval is how often the watcher claims liveness. It sits well inside

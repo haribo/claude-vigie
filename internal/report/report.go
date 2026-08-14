@@ -21,8 +21,16 @@ import (
 	"github.com/haribo/claude-vigie/internal/clock"
 	"github.com/haribo/claude-vigie/internal/compaction"
 	"github.com/haribo/claude-vigie/internal/config"
+	"github.com/haribo/claude-vigie/internal/localwatch"
 	"github.com/haribo/claude-vigie/internal/presence"
 	"github.com/haribo/claude-vigie/internal/transcript"
+)
+
+// Seams for the transcript decision: tests drive both sides of it without a real
+// watcher and without a large file on disk.
+var (
+	parseTranscript = transcript.Parse
+	watcherLive     = localwatch.Live
 )
 
 // hookPayload is the JSON Claude Code passes to a command hook on stdin.
@@ -94,9 +102,15 @@ func Run(event string, stdin io.Reader) error {
 		Detail:           hookActivity(event, p),
 		Timestamp:        clock.Now().UTC().Format(time.RFC3339),
 	}
-	// The transcript is only worth reading at turn/session boundaries.
-	if event == "Stop" || event == "SessionEnd" {
-		if info, err := transcript.Parse(p.TranscriptPath); err == nil {
+	// The transcript is only worth reading at turn/session boundaries — and only
+	// when nothing else has already read it. A local watcher parses the same file
+	// incrementally every ~2 s and reports a superset of these fields, so on a
+	// watched machine this read is a full O(file) re-parse of bytes the server
+	// already has, inside a hook the session waits on. Every field below is
+	// "absent → keep the last known" server-side, so omitting them erases nothing
+	// (#420, docs/design/transcript-reads.md).
+	if (event == "Stop" || event == "SessionEnd") && !watcherLive(clock.Now()) {
+		if info, err := parseTranscript(p.TranscriptPath); err == nil {
 			req.Usage = &info.Usage
 			req.Model = info.Model
 			req.Effort = info.Effort

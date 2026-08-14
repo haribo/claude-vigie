@@ -69,6 +69,10 @@ func TestRunPostsReport(t *testing.T) {
 }
 
 func TestRunStopSendsAggregatedUsage(t *testing.T) {
+	// Isolate HOME: since #420 the transcript is read only when no local watcher
+	// mark is fresh there, so without this the result would depend on whether the
+	// developer's own machine happens to be running a watcher.
+	t.Setenv("HOME", t.TempDir())
 	var got api.ReportRequest
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		_ = json.NewDecoder(r.Body).Decode(&got)
