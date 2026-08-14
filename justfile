@@ -139,8 +139,37 @@ code-check:
     echo "==> test (race)"
     go test -race ./...
     echo "==> govulncheck"
-    ./bin/govulncheck ./...
+    just code-vuln
     echo "all checks passed"
+
+# Scan for known vulnerabilities, standard library included
+#
+# govulncheck matches standard-library advisories against the toolchain's version
+# string. A distribution-built Go reports a non-canonical one — Arch's is
+# `go1.26.5-X:nodwarf5` — which matches no advisory, so every stdlib finding is
+# dropped and the scan still prints "No vulnerabilities found". That silence is
+# the defect this recipe removes (#426).
+#
+# GOTOOLCHAIN pins a canonical toolchain, which Go downloads once. It is a floor
+# for the local pre-check, not the authority: CI resolves the newest patch release
+# itself (`check-latest`, #425) and remains what gates a merge. Bump this when CI
+# reports a stdlib advisory that the local scan misses.
+vuln-toolchain := "go1.26.6"
+
+code-vuln:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    export GOTOOLCHAIN="{{vuln-toolchain}}"
+    # Assert the pin took effect. Anything but a canonical goX.Y.Z means stdlib
+    # advisories were skipped, and a scan that cannot see them must say so rather
+    # than report all-clear.
+    version=$(./bin/govulncheck -version | sed -n 's/^Go: *//p' | head -1)
+    if ! [[ "$version" =~ ^go[0-9]+(\.[0-9]+)*$ ]]; then
+        echo "govulncheck ran under a non-canonical toolchain ($version):" >&2
+        echo "standard-library advisories would be skipped silently. Refusing." >&2
+        exit 1
+    fi
+    ./bin/govulncheck ./...
 
 # Run linter
 code-lint:
