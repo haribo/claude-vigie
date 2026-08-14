@@ -349,7 +349,7 @@ func (s *scanner) scan(root, machine string, maxAge time.Duration, now time.Time
 	}
 	s.cache = fresh // drop entries for files no longer scanned
 	s.pruneLineage(regByProc)
-	return reports, nil
+	return dedupeBySession(reports), nil
 }
 
 // indexByProc maps each live process identity to the session id it currently
@@ -538,6 +538,47 @@ func (s *scanner) parse(p string, fi os.FileInfo, fresh map[string]cacheEntry) (
 	}
 	fresh[p] = cacheEntry{modTime: fi.ModTime(), size: fi.Size(), parser: parser}
 	return parser.Info(), nil
+}
+
+// dedupeBySession keeps one report per session id, the one carrying the largest
+// output-token total.
+//
+// A transcript lives under ~/.claude/projects/<encoded-cwd>/, so a session whose
+// working directory changes — a renamed or moved project, a resume from another
+// path — is written under two directories under the *same* id. The glob then
+// yielded one report per file, and the server saw the session's total alternate
+// between the live figure and the abandoned file's, every scan. Downstream that
+// read as the whole total being produced afresh each time (#432,
+// docs/design/token-rollup.md).
+//
+// The largest total is the live file: an abandoned transcript stops growing.
+// Reports without a session id are left alone rather than collapsed together.
+func dedupeBySession(reports []api.ReportRequest) []api.ReportRequest {
+	best := make(map[string]int, len(reports))
+	out := make([]api.ReportRequest, 0, len(reports))
+	for _, r := range reports {
+		if r.SessionID == "" {
+			out = append(out, r)
+			continue
+		}
+		i, seen := best[r.SessionID]
+		if !seen {
+			best[r.SessionID] = len(out)
+			out = append(out, r)
+			continue
+		}
+		if outputTokens(r) > outputTokens(out[i]) {
+			out[i] = r
+		}
+	}
+	return out
+}
+
+func outputTokens(r api.ReportRequest) int64 {
+	if r.Usage == nil {
+		return 0
+	}
+	return r.Usage.OutputTokens
 }
 
 // sessionStatus layers a transient "error" status on top of the base
