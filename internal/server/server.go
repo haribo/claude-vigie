@@ -26,6 +26,7 @@ type Store interface {
 	LastEvent(ctx context.Context, sessionID string) (store.Event, bool, error)
 	AddSample(ctx context.Context, sessionID, at string, outputTokens int64) error
 	AddDailyTokens(ctx context.Context, day, model string, delta int64) error
+	RaiseTokenMark(ctx context.Context, sessionID string, total int64) (int64, error)
 	AddDailyStatusSeconds(ctx context.Context, day, model, status string, secs int64) error
 	ListDailyStats(ctx context.Context, sinceDay string) ([]store.DailyStat, error)
 	LastSampleAt(ctx context.Context, sessionID string) (string, error)

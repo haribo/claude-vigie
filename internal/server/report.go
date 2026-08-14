@@ -99,8 +99,19 @@ func (s *Server) handleReport(w http.ResponseWriter, r *http.Request) {
 
 // rollupTokens adds the session's output-token growth since the last report to
 // today's daily rollup, bucketed by model. Best-effort.
-func (s *Server) rollupTokens(ctx context.Context, old, sess store.Session, req api.ReportRequest) {
-	delta := sess.Usage.OutputTokens - old.Usage.OutputTokens
+func (s *Server) rollupTokens(ctx context.Context, _, sess store.Session, req api.ReportRequest) {
+	// Count against a mark of our own rather than the growth of the session row.
+	// That row is a counter the rollup does not own: it regresses when one session
+	// is written to two transcript files, when a transcript is truncated, or when
+	// retention deletes the row while the transcript lives on — and each
+	// regression made the next report look like a whole lifetime of fresh output,
+	// permanently, since stats_daily is never recomputed (#432,
+	// docs/design/token-rollup.md).
+	delta, err := s.store.RaiseTokenMark(ctx, sess.ID, sess.Usage.OutputTokens)
+	if err != nil {
+		s.log.Error("raising token mark", "error", err)
+		return
+	}
 	if delta <= 0 {
 		return
 	}

@@ -2,6 +2,8 @@ package store
 
 import (
 	"context"
+	"database/sql"
+	"errors"
 	"fmt"
 )
 
@@ -84,4 +86,32 @@ func (s *Store) ListDailyStats(ctx context.Context, sinceDay string) ([]DailySta
 		return nil, fmt.Errorf("iterating daily stats: %w", err)
 	}
 	return out, nil
+}
+
+// SetDailyTokens replaces the output-token figure of one (day, model) bucket and
+// returns what it held before, plus whether the row existed.
+//
+// It exists because stats_daily is never recomputed: a day cannot be rebuilt from
+// session rows, which retention has long deleted. A value corrupted before the
+// rollup was made safe (#432) can therefore only be corrected deliberately, by an
+// operator who decides what the right figure is. Nothing calls this on its own —
+// a large day is not, by itself, wrong. See docs/design/token-rollup.md.
+func (s *Store) SetDailyTokens(ctx context.Context, day, model string, tokens int64) (int64, bool, error) {
+	var before int64
+	err := s.db.QueryRowContext(ctx,
+		`SELECT output_tokens FROM stats_daily WHERE day = ? AND model = ?`, day, model).Scan(&before)
+	existed := true
+	if errors.Is(err, sql.ErrNoRows) {
+		existed = false
+	} else if err != nil {
+		return 0, false, fmt.Errorf("reading daily tokens: %w", err)
+	}
+
+	if _, err := s.db.ExecContext(ctx,
+		`INSERT INTO stats_daily (day, model, output_tokens) VALUES (?, ?, ?)
+		 ON CONFLICT(day, model) DO UPDATE SET output_tokens = excluded.output_tokens`,
+		day, model, tokens); err != nil {
+		return 0, false, fmt.Errorf("setting daily tokens: %w", err)
+	}
+	return before, existed, nil
 }
