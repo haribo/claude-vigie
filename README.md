@@ -132,12 +132,14 @@ The client reads `~/.config/vigie/config.toml` (override the path with
 
 ## Development
 
-Requires Go 1.26+ and [`just`](https://github.com/casey/just).
+Requires Go 1.26+, [`just`](https://github.com/casey/just), and Node 22+ (the
+dashboard and the GNOME indicator are tested with node's built-in runner — no
+package.json, no dependencies).
 
 ```bash
 just dev-setup      # configure git hooks
 just tool-install   # install golangci-lint + goimports + govulncheck into ./bin
-just code-check     # fmt + lint + build + test + vulnerability scan (run before every PR)
+just code-check     # fmt + lint + build + test (go & js) + vulnerability scan (run before every PR)
 ```
 
 Run the current source against a throwaway local server, fully isolated from any

@@ -138,6 +138,8 @@ code-check:
     go build ./...
     echo "==> test (race)"
     go test -race ./...
+    echo "==> javascript tests"
+    just code-test-js
     echo "==> govulncheck"
     just code-vuln
     echo "all checks passed"
@@ -170,6 +172,15 @@ code-vuln:
         exit 1
     fi
     ./bin/govulncheck ./...
+
+# Run the JavaScript tests (dashboard + GNOME indicator)
+#
+# The two shipped artefacts cannot be imported outside their runtime —
+# extension.js pulls in `gi://` and GNOME Shell resources, app.js drives the DOM —
+# so the rules worth checking live in a sibling `lib.js` that both the artefact and
+# these tests import. No package.json, no dependency: node's built-in runner (#430).
+code-test-js:
+    node --test test/js/dashboard.test.mjs test/js/gnome.test.mjs test/js/boot.test.mjs
 
 # Run linter
 code-lint:

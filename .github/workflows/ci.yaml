@@ -101,6 +101,13 @@ jobs:
           check-latest: true
           cache: true
 
+      - uses: actions/setup-node@v6
+        with:
+          node-version: "22"
+
+      - name: JavaScript tests
+        run: node --test test/js/dashboard.test.mjs test/js/gnome.test.mjs test/js/boot.test.mjs
+
       - name: Build
         run: go build ./...
 
