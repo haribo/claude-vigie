@@ -18,6 +18,15 @@ func TestMarkIsLiveThenGoesStale(t *testing.T) {
 	if err := Mark(); err != nil {
 		t.Fatalf("Mark: %v", err)
 	}
+	// Pin the mark's timestamp before testing the edges. The kernel stamps a file
+	// from a coarse cached clock that can lag time.Now() by milliseconds, so
+	// comparing an exact window edge against an independently captured `now` is a
+	// race between two clocks — one millisecond of lag is enough to fail, which is
+	// what it did in CI while passing on every developer machine.
+	if err := os.Chtimes(markPath(t, home), now, now); err != nil {
+		t.Fatal(err)
+	}
+
 	if !Live(now) {
 		t.Error("a watcher just marked itself and does not read live")
 	}
@@ -92,4 +101,11 @@ func TestFutureMarkIsNotLive(t *testing.T) {
 	if Live(time.Now()) {
 		t.Error("a mark dated in the future reads live")
 	}
+}
+
+// markPath is where Mark writes, as the design document fixes it. Tests that need
+// to control the timestamp use it rather than repeating the path.
+func markPath(t *testing.T, home string) string {
+	t.Helper()
+	return filepath.Join(home, ".local", "state", "vigie", "watcher")
 }
