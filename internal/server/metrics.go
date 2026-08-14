@@ -14,6 +14,7 @@ import (
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 
 	"github.com/haribo/claude-vigie/internal/clock"
+	"github.com/haribo/claude-vigie/internal/status"
 )
 
 // This file is the daemon's only Prometheus dependency; the client packages
@@ -188,8 +189,11 @@ var (
 )
 
 // statusOrder is every status the gauge reports, so each series exists (=0) even
-// when no session currently holds it.
-var statusOrder = []string{"working", "thinking", "waiting", "idle", "stalled", "error", "stale", "ended"}
+// when no session currently holds it. It comes from the shared vocabulary rather
+// than a local copy: this list silently omitted `compacting` from the day it was
+// added (#342), so those sessions were counted and then dropped, and the gauge's
+// total did not match the number of sessions (#421, #423).
+var statusOrder = status.All
 
 func (c *stateCollector) Describe(ch chan<- *prometheus.Desc) {
 	ch <- descSessions
