@@ -28,10 +28,10 @@ Two binaries, split along the deployment boundary (see
 
 - **`vigied`** — the server daemon. One per fleet, on a host machine.
   Carries SQLite, the HTTP/SSE API, and the embedded web dashboard. Subcommands:
-  `serve`, `token`.
+  `serve`, `token`, `stats-repair`.
 - **`vigie`** — the client. Installed on every machine running Claude Code
   sessions. Stays minimal (no server code, no SQLite). Subcommands: `init`,
-  `report`, `watch`, `tui`.
+  `hooks`, `report`, `call`, `watch`, `tui`.
 
 A fleet is *N* client machines all reporting to one daemon.
 
@@ -41,7 +41,9 @@ A fleet is *N* client machines all reporting to one daemon.
 |-----------|--------|------------|------|
 | Server | `vigied` | `serve` | HTTP + SSE API, SQLite storage, session pruning, platform-status polling |
 | Token | `vigied` | `token` | Print/generate the shared auth token (to connect clients) |
-| Installer | `vigie` | `init` | Merges hooks into `~/.claude/settings.json`, writes the client config |
+| Stats repair | `vigied` | `stats-repair` | Correct one day's output-token figure in the analytics table; daily stats are never recomputed, so a value corrupted by an earlier defect can only be set deliberately ([design](design/token-rollup.md)) |
+| Configuration | `vigie` | `init` | Asks for the server URL, the token and the machine name, checks the connection, and writes the client config — nothing else. The watcher installs the hooks and the call skill ([ADR-0009](adr/0009-watcher-managed-hooks.md)) |
+| Hooks | `vigie` | `hooks` | `install` / `uninstall` the reporting hooks and the call skill by hand, for a machine that runs no watcher |
 | Reporter | `vigie` | `report` | Invoked by Claude Code hooks; sends one event per hook |
 | Call | `vigie` | `call` | Run *inside* a session to raise a call for the operator ([ADR-0010](adr/0010-session-raised-operator-call.md)); cleared when that session resumes or ends. Claude learns the command from a personal Agent Skill vigie installs and refreshes ([design](design/call-discoverability.md)) |
 | Watcher | `vigie` | `watch` | Background service: refreshes its own hooks at startup ([ADR-0009](adr/0009-watcher-managed-hooks.md)), scans local transcripts, derives status from process presence + activity, reports every session (covering ones the hooks miss), and holds the usage lease to fetch subscription usage |
@@ -77,11 +79,12 @@ The watcher and the daemon run as systemd user services
 
 ## Hooks
 
-`vigie init` installs these Claude Code hooks; each invokes
-`vigie report` with the event. `vigie watch` also **re-installs its own leg at
-startup** ([ADR-0009](adr/0009-watcher-managed-hooks.md)), so the installed hooks
-always match the running watcher — a service restart after an upgrade self-heals
-stale hooks. The resulting status is derived and reconciled per
+`vigie watch` installs these Claude Code hooks and **re-installs its own leg at
+startup** ([ADR-0009](adr/0009-watcher-managed-hooks.md)); each invokes
+`vigie report` with the event. A machine that runs no watcher installs them by
+hand with `vigie hooks install`. So the installed hooks always match the running
+watcher — a service restart after an upgrade self-heals stale hooks. The
+resulting status is derived and reconciled per
 [`design/session-status.md`](design/session-status.md).
 
 | Hook | Reports |
