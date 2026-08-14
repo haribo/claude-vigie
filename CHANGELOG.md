@@ -11,6 +11,27 @@ file is the single source of truth, not a second narrative.
 
 ### Fixed
 
+- The GNOME extension no longer hides sessions. Its menu was built by iterating a
+  hand-written list of four statuses, so a session that was `thinking`,
+  `compacting`, `stalled`, `error` or `stale` matched no group and was dropped —
+  and since the "No sessions" placeholder only appears when the list is genuinely
+  empty, a fleet of stalled sessions rendered a menu that merely looked empty.
+  `stalled` — a turn parked on a hung tool — is among the states most worth a look.
+  The menu now renders every status, and appends any status it does not recognize
+  rather than dropping it, so one added later degrades to "unstyled" instead of
+  "invisible" (#422).
+- The `vigie_sessions` gauge counts `compacting` sessions. It tallied every status
+  but emitted a series only for those in its own list, which never gained
+  `compacting` when that status was added — so those sessions were counted and
+  then discarded, and the gauge's total did not match the number of sessions
+  (#421).
+- The nine session statuses are now declared once and checked everywhere. The list
+  was hand-copied into four consumers, each incomplete in a different way, and
+  nothing detected the divergence — which is how the two defects above went
+  unnoticed for two releases. A test now reads the vocabulary from
+  [the design document](docs/design/session-status.md) and fails on any copy that
+  drifts, naming the entries that differ (#423).
+
 - The reporting hook no longer re-reads the whole transcript at the end of every
   turn on a watched machine. `Stop` parsed the file from byte 0 to collect six
   fields, inside a hook Claude Code waits on with a 5 s timeout — and transcripts

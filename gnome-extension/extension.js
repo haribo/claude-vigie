@@ -16,14 +16,34 @@ import * as Main from 'resource:///org/gnome/shell/ui/main.js';
 import * as PanelMenu from 'resource:///org/gnome/shell/ui/panelMenu.js';
 import * as PopupMenu from 'resource:///org/gnome/shell/ui/popupMenu.js';
 
-// Statuses, most-active first, with a display label.
-const STATUS_ORDER = ['working', 'waiting', 'idle', 'ended'];
+// Statuses, most-active first, with a display label. Kept identical to
+// docs/design/session-status.md § 1 and internal/status — a Go test reads this
+// literal and fails on any drift. This list used to hold four of the nine, and
+// the menu silently dropped every session in one of the other five, `stalled`
+// among them — the state most worth a look (#422, #423).
+const STATUS_ORDER = ['working', 'thinking', 'compacting', 'waiting', 'stalled', 'idle', 'error', 'stale', 'ended'];
 const STATUS_LABEL = {
     working: 'Working',
+    thinking: 'Thinking',
+    compacting: 'Compacting context',
     waiting: 'Waiting for input',
+    stalled: 'Stalled on a tool',
     idle: 'Idle',
+    error: 'API error',
+    stale: 'Unknown (no watcher)',
     ended: 'Ended',
 };
+
+// groupOrder returns the statuses to render: the known ones in their documented
+// order, then anything else the server actually sent. Keeping the list in step is
+// what the Go test enforces, but a menu must not depend on being in step — a
+// status added on the server side has to *appear*, unstyled and unlabelled if
+// need be, rather than take its sessions off the screen (#422).
+function groupOrder(sessions) {
+    const seen = new Set(sessions.map(s => s.status).filter(Boolean));
+    const unknown = [...seen].filter(s => !STATUS_ORDER.includes(s)).sort();
+    return [...STATUS_ORDER, ...unknown];
+}
 
 function basename(path) {
     if (!path)
@@ -168,7 +188,7 @@ class FleetIndicator extends PanelMenu.Button {
         if (sessions.length === 0) {
             this.menu.addMenuItem(new PopupMenu.PopupMenuItem('No sessions', {reactive: false}));
         } else {
-            for (const status of STATUS_ORDER) {
+            for (const status of groupOrder(sessions)) {
                 const group = sessions.filter(s => s.status === status);
                 if (group.length === 0)
                     continue;
