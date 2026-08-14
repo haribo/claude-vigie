@@ -11,6 +11,17 @@ file is the single source of truth, not a second narrative.
 
 ### Fixed
 
+- A panel now says when it is showing figures it could not refresh. The TUI fetches
+  seven things from the daemon; only a sessions failure ever reached the operator.
+  For the other six the error was discarded and the previous values stayed on
+  screen — right in itself, since blanking a panel on a transient blip would be
+  worse, but presented as current. A panel failing to refresh for an hour looked
+  exactly like one that was up to date, and an endpoint that had never answered
+  looked like "no data". Stats, Machines and Settings now carry a notice above
+  their figures, the bottom strip carries a mark where a sentence would not fit,
+  and a successful refresh clears it. The figures themselves are untouched: they
+  remain the last thing known (#449).
+
 - An abandoned metadata file is no longer reported as a session. Claude Code writes
   a sidecar next to each conversation — title, mode, permission mode, agent name
   and color — under the project's working directory, so a renamed or moved project
