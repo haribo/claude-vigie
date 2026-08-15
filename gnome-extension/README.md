@@ -49,8 +49,13 @@ Open the extension preferences (via *Extensions* app, or
   (edge-triggered — once per transition, not every poll). The first poll after
   launch only seeds state, so enabling the extension never notifies for sessions
   that were already waiting. Toggle it off in preferences.
-- Clicking the icon opens a dropdown listing sessions grouped by status
-  (`working` / `waiting` / `idle` / `ended`) with project, machine, and branch.
+- Clicking the icon opens a dropdown listing sessions grouped by status, with
+  project, machine, and branch. Every status the server can return is shown, in
+  the order [`session-status.md`](../docs/design/session-status.md) § 1 lists them:
+  `working`, `thinking`, `compacting`, `waiting`, `stalled`, `idle`, `error`,
+  `stale`, `ended`. A status this extension does not recognise is appended rather
+  than dropped, so one added on the server side arrives unstyled instead of taking
+  its sessions off the screen (#422).
 - If the server is unreachable or the token is wrong, the icon dims and the menu
   shows the reason.
 
