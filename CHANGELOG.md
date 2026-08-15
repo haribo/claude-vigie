@@ -11,6 +11,17 @@ file is the single source of truth, not a second narrative.
 
 ### Fixed
 
+- The event stream now notices its own death in seconds rather than minutes. A
+  suspended machine's connection dies without a FIN or an RST, so the client's read
+  blocked on a socket that would never deliver another byte, until the OS gave up
+  its keepalive probes. The reconnect loop was correct all along and simply never
+  ran, because the function it guarded had not returned. The daemon now sends a
+  keep-alive comment every 10 s, and the client gives up after 30 s of silence —
+  three missed beats — and reconnects. The connection indicator also stops claiming
+  a live stream while polls are failing: that observation was made before the
+  machine went to sleep, and a failing poll is present-tense proof the server is out
+  of reach (#457).
+
 - A failed poll no longer blanks the sessions table. Resuming a laptop from suspend
   produced `error: … context deadline exceeded` and **no sessions at all**, for the
   minutes the connection took to come back. The sessions were never lost — the

@@ -2,6 +2,7 @@ package tui
 
 import (
 	"bufio"
+	"context"
 	"net/http"
 	"strings"
 	"time"
@@ -22,8 +23,28 @@ func subscribeEvents(cfg *config.Config, out chan<- struct{}, conn chan<- bool) 
 	}
 }
 
+// silenceLimit is how long the client waits to hear anything at all before it
+// treats the stream as dead. The server sends a keep-alive comment every 10 s
+// (internal/server/events.go), so this is three missed beats.
+//
+// It exists because a suspended machine's connection dies without a FIN or an
+// RST: the socket stays open as far as the process is concerned, and a read on it
+// blocks until the OS gives up on its keepalive probes — minutes. The reconnect
+// loop below was correct all along and simply never ran, because the function it
+// guards had not returned (#457).
+var silenceLimit = 30 * time.Second
+
 func streamEvents(client *http.Client, url, token string, out chan<- struct{}, conn chan<- bool) {
-	req, err := http.NewRequest(http.MethodGet, url, nil)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	// A watchdog, reset by every line the stream delivers. Canceling the request
+	// unblocks the read below, which is the only thing that can: a Scanner has no
+	// deadline of its own.
+	watchdog := time.AfterFunc(silenceLimit, cancel)
+	defer watchdog.Stop()
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if err != nil {
 		return
 	}
@@ -39,6 +60,7 @@ func streamEvents(client *http.Client, url, token string, out chan<- struct{}, c
 	sendState(conn, true) // connected and streaming
 	sc := bufio.NewScanner(resp.Body)
 	for sc.Scan() {
+		watchdog.Reset(silenceLimit) // any line, comment included, proves it is alive
 		if strings.HasPrefix(sc.Text(), "data:") {
 			select {
 			case out <- struct{}{}:
