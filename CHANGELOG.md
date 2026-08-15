@@ -26,6 +26,22 @@ file is the single source of truth, not a second narrative.
 
 ### Fixed
 
+- The deployment guide documented Prometheus metrics that do not exist. It said
+  they were namespaced `fleet_*`, with a `fleet_sessions` gauge; the server has
+  emitted `vigie_*` since the rename. An operator who built scrape rules or alerts
+  from that paragraph collected nothing and was never told — a query for a series
+  that does not exist returns an empty result, not an error. The prose is
+  corrected, and a test now checks every metric named in the docs or in the
+  shipped Grafana dashboard against the ones the code registers, so a stale
+  prefix, a renamed metric or a deleted one all fail the build. The dashboard
+  itself was already correct ([deployment](docs/deployment.md), #478).
+- The old brand is gone from the identifiers that ship to users: the GNOME
+  indicator's class and its four `cf-*` CSS classes, the dashboard's `cf_token`
+  and `cf_columns` storage keys, and three package doc comments. The two storage
+  keys hold live state, so they are carried over on first read rather than
+  dropped — nobody is signed out of the dashboard and no column layout is lost.
+  The `FLEET_CONFIG` fallback and the `~/.config/claude-fleet` read-fallback stay:
+  they are a deliberate migration path, not a leftover (#478).
 - A tool call that never got its result no longer pins a session to `stalled` for
   the rest of its life. The `tool_use`↔`tool_result` pairing that detects a hung
   tool (#256) dropped an entry on one event only — the matching result — so a
