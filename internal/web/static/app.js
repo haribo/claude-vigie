@@ -7,14 +7,13 @@
 
 import {
   esc, dash, trim, hasCall, detailText, humanTokens, ageSec, relAge, relResetHint,
-  shortModel, projectName, totalTokens, sparkSVG, migrateKeys, fullColOrder, colHidden,
+  shortModel, projectName, totalTokens, sparkSVG, migrateKeys, fullColOrder, colHidden, rank,
 } from "./lib.js";
 
 const TOKEN_KEY = "cf_token";
 // Kept identical to docs/design/session-status.md § 1 and internal/status — a Go
 // test reads this literal and fails on any drift (#423).
 const STATUSES = ["working", "thinking", "compacting", "waiting", "stalled", "idle", "error", "stale", "ended"];
-const RANK = { stalled: 0, working: 1, thinking: 2, waiting: 3, idle: 4, error: 5, stale: 6, ended: 7 };
 
 let token = localStorage.getItem(TOKEN_KEY) || "";
 let sessions = [], byId = new Map();
@@ -77,7 +76,7 @@ const COLS = [
     cell: (s) => `<td>${sparkSVG(s.samples)}</td>` },
   { key: "rc", label: "RC", cmp: (a, b) => (a.remote_control === b.remote_control ? 0 : a.remote_control ? -1 : 1),
     cell: (s) => `<td>${s.remote_control ? '<span class="rc-on" title="Remote control on">◉</span>' : '<span class="rc-off" title="Remote control off">○</span>'}</td>` },
-  { key: "status", label: "Status", cmp: (a, b) => RANK[a.status] - RANK[b.status],
+  { key: "status", label: "Status", cmp: (a, b) => rank(a.status) - rank(b.status),
     cell: (s) => { const st = STATUSES.includes(s.status) ? s.status : "idle"; const code = (s.status === "error" && s.api_error_status) ? ` <span class="code">${s.api_error_status}</span>` : ""; return `<td><span class="pill st-${st}${hasCall(s) ? " call" : ""}"><span class="dot"></span>${st}${code}</span></td>`; } },
   { key: "detail", label: "Detail", nosort: true,
     cell: (s) => { const d = detailText(s); const cls = hasCall(s) ? "detail call" : (s.status === "waiting" ? "detail wait" : "detail"); return `<td class="${cls}" title="${d}">${d}</td>`; } },

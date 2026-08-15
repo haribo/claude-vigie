@@ -9,7 +9,7 @@ import { readFile } from "node:fs/promises";
 
 import {
   esc, dash, trim, hasCall, detailText, humanTokens, relAge, relResetHint,
-  shortModel, projectName, totalTokens, sparkSVG, migrateKeys, fullColOrder, colHidden,
+  shortModel, projectName, totalTokens, sparkSVG, migrateKeys, fullColOrder, colHidden, rank,
 } from "../../internal/web/static/lib.js";
 
 // esc is the dashboard's only defence against DOM-based XSS: session titles,
@@ -159,4 +159,31 @@ test("lib.js exports every name app.js imports from it", async () => {
   const lib = await import("../../internal/web/static/lib.js");
   const missing = imported.filter((name) => !(name in lib));
   assert.deepEqual(missing, [], `app.js imports names lib.js does not export: ${missing}`);
+});
+
+// The status sort. `RANK` used to be an object holding eight of the nine
+// statuses, so `RANK["compacting"]` was undefined and the comparator returned
+// NaN — which does not order badly, it stops ordering: an `ended` session came
+// out first (#464).
+test("rank places every status, most active first", () => {
+  const order = ["stalled", "working", "thinking", "compacting", "waiting", "idle", "error", "stale", "ended"];
+  order.forEach((s, i) => assert.equal(rank(s), i, `${s} is out of place`));
+});
+
+test("an unknown status sorts last, never first", () => {
+  assert.ok(rank("quantum") > rank("ended"),
+    "a status this build has never heard of must not head the table");
+  assert.ok(Number.isFinite(rank("quantum")), "an unknown status must still compare");
+});
+
+test("the comparator orders instead of returning NaN", () => {
+  const cmp = (a, b) => rank(a.status) - rank(b.status);
+  const rows = ["ended", "compacting", "working", "stale", "quantum", "stalled"].map((status) => ({ status }));
+  assert.deepEqual([...rows].sort(cmp).map((r) => r.status),
+    ["stalled", "working", "compacting", "stale", "ended", "quantum"]);
+  for (const a of rows) {
+    for (const b of rows) {
+      assert.ok(!Number.isNaN(cmp(a, b)), `cmp(${a.status}, ${b.status}) is NaN`);
+    }
+  }
 });

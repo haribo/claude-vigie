@@ -44,9 +44,43 @@ rows keep their previous order:
 | ----------- | ------------------------------------------------------------------ |
 | `last seen` | most recently active (default)                                     |
 | `tokens`    | most total tokens                                                  |
-| `status`    | most active — `stalled` › `working` › `waiting` › `idle` › `ended` |
+| `status`    | most active — see § 2.1                                            |
 | `name`      | A → Z                                                              |
 | `rc`        | remotely controlled first                                          |
+
+### 2.1 The status order
+
+Every status is ranked. A partial list was the defect in #464: four of the nine
+fell to an unranked default, which in the TUI sorted them *below* `ended`, and in
+the web dashboard produced `undefined` and a comparator that returned `NaN` — a
+sort that stopped ordering rather than mis-ordering.
+
+Top first:
+
+| # | Status | Why here |
+|---|--------|----------|
+| 1 | `stalled` | A hung tool. The exception to "most active": nothing is happening, and that is the point. |
+| 2 | `working` | A turn is running. |
+| 3 | `thinking` | A turn is running, inside extended thinking. |
+| 4 | `compacting` | A turn is running, summarizing its context ([ADR-0008](../adr/0008-compacting-status.md)). |
+| 5 | `waiting` | Stopped, and the operator is the blocker. |
+| 6 | `idle` | Alive, between turns. |
+| 7 | `error` | Live but not producing: a transient API error it will retry through. |
+| 8 | `stale` | No fresh signal and no watcher — the state is unknown, not known-inactive. |
+| 9 | `ended` | Over. |
+
+**This is not a new order.** Ranks 1–8 are the order the web dashboard already
+encoded, and the five the TUI ranked agree with it pairwise; only `compacting` was
+missing from both, and it sits with the other two mid-turn sub-states. Preserving
+every existing pairwise relation was deliberate — the defect was the omissions, not
+the ordering.
+
+**`error` sits low on purpose, and it is worth naming the tension.** It is one of
+the three statuses the TUI notifies on (`waiting`, `error`, `stalled`), so it
+demands attention; yet the key sorts by *activity*, and an errored session is
+producing nothing. Attention is carried by the notification and the colour, not by
+the sort. A reader who expects attention-first ordering should read this row as the
+answer, not as an oversight.
 
 `tokens`, `status`, and `rc` break ties by most-recently-seen, so within a rank
 the freshest session is on top. The active key and direction are shown in the

@@ -80,3 +80,20 @@ export function fullColOrder(order, colKeys) {
 }
 
 export function colHidden(hidden, key, mandatory) { return !mandatory.has(key) && hidden.includes(key); }
+
+// Sort order for the status column, lower first. Kept identical to
+// docs/design/session-list.md § 2.1 and internal/status.Order — a Go test reads
+// this literal and fails on drift.
+//
+// It used to be an object with eight of the nine statuses, so `RANK[status]` was
+// `undefined` for `compacting` and the comparator returned `NaN`. A NaN
+// comparator does not order badly, it stops ordering: the table came out with an
+// `ended` session first (#464).
+export const RANK_ORDER = ["stalled", "working", "thinking", "compacting", "waiting", "idle", "error", "stale", "ended"];
+
+// rank places an unknown status last, never first: a status this build has never
+// heard of is the one we can say least about.
+export function rank(status) {
+  const i = RANK_ORDER.indexOf(status);
+  return i < 0 ? RANK_ORDER.length : i;
+}

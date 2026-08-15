@@ -39,3 +39,35 @@ func Known(s string) bool {
 	}
 	return false
 }
+
+// Order is every status ranked for the status sort, most active first, exactly as
+// docs/design/session-list.md § 2.1 lists them.
+//
+// It is separate from All because the two answer different questions: All is what
+// exists, Order is how it sorts. Keeping the sort partial was the defect in #464 —
+// the four statuses nobody ranked fell to a default that put them below `ended` in
+// the TUI, and produced a NaN comparator in the web dashboard, which stops sorting
+// altogether rather than sorting badly.
+var Order = []string{
+	"stalled",
+	"working",
+	"thinking",
+	"compacting",
+	"waiting",
+	"idle",
+	"error",
+	"stale",
+	"ended",
+}
+
+// Rank is a status's position in the sort, lower first. An unknown status sorts
+// last rather than first: a status this build has never heard of is the one thing
+// we can say least about, so it does not get to head the table.
+func Rank(s string) int {
+	for i, k := range Order {
+		if k == s {
+			return i
+		}
+	}
+	return len(Order)
+}
