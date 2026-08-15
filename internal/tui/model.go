@@ -721,7 +721,7 @@ func (m model) watcherWarn() string {
 
 // footerBlock is the key-hint footer, wrapped to width so it never overflows (#328).
 func (m model) footerBlock() string {
-	foot := footer(m.tab)
+	foot := footerFit(m.tab, m.width)
 	if m.width > 0 {
 		foot = lipgloss.NewStyle().Width(m.width).Render(foot)
 	}
@@ -942,7 +942,7 @@ func (m model) viewSessions() string {
 	b.WriteString(m.staleReason())
 	// The tab-bar separator frames the summary strip above; a rule below
 	// separates it from the table.
-	b.WriteString(joinLR(renderSummaryFit(m.sessions, m.sess.history, m.width), m.summaryRight(), m.width) + "\n")
+	b.WriteString(m.summaryStrip() + "\n")
 	b.WriteString(rule(m.width) + "\n")
 	if m.sess.filtering || m.sess.filter != "" {
 		b.WriteString(m.sess.filterLine() + "\n")
@@ -1007,7 +1007,7 @@ func (m model) sessionsBand(bodyHeight int) (tableRows, int) {
 	// Fixed chrome inside the sessions body, measured (never hard-coded): the
 	// summary strip, its rule, the optional filter and overflow-banner lines, the
 	// pinned table header, and the trailing rule + usage strip.
-	fixed := lineCount(joinLR(renderSummaryFit(m.sessions, m.sess.history, m.width), m.summaryRight(), m.width))
+	fixed := lineCount(m.summaryStrip())
 	fixed += lineCount(rule(m.width))
 	if m.sess.filtering || m.sess.filter != "" {
 		fixed += lineCount(m.sess.filterLine())
@@ -1097,6 +1097,34 @@ func (m model) connGlyph() string {
 	default:
 		return lipgloss.NewStyle().Foreground(cAmber).Render("◍")
 	}
+}
+
+// summaryStrip assembles the summary line under a single width budget: the right
+// block is measured first and its space reserved, then the left block is fitted
+// into what is left, dropping its trailing extras as it already does (#334).
+//
+// Each half used to be sized on its own — the left block against the *full*
+// terminal width, after which joinLR discovered there was no room for the right
+// one and dropped it whole. Below ~140 columns that cost the operator `sort`,
+// `group`, `hidden` and the connection glyph at once, with nothing left on
+// screen to say so. The glyph is the TUI's only permanent indication that it is
+// still reaching the server (#457); the left block's extras are decorative
+// beside it, so when something has to go it is `activity`, not the glyph (#486).
+func (m model) summaryStrip() string {
+	right := m.summaryRight()
+	if m.width <= 0 {
+		// No width yet (before the first WindowSizeMsg): nothing to budget, and
+		// joinLR renders both halves unbounded.
+		return joinLR(renderSummaryFit(m.sessions, m.sess.history, 0), right, 0)
+	}
+	// The 3 columns are joinLR's minimum gap between the two halves.
+	avail := m.width - lipgloss.Width(right) - 3
+	if avail <= 0 {
+		// Narrower than the right block itself. Keep it — it is the half that
+		// carries the connection state — rather than a truncated count list.
+		return clampWidth(right, m.width)
+	}
+	return joinLR(renderSummaryFit(m.sessions, m.sess.history, avail), right, m.width)
 }
 
 // joinLR places left and right on one line, right-aligned to width when known.

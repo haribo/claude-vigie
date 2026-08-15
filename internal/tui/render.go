@@ -25,8 +25,20 @@ var (
 	keycapStyle      = lipgloss.NewStyle().Foreground(cText).Background(cSurface)
 )
 
-// footer renders the keycap-style key hints for the active tab.
-func footer(t tab) string {
+// footer renders the keycap-style key hints for the active tab, unconstrained.
+func footer(t tab) string { return renderHints(footerHints(t)) }
+
+// renderHints lays hints out as a keycap plus its label.
+func renderHints(hints [][2]string) string {
+	parts := make([]string, len(hints))
+	for i, h := range hints {
+		parts[i] = keycapStyle.Render(" "+h[0]+" ") + dimStyle.Render(" "+h[1])
+	}
+	return strings.Join(parts, "  ")
+}
+
+// footerHints is the key hints for a tab, in display order.
+func footerHints(t tab) [][2]string {
 	hints := [][2]string{
 		{"⇥", "switch"}, {"↑↓", "select"}, {"enter", "detail"}, {"n", "next"},
 		{"/", "filter"}, {"s", "sort"}, {"S", "reverse"}, {"g", "group"}, {"a", "hide ended"},
@@ -46,11 +58,52 @@ func footer(t tab) string {
 			{"⇥", "switch"}, {"r", "refresh"}, {"q", "quit"},
 		}
 	}
-	parts := make([]string, len(hints))
-	for i, h := range hints {
-		parts[i] = keycapStyle.Render(" "+h[0]+" ") + dimStyle.Render(" "+h[1])
+	return hints
+}
+
+// footerDropOrder is the order the Sessions hints give way in when the footer
+// will not fit on one row — least essential first, by keycap. Display order is
+// unaffected: whatever survives is still shown left to right as before, so the
+// footer a wide terminal shows and the one a narrow terminal shows are the same
+// list, shortened.
+//
+// `q` is absent on purpose: the way out of the program stays on screen at every
+// width. The rest are ordered by how recoverable their absence is — a reversed
+// sort or a refresh is a convenience, while moving the cursor and opening a
+// session are how the tab is used at all.
+var footerDropOrder = []string{"S", "n", "r", "g", "a", "s", "/", "enter", "↑↓", "⇥"}
+
+// footerFit is footer constrained to width: it drops whole hints, in
+// footerDropOrder, until the line fits on one row, and marks the cut with an
+// ellipsis.
+//
+// The Sessions footer needs 134 columns for its eleven hints, and footerBlock
+// renders it through a width that *wraps* rather than truncates — so every
+// narrower terminal paid a second row for it on every frame, forever. That row
+// is charged to the session table (bodyHeight): on a 24-row terminal it is two
+// sessions traded for a standing reminder of `q quit` (#487).
+func footerFit(t tab, width int) string {
+	hints := footerHints(t)
+	if line := renderHints(hints); width <= 0 || lipgloss.Width(line) <= width {
+		return line
 	}
-	return strings.Join(parts, "  ")
+	dropped := map[string]bool{}
+	for _, key := range footerDropOrder {
+		dropped[key] = true
+		kept := make([][2]string, 0, len(hints))
+		for _, h := range hints {
+			if !dropped[h[0]] {
+				kept = append(kept, h)
+			}
+		}
+		line := renderHints(kept) + dimStyle.Render("  …")
+		if lipgloss.Width(line) <= width {
+			return line
+		}
+	}
+	// Narrower than the hints that may never be dropped: clamp rather than wrap,
+	// so the cost stays one row.
+	return clampWidth(renderHints(footerHints(t)), width)
 }
 
 // renderTabBar renders the top-level tab bar: the labels, then a full-width
@@ -426,8 +479,13 @@ func renderSummary(sessions []api.SessionView, history []int) string {
 
 // renderSummaryFit is renderSummary constrained to width: it drops the trailing
 // extras (activity, then rc, then out) when the line does not fit, so a narrow
-// terminal shows whole elements instead of a mid-glyph cut. The status counts
-// are always kept; if even they exceed width, they are clamped as a last resort.
+// terminal shows whole elements instead of a mid-glyph cut.
+//
+// When even the counts alone overflow, whole count entries go — least urgent
+// first, which is the order summaryParts builds them in — followed by an
+// ellipsis saying the list is cut. Clamping the line instead would slice a
+// number in half and turn `ended 25` into `ended 2`: a wrong figure presented as
+// a right one, which is worse than an absent one (#486).
 func renderSummaryFit(sessions []api.SessionView, history []int, width int) string {
 	counts, extras := summaryParts(sessions, history)
 	for n := len(extras); n >= 0; n-- {
@@ -436,6 +494,13 @@ func renderSummaryFit(sessions []api.SessionView, history []int, width int) stri
 			return line
 		}
 	}
+	for k := len(counts) - 1; k >= 1; k-- {
+		line := assembleSummary(counts[:k], nil, 0) + dimStyle.Render(" …")
+		if lipgloss.Width(line) <= width {
+			return line
+		}
+	}
+	// Narrower than a single count: nothing degrades gracefully from here.
 	return clampWidth(assembleSummary(counts, extras, 0), width)
 }
 
