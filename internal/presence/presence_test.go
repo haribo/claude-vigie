@@ -1,6 +1,7 @@
 package presence
 
 import (
+	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -122,8 +123,12 @@ func TestWatcherRunning(t *testing.T) {
 	if err != nil {
 		t.Skipf("no sh: %v", err)
 	}
-	// A copy of sh named "vigieprobe" so its /proc comm matches the name we scan for.
-	const name = "vigieprobe"
+	// A copy of sh named for this run so its /proc comm matches the name we scan
+	// for. The name is unique per process because the assertion below claims that
+	// *nothing else on the machine* carries it — true on a developer's laptop,
+	// not something a test can promise on a shared runner, which is where it
+	// failed (#476). comm is truncated at 15 bytes, so the suffix fits in five.
+	name := fmt.Sprintf("vigiepr%05d", os.Getpid()%100000)
 	bin := filepath.Join(t.TempDir(), name)
 	data, err := os.ReadFile(sh) //nolint:gosec // test-only copy of the system shell
 	if err != nil {
@@ -154,7 +159,7 @@ func TestWatcherRunning(t *testing.T) {
 	if !found {
 		t.Error("WatcherRunning did not detect the running probe")
 	}
-	// Excluding the probe's own pid hides it (nothing else is named vigieprobe).
+	// Excluding the probe's own pid hides it: nothing else carries this run's name.
 	if ok, err := WatcherRunning(name, cmd.Process.Pid); err != nil || ok {
 		t.Errorf("WatcherRunning(selfPID=probe) = %v, %v; want false, nil", ok, err)
 	}
