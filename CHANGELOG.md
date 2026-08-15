@@ -11,6 +11,14 @@ file is the single source of truth, not a second narrative.
 
 ### Fixed
 
+- A failed poll no longer blanks the sessions table. Resuming a laptop from suspend
+  produced `error: … context deadline exceeded` and **no sessions at all**, for the
+  minutes the connection took to come back. The sessions were never lost — the
+  model kept them — the view was discarding data it still had. The table now stays
+  on screen with a notice naming the failure, and the error stands alone only when
+  there is nothing to fall back on. This was the last panel still doing what the
+  previous entry fixed everywhere else, and the one that matters most (#456).
+
 - A panel now says when it is showing figures it could not refresh. The TUI fetches
   seven things from the daemon; only a sessions failure ever reached the operator.
   For the other six the error was discarded and the previous values stayed on

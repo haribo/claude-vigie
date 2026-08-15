@@ -422,6 +422,7 @@ func (m model) applySessions(msg sessionsMsg) model {
 		return m // stale out-of-order response; keep the newer state
 	}
 	m.appliedSeq = msg.gen
+	m.markRefresh(srcSessions, msg.err)
 	if msg.err != nil {
 		m.err = msg.err
 		return m
@@ -912,7 +913,10 @@ func overflowBanner(active []column, width int) string {
 }
 
 func (m model) viewSessions() string {
-	if m.err != nil {
+	// A failed poll must not cost sight of the fleet: the sessions are still in
+	// the model, so keep showing them and say they are not current. Only when
+	// there is nothing to fall back on does the error stand alone (#456).
+	if m.err != nil && len(m.sessions) == 0 {
 		return errStyle.Render("error: " + m.err.Error())
 	}
 	if len(m.sessions) == 0 {
@@ -927,6 +931,7 @@ func (m model) viewSessions() string {
 	}
 
 	var b strings.Builder
+	b.WriteString(m.staleReason())
 	// The tab-bar separator frames the summary strip above; a rule below
 	// separates it from the table.
 	b.WriteString(joinLR(renderSummaryFit(m.sessions, m.sess.history, m.width), m.summaryRight(), m.width) + "\n")

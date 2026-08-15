@@ -117,9 +117,12 @@ func TestSourcesAreFlaggedIndependently(t *testing.T) {
 	}
 }
 
-// The sessions failure keeps its own path (m.err) and must not be duplicated
-// into the stale machinery.
-func TestSessionsFailureIsNotDoubleReported(t *testing.T) {
+// This test used to assert the opposite: that sessions stayed out of the stale
+// tracking because `m.err` already reached the operator. #456 reversed that —
+// `m.err` was not reporting the failure, it was standing in for the table. The
+// failure now surfaces in both places: `m.err` carries the reason, the tracking
+// draws the note, and the table stays.
+func TestSessionsFailureKeepsTheTableAndSaysWhy(t *testing.T) {
 	m := stubModel()
 	m.width = 120
 	m.fetch = func() ([]api.SessionView, error) { return nil, errFetch }
@@ -128,7 +131,7 @@ func TestSessionsFailureIsNotDoubleReported(t *testing.T) {
 	if m.err == nil {
 		t.Fatal("the sessions failure no longer surfaces")
 	}
-	if len(m.refreshFailed) != 0 {
-		t.Errorf("sessions leaked into the stale sources: %v", m.refreshFailed)
+	if !m.refreshFailed[srcSessions] {
+		t.Error("the failure is not tracked, so no note would be drawn")
 	}
 }
