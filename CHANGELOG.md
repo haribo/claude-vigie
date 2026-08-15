@@ -26,6 +26,23 @@ file is the single source of truth, not a second narrative.
 
 ### Fixed
 
+- The summary strip keeps the view state on a narrow terminal. Its two halves did
+  not share a width budget: the left block (status counts, totals) was fitted
+  against the full terminal width, after which there was no room for the right one
+  and it was dropped whole. Below ~140 columns that cost `sort`, `group`, `hidden`
+  and the server-connection glyph at once, with nothing left on screen to say they
+  had been cut — and the glyph is the only permanent sign the client is still
+  reaching the server. The right block's width is now reserved first and the left
+  block fitted into what remains, dropping its decoration as it already did. Status
+  counts are dropped whole rather than sliced, so `ended 25` can no longer render
+  as `ended 2`, and an ellipsis marks a shortened list
+  ([session-list](docs/design/session-list.md), #486).
+- The key-hint footer costs one row at any width. It was wrapped to the terminal
+  width rather than fitted, and the Sessions hints need 134 columns — so every
+  narrower terminal spent an extra row on it, on every frame, charged to the
+  session table. Hints are now dropped whole, least essential first, with an
+  ellipsis marking the cut; `q quit` is never dropped
+  ([tui-viewport](docs/design/tui-viewport.md), #487).
 - The deployment guide documented Prometheus metrics that do not exist. It said
   they were namespaced `fleet_*`, with a `fleet_sessions` gauge; the server has
   emitted `vigie_*` since the rename. An operator who built scrape rules or alerts
