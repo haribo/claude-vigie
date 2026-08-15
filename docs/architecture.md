@@ -53,7 +53,7 @@ A fleet is *N* client machines all reporting to one daemon.
 The **web dashboard** is the second client, served by the daemon itself (no build
 step, no framework — plain HTML/CSS/JS as `go:embed` static files, consistent with
 the single-binary ethos of [ADR-0002](adr/0002-single-go-binary-with-sqlite.md)). Open the
-daemon's URL in a browser and paste the fleet token; it is kept in the browser and
+daemon's URL in a browser and paste the shared token; it is kept in the browser and
 sent as a bearer token on same-origin API calls. Read-only, like every client
 (observe-only, [ADR-0005](adr/0005-observe-only.md)).
 

@@ -100,12 +100,12 @@ only matters once traffic crosses an untrusted one.
 
 ## Public exposure
 
-If `fleetd` is reachable from the internet, two rules:
+If `vigied` is reachable from the internet, two rules:
 
 1. **Put a TLS front in front of it** (Caddy, nginx, Traefik). The front holds the
-   certificate and forwards to `fleetd`. Clients talk `https://` to the front;
-   `fleetd` stays plain HTTP on the host.
-2. **Keep `fleetd` on `127.0.0.1`** (the default) so only the front (same host)
+   certificate and forwards to `vigied`. Clients talk `https://` to the front;
+   `vigied` stays plain HTTP on the host.
+2. **Keep `vigied` on `127.0.0.1`** (the default) so only the front (same host)
    reaches it — no extra flag needed. Expose the raw port widely only by an
    explicit choice (`--addr :8080`); a public HTTP port would let someone hit it
    directly, **bypassing your TLS front**. They still need the token (every
@@ -125,7 +125,7 @@ gets `401` and no data (enforced by `TestEveryAPIRouteRejectsUnauthenticated`).
 The token is 256-bit, compared in constant time — not guessable, no timing
 oracle. The API port serves **only** authenticated `/api/*` routes; the
 unauthenticated `/healthz` and `/metrics` live on the separate ops listener (see
-above). So a public `fleetd` behind TLS leaks nothing to someone who does not
+above). So a public `vigied` behind TLS leaks nothing to someone who does not
 hold the token.
 
 ## The token
@@ -165,6 +165,6 @@ against the OS trust store — no client-side TLS code, no flags.
 
 If the watcher/TUI machines have changing IPs, a **private overlay network**
 (Tailscale, WireGuard) is the simplest robust option: it gives each machine a
-stable identity regardless of its public IP, and `fleetd` needs **no public port
+stable identity regardless of its public IP, and `vigied` needs **no public port
 at all** — zero internet attack surface, no certificate to manage. Reach for a
 public TLS front only if you must serve clients that can't join the overlay.
