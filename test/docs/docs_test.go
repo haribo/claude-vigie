@@ -14,6 +14,8 @@ import (
 	"regexp"
 	"strings"
 	"testing"
+
+	"github.com/haribo/claude-vigie/internal/status"
 )
 
 const designDir = "../../docs/design"
@@ -161,5 +163,19 @@ func TestThePackageTableMatchesTheTree(t *testing.T) {
 	}
 	for name := range listed {
 		t.Errorf("docs/code.md lists internal/%s, which does not exist", name)
+	}
+}
+
+// The GNOME extension's README described four statuses out of nine, long after
+// #422 made its menu render all of them — it documented the defect (#470).
+//
+// This checks the prose against the vocabulary, the same way internal/status
+// checks the code copies against it.
+func TestTheGnomeReadmeNamesEveryStatus(t *testing.T) {
+	readme := read(t, "../../gnome-extension/README.md")
+	for _, s := range status.All {
+		if !strings.Contains(readme, "`"+s+"`") {
+			t.Errorf("gnome-extension/README.md does not mention `%s`", s)
+		}
 	}
 }
