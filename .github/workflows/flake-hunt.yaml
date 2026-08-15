@@ -22,14 +22,13 @@ jobs:
           check-latest: true
           cache: true
 
-      - name: the real CI condition — the whole suite, in parallel, six times
+      - name: the real CI condition — the whole suite, in parallel, eight times, cache defeated
         continue-on-error: true
         run: |
           fail=0
-          for i in $(seq 1 6); do
+          for i in $(seq 1 8); do
             echo "=== run $i ==="
-            go test -race ./... 2>&1 | grep -E "^(---|FAIL|ok  .*(presence|store))" | grep -vE "^ok" || true
-            go test -race ./... >/tmp/out-$i.txt 2>&1 || { fail=$((fail+1)); grep -E "^--- FAIL|_test.go:" /tmp/out-$i.txt | head -6; }
+            go test -race -count=1 ./... >/tmp/out-$i.txt 2>&1 || { fail=$((fail+1)); grep -E "^--- FAIL|_test.go:" /tmp/out-$i.txt | head -6; }
           done
-          echo "runs failed: $fail/6"
+          echo "runs failed: $fail/8"
 
