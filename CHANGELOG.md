@@ -26,6 +26,18 @@ file is the single source of truth, not a second narrative.
 
 ### Fixed
 
+- Running the tests no longer overwrites the operator's own TUI preferences.
+  `TestGroupToggleCycles` built a zero-value model and sent `g`, which saves the
+  view preferences — into the **real** `~/.config/vigie/tui.toml`, because that
+  test never redirected `XDG_CONFIG_HOME`. A zero-value `prefs` is not
+  `defaultPrefs()`, so the file came back with `column_order = []` and the saved
+  column layout was gone. A second leak of the same kind wrote a phantom
+  `s1.json` into the live `~/.local/state/vigie/sessions/`, the directory the
+  watcher reads. Both packages now isolate their home directory for the whole test
+  run, so a future test cannot leak by forgetting a redirect, and a guard fails if
+  that isolation is ever removed. Measured before and after: the suite wrote two
+  files into a stand-in home, and now writes none (#479).
+
 - The GNOME indicator now raises a badge and a notification for every signal that
   calls for the operator, not only `waiting`. A stalled turn — a tool that hung and
   will not resolve itself — raised nothing, and a session's own call, the headline
