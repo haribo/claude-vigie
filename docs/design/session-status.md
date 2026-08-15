@@ -80,6 +80,17 @@ hooks aren't installed). It derives status from two signals — is the session's
   session `working` — a real background task, not a hang. This exact pairing
   replaces the old blind 5-minute "a tool may still be running" window.
 
+  **The pairing is scoped to the turn: a real user prompt closes every older
+  unresolved `tool_use`.** A result that never arrives — Claude Code killed while
+  a tool was in flight — otherwise pins the session to `stalled` for the rest of
+  its life, at every pause between turns, and no operator action can clear it
+  (vigie is observe-only, [ADR-0005](../adr/0005-observe-only.md)). A prompt is
+  proof the session moved on, so a tool call from before it cannot be what the
+  current turn is parked on. Only a prompt the *operator* typed counts: Claude
+  Code injects `user` lines of its own for system reminders, skill preambles and
+  the "Continue from where you left off." resume, and marks them `isMeta` — those
+  land in the middle of a live tool call and must not close it (#483).
+
 The watcher can see `working`, `thinking`, `idle`, `stalled`, `ended`, and
 `error`. It **cannot** see `waiting`.
 
@@ -166,7 +177,7 @@ trust it:
 | `ended`    | hook `SessionEnd`; watcher (dead process, or no mapping + quiet); server (no report for ~60 s) | **Reliable** for a hooked end or a dead process; a **heuristic** for a hooks-free session that simply went quiet. |
 | `error`    | watcher (`isApiErrorMessage` in the transcript) | **Reliable signal, sampled.** The flag is unambiguous, but surfaced only at the next scan, not instantly (Claude Code has no error hook). |
 | `thinking` | watcher only (last content block is a `thinking` block) | **Best-effort heuristic.** No hook signals reasoning; it is inferred from the transcript, sampled every ~2 s, invisible in a hooks-only deployment, and can briefly mis-read when a `tool_use` block follows the thinking block. |
-| `stalled`  | watcher only (unresolved `tool_use`↔`tool_result` + quiet) | **Reliable signal, sampled.** The pairing is exact (an id match), not a timeout guess; surfaced at the next scan once the session has been quiet past a short threshold. Invisible in a hooks-only deployment. |
+| `stalled`  | watcher only (unresolved `tool_use`↔`tool_result` + quiet) | **Reliable signal, sampled.** The pairing is exact (an id match), not a timeout guess; surfaced at the next scan once the session has been quiet past a short threshold. Self-healing: a tool whose result never arrives is closed by the next operator prompt rather than pinning the session (§ 2). Invisible in a hooks-only deployment. |
 
 **Decision on `thinking` (#207): kept, as an explicit best-effort refinement.**
 Dropping it would lose a genuine, if imperfect, signal; hardening it to real-time
