@@ -28,7 +28,7 @@ dev_port := "8099"
 dev_addr := dev_host + ":" + dev_port
 dev_url := "http://" + dev_host + ":" + dev_port
 dev_config := dev_dir / "config.toml"
-dev_db := dev_dir / "fleet.db"
+dev_db := dev_dir / "vigie.db"
 dev_token := "dev"
 
 # Write the dev client config (points the client at the local dev server).

@@ -1,7 +1,7 @@
-// Package config loads the shared per-machine claude-fleet client
+// Package config loads the shared per-machine vigie client
 // configuration (server URL, auth token, machine name) used by the reporter
 // and the terminal client. It lives in the XDG config directory as a TOML file
-// (config.toml), is written by `claude-fleet init`, and is never committed (it
+// (config.toml), is written by `vigie init`, and is never committed (it
 // holds a secret token). A pre-TOML config.json is migrated on first load.
 //
 // VIGIE_CONFIG (or the deprecated FLEET_CONFIG) overrides the path with an
@@ -22,7 +22,7 @@ import (
 // Config is the per-machine client configuration. Both toml and json tags are
 // declared so the legacy config.json can be migrated (see migrateLegacy).
 type Config struct {
-	// ServerURL is the base URL of the claude-fleet server (e.g. http://host:8080).
+	// ServerURL is the base URL of the vigied server (e.g. http://host:8080).
 	ServerURL string `toml:"server_url" json:"server_url"`
 	// Token is the shared secret sent in the Authorization header when reporting.
 	Token string `toml:"token" json:"token"`
