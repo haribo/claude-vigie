@@ -26,7 +26,6 @@ func runServe(args []string) int {
 	fs := flag.NewFlagSet("serve", flag.ContinueOnError)
 	addr := fs.String("addr", "127.0.0.1:8080", "address the server listens on (bind a reachable interface, e.g. :8080, for cross-machine clients)")
 	dbPath := fs.String("db", "vigie.db", "path to the SQLite database file")
-	tokenFlag := fs.String("token", "", "shared auth token (else $FLEET_TOKEN, else auto-generated)")
 	retention := fs.Duration("session-retention", 24*time.Hour, "delete sessions not reported within this window (0 disables)")
 	metricsAddr := fs.String("metrics-addr", "127.0.0.1:9464", "ops listener for /metrics and /healthz (empty disables)")
 	if err := fs.Parse(args); err != nil {
@@ -42,7 +41,7 @@ func runServe(args []string) int {
 	}
 	defer func() { _ = st.Close() }()
 
-	token, err := resolveToken(context.Background(), st, *tokenFlag)
+	token, err := resolveToken(context.Background(), st)
 	if err != nil {
 		log.Error("resolving token", "error", err)
 		return 1
@@ -189,14 +188,21 @@ func pruneLoop(st *store.Store, defaultRetention time.Duration, log *slog.Logger
 	}
 }
 
-// resolveToken returns the auth token: the flag, else $FLEET_TOKEN, else the
-// value persisted in the store, else a freshly generated one (persisted and
-// printed so the operator can share it).
-func resolveToken(ctx context.Context, st *store.Store, flagToken string) (string, error) {
-	if flagToken != "" {
-		return flagToken, nil
-	}
-	if env := os.Getenv("FLEET_TOKEN"); env != "" {
+// tokenEnv is the one way to supply a chosen token. There is no flag: a token on
+// the command line is published to every local user through /proc/PID/cmdline,
+// which is world-readable, while /proc/PID/environ is readable only by the owner.
+// Two ways to pass a secret, where the more discoverable one leaks it, is a trap
+// rather than a convenience (#465).
+const tokenEnv = "VIGIE_TOKEN"
+
+// resolveToken returns the auth token: $VIGIE_TOKEN, else the value persisted in
+// the store, else a freshly generated one (persisted and printed so the operator
+// can share it).
+//
+// The environment wins over the stored value on purpose: a token the operator set
+// explicitly should beat one the daemon persisted for itself.
+func resolveToken(ctx context.Context, st *store.Store) (string, error) {
+	if env := os.Getenv(tokenEnv); env != "" {
 		return env, nil
 	}
 	if v, ok, err := st.GetMeta(ctx, "token"); err != nil {
@@ -212,7 +218,7 @@ func resolveToken(ctx context.Context, st *store.Store, flagToken string) (strin
 	if err := st.SetMeta(ctx, "token", token); err != nil {
 		return "", err
 	}
-	fmt.Fprintf(os.Stderr, "generated fleet token: %s\n", token)
+	fmt.Fprintf(os.Stderr, "generated vigie token: %s\n", token)
 	return token, nil
 }
 

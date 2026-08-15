@@ -9,6 +9,21 @@ file is the single source of truth, not a second narrative.
 
 ## [Unreleased]
 
+### Changed
+
+- **Breaking:** the daemon's shared token is supplied one way only, through
+  `VIGIE_TOKEN`. The `--token` flag is removed and `FLEET_TOKEN` is no longer read.
+  A token on the command line is published to every local user through
+  `/proc/PID/cmdline`, which is world-readable, while `/proc/PID/environ` is
+  readable only by the process owner — measured, not assumed. Two ways to pass a
+  secret, where the more discoverable one leaks it and took priority, is a trap
+  rather than a convenience. The order is now `$VIGIE_TOKEN` → the stored token →
+  a generated one; the environment still wins over the store, so a token set
+  explicitly beats one the daemon persisted for itself. The default path is
+  unchanged and remains the safest: supply nothing, and the token is generated,
+  stored and printed once, with `vigied token` to read it back
+  ([deployment](docs/deployment.md), #465).
+
 ### Fixed
 
 - Sorting by status now places every status, in both dashboards. Only five of the

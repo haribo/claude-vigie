@@ -25,7 +25,7 @@ func runToken(args []string) int {
 	}
 	defer func() { _ = st.Close() }()
 
-	token, err := resolveToken(context.Background(), st, "")
+	token, err := resolveToken(context.Background(), st)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "token: %v\n", err)
 		return 1
