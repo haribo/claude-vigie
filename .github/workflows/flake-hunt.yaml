@@ -22,25 +22,14 @@ jobs:
           check-latest: true
           cache: true
 
-      - name: presence — 200 runs
+      - name: the real CI condition — the whole suite, in parallel, six times
         continue-on-error: true
         run: |
-          go test ./internal/presence/ -run '^TestWatcherRunning$' -race -count=200 2>&1 | tail -30
+          fail=0
+          for i in $(seq 1 6); do
+            echo "=== run $i ==="
+            go test -race ./... 2>&1 | grep -E "^(---|FAIL|ok  .*(presence|store))" | grep -vE "^ok" || true
+            go test -race ./... >/tmp/out-$i.txt 2>&1 || { fail=$((fail+1)); grep -E "^--- FAIL|_test.go:" /tmp/out-$i.txt | head -6; }
+          done
+          echo "runs failed: $fail/6"
 
-      - name: store — 20 runs
-        continue-on-error: true
-        run: |
-          go test ./internal/store/ -run '^TestConcurrentWritesDoNotBusyError$' -race -count=20 2>&1 | tail -30
-
-      - name: what else is called vigieprobe while the test runs
-        continue-on-error: true
-        run: |
-          (for i in $(seq 1 400); do
-             for d in /proc/[0-9]*; do
-               c=$(cat "$d/comm" 2>/dev/null) || continue
-               case "$c" in vigieprobe*) echo "$(basename "$d") $c $(tr '\0' ' ' < "$d/cmdline" 2>/dev/null)";; esac
-             done
-           done | sort | uniq -c | sort -rn | head -20) &
-          sampler=$!
-          go test ./internal/presence/ -run '^TestWatcherRunning$' -count=40 >/dev/null 2>&1 || true
-          wait $sampler || true
