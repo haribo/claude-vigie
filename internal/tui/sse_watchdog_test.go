@@ -117,6 +117,8 @@ func TestTrafficKeepsTheStreamAlive(t *testing.T) {
 	case <-time.After(1200 * time.Millisecond): // three watchdog windows of traffic
 	}
 	close(stop)
+	<-done // wait for the stream to finish: it reads silenceLimit, which the
+	// cleanup restores, and leaving it running races that write
 }
 
 // A keep-alive comment carries no data, so it must not be mistaken for an event —
