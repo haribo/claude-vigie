@@ -8,8 +8,14 @@ package tui
 //
 // So the figures stay and the panel says it could not refresh them.
 
-// Data sources that can fail independently of one another. Sessions are not here:
-// their failure already reaches the operator through `m.err`.
+// Data sources that can fail independently of one another.
+//
+// Sessions were once excluded, on the grounds that their failure already reached
+// the operator through `m.err`. That was the wrong reading: `m.err` did not merely
+// report the failure, it stood in for the table — one failed poll blanked the
+// fleet, which is what a laptop resuming from suspend does every time. The panel
+// that matters most was the last one still doing what this file exists to prevent
+// (#456).
 const (
 	srcUsage    = "usage"
 	srcStats    = "stats"
@@ -17,6 +23,7 @@ const (
 	srcWatcher  = "watcher"
 	srcPlatform = "platform status"
 	srcVersion  = "daemon version"
+	srcSessions = "sessions"
 )
 
 // markRefresh records the outcome of one source's refresh. A success clears the
@@ -53,4 +60,14 @@ func (m model) staleMark(sources ...string) string {
 		}
 	}
 	return ""
+}
+
+// staleReason is the sessions panel's own note. It names the failure rather than
+// giving the generic line, because the reason distinguishes a network blip from a
+// rejected token — and the table stays on screen underneath either way (#456).
+func (m model) staleReason() string {
+	if !m.refreshFailed[srcSessions] || m.err == nil {
+		return ""
+	}
+	return warnStyle.Render("⚠ could not refresh — showing the last known sessions: "+m.err.Error()) + "\n"
 }
