@@ -13,7 +13,6 @@ boundary and the security implications; it changes no defaults.
 |------|---------|---------|
 | `--addr` | `127.0.0.1:8080` | listen address (bind a reachable interface for cross-machine clients) |
 | `--db` | `vigie.db` | SQLite file path |
-| `--token` | — | shared auth token (else `$FLEET_TOKEN`, else the stored one, else generated) |
 | `--session-retention` | `24h` | delete sessions not reported within this window (`0` disables) |
 | `--metrics-addr` | `127.0.0.1:9464` | ops listener for `/metrics` and `/healthz` (empty disables) |
 
@@ -131,9 +130,17 @@ hold the token.
 
 ## The token
 
-- Supply it as a secret via `FLEET_TOKEN` (or `--token`). If none is provided and
-  none is stored, `fleetd` generates one and logs it once — fine for a first run,
-  but prefer providing it explicitly in production.
+- **The default is the safest path**: with nothing supplied, the daemon generates a
+  token, stores it, and logs it once. It then lives only in the database, and
+  `vigied token` prints it whenever you need to hand it to a client. Prefer this
+  unless the token has to come from somewhere else.
+- **To choose the token**, set `VIGIE_TOKEN`. It takes precedence over the stored
+  one. There is no flag: a token on the command line is published to every local
+  user through `/proc/PID/cmdline`, which is world-readable, whereas
+  `/proc/PID/environ` is readable only by the process owner.
+- **Setting it safely matters as much as the name.** `Environment=VIGIE_TOKEN=…`
+  in a unit file is readable by anyone who can read that file and shows up in
+  `systemctl show`. Use `EnvironmentFile=` on a `0600` file, or `LoadCredential=`.
 - The client stores it in `~/.config/vigie/config.toml` (written `0600`).
 - It is a **single shared, static** credential with no per-machine revocation. If
   one machine leaks it, rotate everywhere.
