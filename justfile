@@ -182,6 +182,16 @@ code-vuln:
 code-test-js:
     node --test test/js/dashboard.test.mjs test/js/gnome.test.mjs test/js/boot.test.mjs
 
+# Regenerate the README animation from its template
+#
+# The asset was once produced by a script nobody committed, so it could not be
+# rebuilt and nothing detected it going stale (#450). Edit
+# internal/animation/template.svg or its palettes, run this, and commit the four
+# files it writes — a test compares them against a fresh render, so forgetting
+# fails the build.
+animation:
+    go run ./tools/animation
+
 # Run linter
 code-lint:
     ./bin/golangci-lint run ./...

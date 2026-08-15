@@ -140,6 +140,7 @@ package.json, no dependencies).
 just dev-setup      # configure git hooks
 just tool-install   # install golangci-lint + goimports + govulncheck into ./bin
 just code-check     # fmt + lint + build + test (go & js) + vulnerability scan (run before every PR)
+just animation      # regenerate the README animation after editing its template
 ```
 
 Run the current source against a throwaway local server, fully isolated from any
