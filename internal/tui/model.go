@@ -785,6 +785,13 @@ func (m model) renderBuild() string {
 func (m model) renderSettings() string {
 	var b strings.Builder
 	b.WriteString(m.staleNote(srcSettings, srcVersion))
+	// A preferences file that could not be read is kept, not overwritten — and the
+	// operator has to be told, or the TUI silently runs on defaults while their
+	// settings sit on disk unused (#480).
+	if m.prefs.loadFailed != "" {
+		b.WriteString(warnStyle.Render("⚠ "+m.prefs.loadFailed+
+			" — running on defaults, and leaving the file untouched") + "\n\n")
+	}
 
 	// Connection is read-only here: it is set per machine by `vigie init`
 	// and shared with the watcher/reporter. Editing it from the TUI would only
