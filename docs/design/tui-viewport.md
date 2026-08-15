@@ -37,13 +37,22 @@ footer                      ┘
 Only the row band scrolls. Everything else stays put, so the operator never
 loses the header, the counts, or the key hints to scrolling.
 
+**Chrome costs one row, whatever the width.** The key-hint footer is fitted to
+the terminal width rather than wrapped: hints are dropped whole, least essential
+first, and the cut is marked with an ellipsis. `q quit` is never dropped — the
+way out stays on screen at every width. Wrapping is measured correctly by the row
+budget below, so nothing is drawn out of place, but the row is genuinely spent:
+the Sessions footer needs 134 columns, so every narrower terminal paid a second
+row for it on every frame. Rows belong to the session table, and a standing
+reminder of `q quit` is not worth two of them on a 24-row terminal (#487).
+
 ## 2. Row budget
 
 `View` learns the terminal height from `WindowSizeMsg.Height` (new `model.height`,
 the vertical dual of `model.width`). The row budget is computed by **measuring the
 rendered chrome**, not by hard-coding line counts — the chrome is variable
-(the watcher-stale line, the filter line, the multi-line overflow banner, a
-wrapped usage strip or footer all come and go):
+(the watcher-stale line, the filter line, the multi-line overflow banner and a
+wrapped usage strip all come and go):
 
 ```
 rowBudget = height − lines(everything rendered except the row band)

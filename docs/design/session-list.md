@@ -32,6 +32,17 @@ The table is a live operator view, not an archive. By default it hides the noise
 The summary strip reports how many sessions the default view is hiding, so the
 operator always knows there is more behind the current filter.
 
+**One width budget, right side first.** The strip has two halves — status counts
+and totals on the left, the view state (`sort`, `group`, `hidden`, the
+server-connection glyph) on the right. On a narrow terminal the right half is
+measured first and its space reserved; the left half then fits into what remains.
+The right half is the smaller and the more load-bearing: it carries the two
+promises above, and the glyph is the only permanent sign the client is still
+reaching the server. What gives way is the left half's decoration — `activity`,
+then `rc`, then `out`, then whole status counts from the least urgent end, with
+an ellipsis saying the list was cut. Counts are never sliced mid-value: a wrong
+figure shown as a right one is worse than an absent one (#486).
+
 ---
 
 ## 2. Sorting — `s` to cycle, `S` to reverse
