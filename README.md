@@ -137,10 +137,10 @@ dashboard and the GNOME indicator are tested with node's built-in runner — no
 package.json, no dependencies).
 
 ```bash
-just dev-setup      # configure git hooks
-just tool-install   # install golangci-lint + goimports + govulncheck into ./bin
-just code-check     # fmt + lint + build + test (go & js) + vulnerability scan (run before every PR)
-just animation      # regenerate the README animation after editing its template
+just dev-setup       # configure git hooks
+just tool-install    # install golangci-lint + goimports + govulncheck into ./bin
+just code-check      # fmt + lint + build + test (go & js) + vulnerability scan (run before every PR)
+just docs-animation  # regenerate the README animation after editing its template
 ```
 
 Run the current source against a throwaway local server, fully isolated from any

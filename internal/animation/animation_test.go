@@ -13,7 +13,7 @@ import (
 // that no longer exists and only a human noticing would catch it (#450).
 //
 // These tests are what closes that. The committed files must equal a fresh
-// render, so editing the template without running `just animation` fails the
+// render, so editing the template without running `just docs-animation` fails the
 // build, and editing a committed file by hand fails it too.
 
 const repoRoot = "../.."
@@ -30,7 +30,7 @@ func TestTheCommittedAssetsAreWhatTheGeneratorProduces(t *testing.T) {
 				t.Fatalf("reading %s: %v", target, err)
 			}
 			if string(committed) != svg {
-				t.Errorf("%s is not what the generator produces — run `just animation`", target)
+				t.Errorf("%s is not what the generator produces — run `just docs-animation`", target)
 			}
 		}
 	}
