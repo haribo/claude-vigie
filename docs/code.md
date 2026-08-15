@@ -72,12 +72,23 @@ the client never imports the server/store packages, so it never links them.
 | `internal/config` | both | Load/save the shared per-machine client config (XDG) |
 | `internal/api` | both | Shared request/response types (client ↔ server) |
 | `internal/version` | both | Build metadata injected via ldflags |
-| `web/` | daemon | Static dashboard assets, embedded via `embed.FS` — **planned**, not yet present (the depguard rule reserves the boundary) |
+| `internal/web` | daemon | Static dashboard assets, embedded via `go:embed` and served at `GET /` |
+| `internal/watch` | client | Scans transcripts, derives status, reports every session |
+| `internal/transcript` | client | Parses a session transcript, incrementally |
+| `internal/apiclient` | client | One authenticated GET against the daemon, shared by the TUI and the preflight |
+| `internal/status` | both | The session status vocabulary and its sort order |
+| `internal/install` | client | Merges the reporting hooks into Claude Code's settings |
+| `internal/presence` | client | Session→process mapping, read back through `/proc` |
+| `internal/compaction` | client | Compaction markers dropped by the `PreCompact` hook |
+| `internal/localwatch` | client | The local mark saying a watcher is running here |
+| `internal/usage` | client | Subscription usage fetch, held under a fleet-wide lease |
+| `internal/animation` | — | Renders the README asset; not built into either binary |
+| `internal/clock` | both | Time source, so tests do not wait |
 
 ### Boundaries
 
 - The client (`internal/client`, `report`, `tui`) MUST NOT import
-  `internal/server`, `internal/store`, or `web/` — that is what keeps the
+  `internal/server`, `internal/store`, or `internal/web` — that is what keeps the
   client binary minimal (enforced by `depguard` in `.golangci.yml`)
 - `config`, `api`, and `version` are shared leaves — no business logic
 - Keep transport (HTTP handlers) separate from persistence (`store`)

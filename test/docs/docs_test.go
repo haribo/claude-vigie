@@ -136,3 +136,30 @@ func TestNoDocumentNamesTheOldBinary(t *testing.T) {
 		}
 	}
 }
+
+// docs/code.md § File organization lists every package a contributor is meant to
+// find. It said the web dashboard was "**planned**, not yet present" long after it
+// shipped, and had missed a dozen packages added since (#468).
+//
+// The check is symmetric on purpose: a package with no row is undiscoverable, and
+// a row with no package sends someone looking for something that is not there.
+func TestThePackageTableMatchesTheTree(t *testing.T) {
+	row := regexp.MustCompile("(?m)^\\| `internal/([a-z]+)` \\|")
+	listed := map[string]bool{}
+	for _, m := range row.FindAllStringSubmatch(read(t, "../../docs/code.md"), -1) {
+		listed[m[1]] = true
+	}
+	entries, err := os.ReadDir("../../internal")
+	if err != nil {
+		t.Fatalf("reading internal/: %v", err)
+	}
+	for _, e := range entries {
+		if e.IsDir() && !listed[e.Name()] {
+			t.Errorf("internal/%s has no row in docs/code.md — a contributor cannot find it", e.Name())
+		}
+		delete(listed, e.Name())
+	}
+	for name := range listed {
+		t.Errorf("docs/code.md lists internal/%s, which does not exist", name)
+	}
+}
