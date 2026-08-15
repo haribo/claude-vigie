@@ -8,14 +8,18 @@
 import {
   esc, dash, trim, hasCall, detailText, humanTokens, ageSec, relAge, relResetHint,
   shortModel, projectName, totalTokens, sparkSVG, migrateKeys, fullColOrder, colHidden, rank,
+  adoptLegacyKey,
 } from "./lib.js";
 
-const TOKEN_KEY = "cf_token";
+// Both keys were named for the old brand. They hold live state — a signed-in
+// token and a column layout — so the old name is read once and carried over
+// rather than dropped (adoptLegacyKey, #478).
+const TOKEN_KEY = "vigie_token";
 // Kept identical to docs/design/session-status.md § 1 and internal/status — a Go
 // test reads this literal and fails on any drift (#423).
 const STATUSES = ["working", "thinking", "compacting", "waiting", "stalled", "idle", "error", "stale", "ended"];
 
-let token = localStorage.getItem(TOKEN_KEY) || "";
+let token = adoptLegacyKey(localStorage, "cf_token", TOKEN_KEY) || "";
 let sessions = [], byId = new Map();
 let usage = null, platform = null, stats = null, settings = null, ver = null, watcher = null;
 let activeTab = "sessions", detailId = null, showEnded = false;
@@ -87,14 +91,14 @@ const COLS = [
 // COLS_KEY holds the operator's column layout for this browser, {order, hidden}:
 // the display order of ALL columns plus the hidden set. Client-local like the
 // token. Hiding a column keeps its position — only its visibility changes (#315).
-const COLS_KEY = "cf_columns";
+const COLS_KEY = "vigie_columns";
 const MANDATORY_COLS = new Set(["name", "status"]);
 const COL_KEYS = COLS.map((c) => c.key);
 
 
 function loadLayout() {
   try {
-    const v = JSON.parse(localStorage.getItem(COLS_KEY) || "null");
+    const v = JSON.parse(adoptLegacyKey(localStorage, "cf_columns", COLS_KEY) || "null");
     // Migrate the old visible-only array form to {order, hidden}.
     if (Array.isArray(v)) return { order: v.slice(), hidden: COL_KEYS.filter((k) => !v.includes(k) && !MANDATORY_COLS.has(k)) };
     if (v && Array.isArray(v.order)) return { order: migrateKeys(v.order), hidden: migrateKeys(Array.isArray(v.hidden) ? v.hidden : []) };

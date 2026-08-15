@@ -61,6 +61,28 @@ export function sparkSVG(data, w = 72, h = 18) {
     <circle cx="${ex.toFixed(1)}" cy="${ey.toFixed(1)}" r="2" fill="var(--st)"/></svg>`;
 }
 
+// adoptLegacyKey moves a value saved under a pre-rename localStorage key to its
+// current name, once, and returns what is now stored there.
+//
+// The dashboard's keys carried the old brand (`cf_token`, `cf_columns`). Renaming
+// them outright is not a rename at all from the operator's side: those keys hold
+// live state, so every open dashboard would have been signed out and every column
+// layout lost — for a cosmetic gain. Reading the old key once, under the new name,
+// makes the rename invisible. The new key wins if both exist, so a value written
+// since the upgrade is never rolled back by a stale leftover (#478).
+export function adoptLegacyKey(storage, oldKey, newKey) {
+  const current = storage.getItem(newKey);
+  if (current !== null) {
+    storage.removeItem(oldKey); // the new key is authoritative; drop the leftover
+    return current;
+  }
+  const legacy = storage.getItem(oldKey);
+  if (legacy === null) return null;
+  storage.setItem(newKey, legacy);
+  storage.removeItem(oldKey);
+  return legacy;
+}
+
 // LEGACY_COLS maps a key saved under an older name to its current one. Without
 // it, a layout saved before a rename silently loses that column.
 export const LEGACY_COLS = { doing: "detail" };

@@ -1,4 +1,4 @@
-// Package server implements the claude-fleetd HTTP API: it accepts session
+// Package server implements the vigied HTTP API: it accepts session
 // event reports, lists sessions, and streams updates over SSE. Only the daemon
 // imports this package.
 package server

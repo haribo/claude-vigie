@@ -32,8 +32,8 @@ from the bind address (`127.0.0.1` by default). Expose it only to your scraper:
   internet. It carries no session content: labels are bounded (`status`, `event`,
   `model`, `route`), never a session id, machine, or project.
 
-Metrics are namespaced `fleet_*` (RED HTTP metrics, ingestion counters, a
-scrape-time `fleet_sessions` gauge by reconciled status, SSE and prune counters,
+Metrics are namespaced `vigie_*` (RED HTTP metrics, ingestion counters, a
+scrape-time `vigie_sessions` gauge by reconciled status, SSE and prune counters,
 DB size, watcher heartbeat) plus the default Go/process collectors.
 
 A ready-made Grafana dashboard ships in [`dashboards/vigie.json`](../dashboards/vigie.json)

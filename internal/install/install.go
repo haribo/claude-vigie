@@ -1,4 +1,4 @@
-// Package install merges claude-fleet reporting hooks into the user's Claude
+// Package install merges vigie reporting hooks into the user's Claude
 // Code settings (~/.claude/settings.json), idempotently, preserving any
 // existing hooks and settings. Client side; imports nothing heavy.
 //
@@ -28,7 +28,7 @@ type hookMatcher struct {
 	Hooks   []hookCommand `json:"hooks"`
 }
 
-// reportMarker identifies a claude-fleet reporting hook, independent of the
+// reportMarker identifies a vigie reporting hook, independent of the
 // binary path.
 const reportMarker = "report --event="
 

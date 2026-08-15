@@ -37,8 +37,8 @@ const STATUS_LABEL = {
     ended: 'Ended',
 };
 
-const FleetIndicator = GObject.registerClass(
-class FleetIndicator extends PanelMenu.Button {
+const VigieIndicator = GObject.registerClass(
+class VigieIndicator extends PanelMenu.Button {
     _init(extension) {
         super._init(0.0, 'Claude Vigie');
 
@@ -56,7 +56,7 @@ class FleetIndicator extends PanelMenu.Button {
             style_class: 'system-status-icon',
         });
         this._badge = new St.Label({
-            style_class: 'cf-badge',
+            style_class: 'vigie-badge',
             y_align: Clutter.ActorAlign.CENTER,
             visible: false,
         });
@@ -127,14 +127,14 @@ class FleetIndicator extends PanelMenu.Button {
         this._notifyNewlyCalling(sessions);
 
         if (calling > 0) {
-            this._icon.add_style_class_name('cf-attention');
+            this._icon.add_style_class_name('vigie-attention');
             this._badge.text = String(calling);
             this._badge.visible = true;
         } else {
-            this._icon.remove_style_class_name('cf-attention');
+            this._icon.remove_style_class_name('vigie-attention');
             this._badge.visible = false;
         }
-        this._icon.remove_style_class_name('cf-error');
+        this._icon.remove_style_class_name('vigie-error');
         this._rebuildMenu(sessions);
     }
 
@@ -166,8 +166,8 @@ class FleetIndicator extends PanelMenu.Button {
     }
 
     _showError(message) {
-        this._icon.remove_style_class_name('cf-attention');
-        this._icon.add_style_class_name('cf-error');
+        this._icon.remove_style_class_name('vigie-attention');
+        this._icon.add_style_class_name('vigie-error');
         this._badge.visible = false;
         this.menu.removeAll();
         this.menu.addMenuItem(new PopupMenu.PopupMenuItem(`⚠ ${message}`, {reactive: false}));
@@ -200,7 +200,7 @@ class FleetIndicator extends PanelMenu.Button {
         const context = [s.machine, s.git_branch].filter(Boolean).join(' · ');
         const item = new PopupMenu.PopupMenuItem(name, {reactive: false});
         if (context) {
-            const label = new St.Label({text: context, style_class: 'cf-context'});
+            const label = new St.Label({text: context, style_class: 'vigie-context'});
             item.add_child(label);
         }
         return item;
@@ -229,7 +229,7 @@ class FleetIndicator extends PanelMenu.Button {
 
 export default class VigieExtension extends Extension {
     enable() {
-        this._indicator = new FleetIndicator(this);
+        this._indicator = new VigieIndicator(this);
         Main.panel.addToStatusArea(this.uuid, this._indicator);
     }
 
