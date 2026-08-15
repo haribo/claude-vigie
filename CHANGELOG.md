@@ -26,6 +26,20 @@ file is the single source of truth, not a second narrative.
 
 ### Fixed
 
+- A tool call that never got its result no longer pins a session to `stalled` for
+  the rest of its life. The `tool_use`↔`tool_result` pairing that detects a hung
+  tool (#256) dropped an entry on one event only — the matching result — so a
+  session killed while a tool was in flight kept that call pending forever and
+  read `stalled` at every pause between turns, long after it had gone back to
+  working normally. `stalled` is one of the signals that call the operator, and
+  this one was unclearable: no action on the session removes it, and vigie is
+  read-only towards sessions. The pairing is now scoped to the turn — a prompt the
+  operator typed closes every older unresolved call, since a call from before the
+  prompt cannot be what the current turn is parked on. Lines Claude Code injects
+  itself (system reminders, skill preambles, the "Continue from where you left
+  off." resume) are excluded: they land in the middle of live tool calls, and
+  closing on them would break stall detection outright
+  ([session-status](docs/design/session-status.md) § 2, #483).
 - A preferences file that cannot be read is kept, not replaced. `loadPrefs` fell
   back to the defaults on a read or parse error, and the next preference keystroke
   wrote those defaults over the file — turning a recoverable problem into a lost

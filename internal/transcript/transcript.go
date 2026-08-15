@@ -109,6 +109,7 @@ type line struct {
 	PermissionMode string  `json:"permissionMode"` // permission mode, on user / permission-mode lines (#304)
 	IsAPIError     bool    `json:"isApiErrorMessage"`
 	IsSidechain    bool    `json:"isSidechain"` // a sub-agent line — excluded from context sizing (#279)
+	IsMeta         bool    `json:"isMeta"`      // a user line Claude Code injected, not one the operator typed (#483)
 	APIErrorStatus int     `json:"apiErrorStatus"`
 	Message        message `json:"message"`
 }

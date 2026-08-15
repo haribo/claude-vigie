@@ -67,7 +67,14 @@ func (p *Parser) foldLine(raw []byte) {
 		p.agents.addLaunches(l.Message.Content)
 		p.info.Interrupted = false // a real turn resumed (#351)
 	case "user":
-		p.pending.clearToolResults(l.Message.Content)
+		// A user line carrying no tool_result is a new prompt, and it closes the
+		// turn any older tool call belonged to (#483) — unless Claude Code wrote
+		// it itself. It marks those isMeta (system reminders, skill preambles, the
+		// "Continue from where you left off." resume), and they land in the middle
+		// of live tool calls, so closing on them would break stalled detection.
+		if answered := p.pending.clearToolResults(l.Message.Content); !answered && !l.IsMeta {
+			p.pending.closeTurn()
+		}
 		p.agents.clearNotifications(l.Message.Content)          // <task-notification> closes an agent (#344)
 		p.info.Interrupted = isInterruptLine(l.Message.Content) // synthetic interrupt marker, else a real prompt clears it (#351)
 	case "system":
