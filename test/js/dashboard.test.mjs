@@ -10,6 +10,7 @@ import { readFile } from "node:fs/promises";
 import {
   esc, dash, trim, hasCall, detailText, humanTokens, relAge, relResetHint,
   shortModel, projectName, totalTokens, sparkSVG, migrateKeys, fullColOrder, colHidden, rank,
+  adoptLegacyKey,
 } from "../../internal/web/static/lib.js";
 
 // esc is the dashboard's only defence against DOM-based XSS: session titles,
@@ -186,4 +187,54 @@ test("the comparator orders instead of returning NaN", () => {
       assert.ok(!Number.isNaN(cmp(a, b)), `cmp(${a.status}, ${b.status}) is NaN`);
     }
   }
+});
+
+// A localStorage stand-in: the same three methods the dashboard uses.
+function fakeStorage(initial = {}) {
+  const m = new Map(Object.entries(initial));
+  return {
+    getItem: (k) => (m.has(k) ? m.get(k) : null),
+    setItem: (k, v) => m.set(k, v),
+    removeItem: (k) => m.delete(k),
+    keys: () => [...m.keys()].sort(),
+  };
+}
+
+// #478. The dashboard's storage keys carried the old brand and hold live state:
+// renaming them without carrying the values over signs every operator out and
+// drops their column layout.
+test("a value saved under the old key survives the rename", () => {
+  const s = fakeStorage({ cf_token: "tok-123" });
+  assert.equal(adoptLegacyKey(s, "cf_token", "vigie_token"), "tok-123",
+    "the operator was signed out by a rename");
+  assert.equal(s.getItem("vigie_token"), "tok-123", "the value was not carried over");
+  assert.deepEqual(s.keys(), ["vigie_token"], "the old key must not linger");
+});
+
+test("a value written since the upgrade wins over a stale leftover", () => {
+  const s = fakeStorage({ cf_token: "old", vigie_token: "new" });
+  assert.equal(adoptLegacyKey(s, "cf_token", "vigie_token"), "new",
+    "a leftover old key rolled the current value back");
+  assert.deepEqual(s.keys(), ["vigie_token"]);
+});
+
+test("nothing stored stays nothing stored", () => {
+  const s = fakeStorage();
+  assert.equal(adoptLegacyKey(s, "cf_token", "vigie_token"), null);
+  assert.deepEqual(s.keys(), [], "a fresh browser must not gain an empty key");
+});
+
+test("the migration is idempotent — the dashboard calls it on every layout read", () => {
+  const s = fakeStorage({ cf_columns: '{"order":["name"],"hidden":[]}' });
+  const first = adoptLegacyKey(s, "cf_columns", "vigie_columns");
+  assert.equal(adoptLegacyKey(s, "cf_columns", "vigie_columns"), first);
+  assert.deepEqual(s.keys(), ["vigie_columns"]);
+});
+
+// An empty string is a real stored value (a cleared token), not an absent key —
+// and `|| null` in the wrong place would turn one into the other.
+test("an empty stored value is carried over, not dropped", () => {
+  const s = fakeStorage({ cf_token: "" });
+  assert.equal(adoptLegacyKey(s, "cf_token", "vigie_token"), "");
+  assert.deepEqual(s.keys(), ["vigie_token"]);
 });
