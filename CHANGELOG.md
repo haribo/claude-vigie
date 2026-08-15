@@ -26,6 +26,18 @@ file is the single source of truth, not a second narrative.
 
 ### Fixed
 
+- A preferences file that cannot be read is kept, not replaced. `loadPrefs` fell
+  back to the defaults on a read or parse error, and the next preference keystroke
+  wrote those defaults over the file — turning a recoverable problem into a lost
+  configuration, with nothing said anywhere. An empty file was worse: it parses
+  cleanly into zero values, so `hide_ended` flipped and the column layout vanished
+  while everything looked normal. Unreadable, empty and unparsable are now told
+  apart from absent; the file is left untouched, the session runs on defaults, and
+  the Settings tab says so. The write also goes through a temp file renamed over
+  the target, as `internal/install` already did for `settings.json`, so a TUI
+  killed mid-save can no longer leave a truncated file where the real one was
+  (#480).
+
 - Running the tests no longer overwrites the operator's own TUI preferences.
   `TestGroupToggleCycles` built a zero-value model and sent `g`, which saves the
   view preferences — into the **real** `~/.config/vigie/tui.toml`, because that

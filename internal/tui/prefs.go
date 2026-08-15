@@ -1,6 +1,7 @@
 package tui
 
 import (
+	"bytes"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -23,7 +24,14 @@ type prefs struct {
 	columnOrder   []string      // display order of ALL table columns; empty = built-in default (#308)
 	columnHidden  []string      // hidden table columns (#315)
 	blink         bool          // animate the marker of a calling session (#389)
-	callMarker    string        // glyph for a calling session's dot; "" = defaultCallMarker
+	// loadFailed says the preferences file exists but could not be used — it was
+	// unreadable, empty, or not valid TOML. It is not a preference: it is a latch
+	// that stops savePrefs stamping defaults over a file whose contents are still
+	// there, which is how a corrupt file used to become an unrecoverable one
+	// (#480). Empty means the file loaded, or genuinely did not exist yet.
+	loadFailed string
+
+	callMarker string // glyph for a calling session's dot; "" = defaultCallMarker
 }
 
 // defaultPrefs are used when no preferences file exists: hide only ended
@@ -126,15 +134,47 @@ call_marker = %q
 }
 
 // savePrefs writes the preferences file (best-effort; the UI must not block).
+//
+// Two rules, both learned from losing a layout (#480):
+//
+// It refuses to write when the file could not be read. Otherwise the first
+// preference keystroke after a corrupt read would replace the operator's settings
+// with the defaults the TUI fell back to — turning a recoverable file into a lost
+// one, silently.
+//
+// And it writes through a temp file in the same directory, renamed over the
+// target, so a TUI killed mid-write leaves the previous file intact rather than a
+// truncated one. `internal/install` already did this for settings.json; the
+// preferences were the asymmetry.
 func savePrefs(p prefs) {
+	if p.loadFailed != "" {
+		return
+	}
 	path, err := prefsPath()
 	if err != nil {
 		return
 	}
-	if err := os.MkdirAll(filepath.Dir(path), 0o750); err != nil {
+	dir := filepath.Dir(path)
+	if err := os.MkdirAll(dir, 0o750); err != nil {
 		return
 	}
-	_ = os.WriteFile(path, []byte(renderPrefsTOML(p)), 0o600)
+	tmp, err := os.CreateTemp(dir, ".tui-*.toml")
+	if err != nil {
+		return
+	}
+	defer func() { _ = os.Remove(tmp.Name()) }() // no-op once renamed
+	if _, err := tmp.WriteString(renderPrefsTOML(p)); err != nil {
+		_ = tmp.Close()
+		return
+	}
+	if err := tmp.Chmod(0o600); err != nil {
+		_ = tmp.Close()
+		return
+	}
+	if err := tmp.Close(); err != nil {
+		return
+	}
+	_ = os.Rename(tmp.Name(), path)
 }
 
 // idlePresets are the selectable values for idle_hide_after (0 = never hide).
@@ -190,10 +230,21 @@ func loadPrefs() prefs {
 			return p
 		}
 	} else if err != nil {
+		// Keep the file and say so. Returning defaults silently was half the
+		// defect: the next keystroke wrote them over whatever was still there.
+		p.loadFailed = fmt.Sprintf("cannot read %s: %v", path, err)
+		return p
+	}
+	// An empty file parses cleanly into zero values, which is worse than a parse
+	// error: hide_ended flips to false and the column layout is lost, with nothing
+	// to distinguish it from a deliberate configuration (#480).
+	if len(bytes.TrimSpace(data)) == 0 {
+		p.loadFailed = fmt.Sprintf("%s is empty", path)
 		return p
 	}
 	var f prefsFile
 	if err := toml.Unmarshal(data, &f); err != nil {
+		p.loadFailed = fmt.Sprintf("cannot parse %s: %v", path, err)
 		return p
 	}
 	p.hideEnded = f.HideEnded
