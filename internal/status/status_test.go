@@ -3,6 +3,7 @@ package status
 import (
 	"os"
 	"regexp"
+	"sort"
 	"strings"
 	"testing"
 )
@@ -17,9 +18,11 @@ import (
 // (#421) and the GNOME extension dropped them from its menu entirely (#422).
 
 const (
-	designDoc   = "../../docs/design/session-status.md"
-	dashboardJS = "../../internal/web/static/app.js"
-	gnomeJS     = "../../gnome-extension/extension.js"
+	designDoc    = "../../docs/design/session-status.md"
+	listDoc      = "../../docs/design/session-list.md"
+	dashboardJS  = "../../internal/web/static/app.js"
+	dashboardLib = "../../internal/web/static/lib.js"
+	gnomeJS      = "../../gnome-extension/extension.js"
 )
 
 // statusesFromDoc reads § 1's table, which is where the vocabulary is specified.
@@ -111,6 +114,33 @@ func diff(t *testing.T, what string, got, want []string) {
 	}
 }
 
+// sorted copies and sorts, so a set comparison does not depend on order.
+func sorted(in []string) []string {
+	out := append([]string(nil), in...)
+	sort.Strings(out)
+	return out
+}
+
+// statusesFromSortTable reads the ranked table of docs/design/session-list.md
+// § 2.1, whose rows open with the rank then the status: "| 1 | `stalled` | …".
+func statusesFromSortTable(t *testing.T) []string {
+	t.Helper()
+	b, err := os.ReadFile(listDoc)
+	if err != nil {
+		t.Fatalf("reading %s: %v", listDoc, err)
+	}
+	row := regexp.MustCompile("(?m)^\\|\\s*(\\d+)\\s*\\|\\s*`([a-z]+)`")
+	rows := row.FindAllStringSubmatch(string(b), -1)
+	out := make([]string, 0, len(rows))
+	for _, m := range rows {
+		out = append(out, m[2])
+	}
+	if len(out) == 0 {
+		t.Fatalf("no ranked rows found in %s § 2.1 — has the table moved?", listDoc)
+	}
+	return out
+}
+
 // TestAllMatchesTheDesignDocument keeps the code honest against the
 // specification, in that direction: the document decides, the code follows.
 func TestAllMatchesTheDesignDocument(t *testing.T) {
@@ -142,4 +172,37 @@ func TestKnown(t *testing.T) {
 			t.Errorf("Known(%q) = true", s)
 		}
 	}
+}
+
+// TestOrderCoversEveryStatus is the guard #464 was missing: membership and
+// ranking are separate lists, and a status can exist while nothing ranks it.
+func TestOrderCoversEveryStatus(t *testing.T) {
+	diff(t, "internal/status.Order", sorted(Order), sorted(All))
+}
+
+// TestOrderMatchesTheDesignDocument: § 2.1 decides the order, the code follows.
+func TestOrderMatchesTheDesignDocument(t *testing.T) {
+	diff(t, listDoc+" § 2.1", statusesFromSortTable(t), Order)
+}
+
+// TestRankPutsTheUnknownLast: a status this build does not know sorts last, never
+// first — the opposite of the TUI's old default, which ranked four real statuses
+// below `ended`.
+func TestRankPutsTheUnknownLast(t *testing.T) {
+	if Rank("quantum") <= Rank("ended") {
+		t.Errorf("Rank(unknown) = %d, Rank(ended) = %d — an unknown status must sort last", Rank("quantum"), Rank("ended"))
+	}
+	for i, s := range Order {
+		if Rank(s) != i {
+			t.Errorf("Rank(%q) = %d, want %d", s, Rank(s), i)
+		}
+	}
+}
+
+// TestDashboardRanksEveryStatus: the web comparator subtracts two ranks, so a
+// status missing from the list yielded undefined and therefore NaN — a comparator
+// that returns NaN does not order at all, and the table came out with `ended`
+// first (#464).
+func TestDashboardRanksEveryStatus(t *testing.T) {
+	diff(t, dashboardLib+" RANK_ORDER", jsArray(t, dashboardLib, "RANK_ORDER"), Order)
 }

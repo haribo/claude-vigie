@@ -278,8 +278,11 @@ func TestGroupToggleCycles(t *testing.T) {
 }
 
 func TestStatusRankAndSort(t *testing.T) {
-	if statusRank("working") <= statusRank("waiting") || statusRank("idle") <= statusRank("ended") {
-		t.Fatal("status rank must be working > waiting > idle > ended")
+	// #464 inverted the convention: statusRank is now an index into the shared
+	// order (lower sorts higher), so this asserts the *visible* order instead of
+	// the direction of the integer — which is what the test was standing in for.
+	if statusRank("working") >= statusRank("waiting") || statusRank("idle") >= statusRank("ended") {
+		t.Fatal("status order must place working before waiting, and idle before ended")
 	}
 	s := []api.SessionView{
 		{Status: "idle", LastSeenAt: "2026-07-27T10:00:00Z"},

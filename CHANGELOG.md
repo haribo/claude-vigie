@@ -11,6 +11,18 @@ file is the single source of truth, not a second narrative.
 
 ### Fixed
 
+- Sorting by status now places every status, in both dashboards. Only five of the
+  nine were ranked: in the TUI the other four fell to an unranked default that put
+  them **below `ended`**, so a session hitting an API error sorted under one that
+  was over. In the web dashboard `compacting` was missing from the rank table, so
+  the comparator returned `NaN` — which does not order badly, it stops ordering:
+  the table came out with an ended session first. The nine are now ranked once, in
+  [the design document](docs/design/session-list.md) § 2.1 and in `internal/status`,
+  and both clients read from it. An unknown status sorts last rather than first,
+  since it is the one the build can say least about. #423 locked which statuses
+  exist; this locks how they sort, which its own text had flagged as the remaining
+  gap (#464).
+
 - The event stream now notices its own death in seconds rather than minutes. A
   suspended machine's connection dies without a FIN or an RST, so the client's read
   blocked on a socket that would never deliver another byte, until the OS gave up
@@ -86,8 +98,6 @@ file is the single source of truth, not a second narrative.
   already corrupted — daily stats cannot be recomputed, so the figure is the
   operator's decision, never guessed
   ([design](docs/design/token-rollup.md), #432).
-
-### Fixed
 
 - The GNOME extension no longer hides sessions. Its menu was built by iterating a
   hand-written list of four statuses, so a session that was `thinking`,
