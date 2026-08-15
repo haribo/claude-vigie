@@ -114,3 +114,25 @@ func TestSupersededADRsLinkBothWays(t *testing.T) {
 		}
 	}
 }
+
+// The rename to claude-vigie (#262/#263) left `fleetd` in the deployment guide,
+// where an operator follows commands verbatim — seven times, in the one document
+// whose instructions expose a server if they are wrong (#467).
+//
+// Nothing detected it: the shape checks above look at how a document is
+// structured, never at whether the prose names something that exists.
+func TestNoDocumentNamesTheOldBinary(t *testing.T) {
+	gone := regexp.MustCompile(`\bfleetd\b`)
+	for _, dir := range []string{"../../docs", "../../docs/design", "../../docs/adr"} {
+		for _, p := range markdownIn(t, dir) {
+			if gone.MatchString(read(t, p)) {
+				t.Errorf("%s names `fleetd`, a binary that does not exist — it is `vigied`", filepath.Base(p))
+			}
+		}
+	}
+	for _, p := range []string{"../../README.md", "../../gnome-extension/README.md"} {
+		if gone.MatchString(read(t, p)) {
+			t.Errorf("%s names `fleetd`", p)
+		}
+	}
+}
