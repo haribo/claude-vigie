@@ -3,7 +3,7 @@
 // Run it from the repository root after editing internal/animation/template.svg
 // or its palettes:
 //
-//	just animation
+//	just docs-animation
 //
 // The committed files are compared against a fresh render by the package's test,
 // so forgetting to run this fails the build rather than shipping a stale asset

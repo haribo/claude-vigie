@@ -17,7 +17,6 @@ tool-install:
     GOBIN=$(pwd)/bin go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.11.4
     GOBIN=$(pwd)/bin go install golang.org/x/tools/cmd/goimports@latest
     GOBIN=$(pwd)/bin go install golang.org/x/vuln/cmd/govulncheck@latest
-
 # =============================================================================
 # DEV RUN — run the current source against a throwaway local server, isolated
 # from any installed production client via VIGIE_CONFIG (never touches
@@ -42,34 +41,6 @@ dev-config:
     mkdir -p "{{dev_dir}}"
     printf 'server_url = "{{dev_url}}"\ntoken = "{{dev_token}}"\nmachine = "%s-dev"\n' "$(hostname)" > "{{dev_config}}"
     echo "wrote {{dev_config}}"
-
-# Start the source server in the background (rebuild + restart, throwaway db).
-dev-server:
-    #!/usr/bin/env bash
-    set -euo pipefail
-    mkdir -p "{{dev_bin}}"
-    go build -o "{{dev_bin}}/vigied" ./cmd/vigied
-    pidf="{{dev_dir}}/server.pid"
-    [ -f "$pidf" ] && kill "$(cat "$pidf")" 2>/dev/null || true
-    nohup "{{dev_bin}}/vigied" serve --addr {{dev_addr}} --token {{dev_token}} --db "{{dev_db}}" --session-retention 0 --metrics-addr 0.0.0.0:9464 > "{{dev_dir}}/server.log" 2>&1 &
-    echo $! > "$pidf"
-    echo "dev server → {{dev_url}} (pid $(cat "$pidf"), logs {{dev_dir}}/server.log)"
-
-# Start the current-source watcher in the background, pointed at the dev server.
-dev-watcher: dev-config
-    #!/usr/bin/env bash
-    set -euo pipefail
-    mkdir -p "{{dev_bin}}"
-    go build -o "{{dev_bin}}/vigie" ./cmd/vigie
-    pidf="{{dev_dir}}/watcher.pid"
-    [ -f "$pidf" ] && kill "$(cat "$pidf")" 2>/dev/null || true
-    VIGIE_CONFIG="{{dev_config}}" nohup "{{dev_bin}}/vigie" watch > "{{dev_dir}}/watcher.log" 2>&1 &
-    echo $! > "$pidf"
-    echo "dev watcher → {{dev_url}} (pid $(cat "$pidf"), logs {{dev_dir}}/watcher.log)"
-
-# Run the current-source TUI in the foreground, pointed at the dev server.
-dev-tui: dev-config
-    VIGIE_CONFIG="{{dev_config}}" go run ./cmd/vigie tui
 
 # Stop the background dev server and watcher.
 dev-down:
@@ -99,28 +70,36 @@ dev-hooks-uninstall:
     [ -x "{{dev_bin}}/vigie" ] || go build -o "{{dev_bin}}/vigie" ./cmd/vigie
     VIGIE_CONFIG="{{dev_config}}" "{{dev_bin}}/vigie" hooks uninstall
 
+# Start the source server in the background (rebuild + restart, throwaway db).
+dev-server:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    mkdir -p "{{dev_bin}}"
+    go build -o "{{dev_bin}}/vigied" ./cmd/vigied
+    pidf="{{dev_dir}}/server.pid"
+    [ -f "$pidf" ] && kill "$(cat "$pidf")" 2>/dev/null || true
+    nohup "{{dev_bin}}/vigied" serve --addr {{dev_addr}} --token {{dev_token}} --db "{{dev_db}}" --session-retention 0 --metrics-addr 0.0.0.0:9464 > "{{dev_dir}}/server.log" 2>&1 &
+    echo $! > "$pidf"
+    echo "dev server → {{dev_url}} (pid $(cat "$pidf"), logs {{dev_dir}}/server.log)"
+
+# Run the current-source TUI in the foreground, pointed at the dev server.
+dev-tui: dev-config
+    VIGIE_CONFIG="{{dev_config}}" go run ./cmd/vigie tui
+
+# Start the current-source watcher in the background, pointed at the dev server.
+dev-watcher: dev-config
+    #!/usr/bin/env bash
+    set -euo pipefail
+    mkdir -p "{{dev_bin}}"
+    go build -o "{{dev_bin}}/vigie" ./cmd/vigie
+    pidf="{{dev_dir}}/watcher.pid"
+    [ -f "$pidf" ] && kill "$(cat "$pidf")" 2>/dev/null || true
+    VIGIE_CONFIG="{{dev_config}}" nohup "{{dev_bin}}/vigie" watch > "{{dev_dir}}/watcher.log" 2>&1 &
+    echo $! > "$pidf"
+    echo "dev watcher → {{dev_url}} (pid $(cat "$pidf"), logs {{dev_dir}}/watcher.log)"
 # =============================================================================
 # CODE
 # =============================================================================
-
-# Tidy dependencies
-code-dep-tidy:
-    go mod tidy
-
-# Update dependencies
-code-dep-update:
-    go get -u ./...
-    go mod tidy
-
-# Format code
-code-fmt:
-    gofmt -w .
-    ./bin/goimports -w .
-
-# Check formatting
-code-fmt-check:
-    gofmt -l .
-    ./bin/goimports -l .
 
 # Run all CI checks locally (fmt, lint, build, test)
 code-check:
@@ -143,6 +122,55 @@ code-check:
     echo "==> govulncheck"
     just code-vuln
     echo "all checks passed"
+
+# Tidy dependencies
+code-dep-tidy:
+    go mod tidy
+
+# Update dependencies
+code-dep-update:
+    go get -u ./...
+    go mod tidy
+
+# Format code
+code-fmt:
+    gofmt -w .
+    ./bin/goimports -w .
+
+# Check formatting
+code-fmt-check:
+    gofmt -l .
+    ./bin/goimports -l .
+
+# Run linter
+code-lint:
+    ./bin/golangci-lint run ./...
+
+# Run linter with auto-fix
+code-lint-fix:
+    ./bin/golangci-lint run --fix ./...
+
+# Run all tests
+code-test:
+    go test ./...
+
+# Run tests with coverage
+code-test-cover:
+    go test -coverprofile=coverage.out ./...
+    go tool cover -html=coverage.out -o coverage.html
+
+# Run the JavaScript tests (dashboard + GNOME indicator)
+#
+# The two shipped artefacts cannot be imported outside their runtime —
+# extension.js pulls in `gi://` and GNOME Shell resources, app.js drives the DOM —
+# so the rules worth checking live in a sibling `lib.js` that both the artefact and
+# these tests import. No package.json, no dependency: node's built-in runner (#430).
+code-test-js:
+    node --test test/js/dashboard.test.mjs test/js/gnome.test.mjs test/js/boot.test.mjs
+
+# Run tests with race detector
+code-test-race:
+    go test -race ./...
 
 # Scan for known vulnerabilities, standard library included
 #
@@ -173,15 +201,6 @@ code-vuln:
     fi
     ./bin/govulncheck ./...
 
-# Run the JavaScript tests (dashboard + GNOME indicator)
-#
-# The two shipped artefacts cannot be imported outside their runtime —
-# extension.js pulls in `gi://` and GNOME Shell resources, app.js drives the DOM —
-# so the rules worth checking live in a sibling `lib.js` that both the artefact and
-# these tests import. No package.json, no dependency: node's built-in runner (#430).
-code-test-js:
-    node --test test/js/dashboard.test.mjs test/js/gnome.test.mjs test/js/boot.test.mjs
-
 # Regenerate the README animation from its template
 #
 # The asset was once produced by a script nobody committed, so it could not be
@@ -189,26 +208,5 @@ code-test-js:
 # internal/animation/template.svg or its palettes, run this, and commit the four
 # files it writes — a test compares them against a fresh render, so forgetting
 # fails the build.
-animation:
+docs-animation:
     go run ./tools/animation
-
-# Run linter
-code-lint:
-    ./bin/golangci-lint run ./...
-
-# Run linter with auto-fix
-code-lint-fix:
-    ./bin/golangci-lint run --fix ./...
-
-# Run all tests
-code-test:
-    go test ./...
-
-# Run tests with coverage
-code-test-cover:
-    go test -coverprofile=coverage.out ./...
-    go tool cover -html=coverage.out -o coverage.html
-
-# Run tests with race detector
-code-test-race:
-    go test -race ./...
