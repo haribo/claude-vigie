@@ -1,9 +1,9 @@
 # Claude Vigie — GNOME Shell extension
 
 A top-bar indicator for [vigie](../README.md): it shows, at a glance, how
-many Claude Code sessions across your fleet are **waiting for input**, lists
+many Claude Code sessions across your fleet are **calling for you**, lists
 sessions grouped by status in a dropdown, and **pushes a notification** when a
-session starts waiting — so a blocked session reaches you whether or not you're
+session starts calling — so a blocked session reaches you whether or not you're
 looking at the bar.
 
 It is a **read-only** client of a `vigied` server — it polls
@@ -39,16 +39,19 @@ Open the extension preferences (via *Extensions* app, or
 - **Server URL** — e.g. `https://fleet.example.com` (or `http://localhost:8080`).
 - **Token** — the shared fleet token.
 - **Poll interval** — seconds between refreshes (default 5).
-- **Desktop notifications** — notify when a session starts waiting (default on).
+- **Desktop notifications** — notify when a session starts calling for you
+  (default on).
 
 ## Behavior
 
 - The radar icon shows a **count badge** and turns to the attention color when at
-  least one session is `waiting`.
-- A **notification** fires when a session **transitions into `waiting`**
-  (edge-triggered — once per transition, not every poll). The first poll after
-  launch only seeds state, so enabling the extension never notifies for sessions
-  that were already waiting. Toggle it off in preferences.
+  least one session is calling for you.
+- A **notification** fires when a session **starts calling for you** — it began
+  `waiting` on input, a tool hung (`stalled`), it hit an API error, or the session
+  raised a call of its own ([ADR-0010](../docs/adr/0010-session-raised-operator-call.md)).
+  The body says which. Edge-triggered — once per transition, not every poll. The
+  first poll after launch only seeds state, so enabling the extension never
+  notifies for sessions that were already calling. Toggle it off in preferences.
 - Clicking the icon opens a dropdown listing sessions grouped by status, with
   project, machine, and branch. Every status the server can return is shown, in
   the order [`session-status.md`](../docs/design/session-status.md) § 1 lists them:

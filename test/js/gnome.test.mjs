@@ -8,7 +8,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
-import { groupOrder, basename } from "../../gnome-extension/lib.js";
+import { groupOrder, basename, needsAttention, attentionReason, attentionIds } from "../../gnome-extension/lib.js";
 
 // The documented vocabulary, passed in explicitly. The list that ships is checked
 // against docs/design/session-status.md by a Go test (#423); what is checked here
@@ -49,4 +49,63 @@ test("basename reduces a project path to its last segment", () => {
   assert.equal(basename("/home/u/dev/api-gateway/"), "api-gateway");
   assert.equal(basename(""), "");
   assert.equal(basename(null), "");
+});
+
+// #466. The indicator exists so an operator who is not looking at the TUI still
+// learns that a session needs them — and it reacted to one signal out of four:
+// `waiting`. A stalled turn raised nothing, and a session's own call, the headline
+// of 0.5.0, did not exist for it at all.
+
+test("a call counts, whatever the status underneath", () => {
+  assert.equal(needsAttention({ status: "idle", call_at: "t" }), true);
+  assert.equal(needsAttention({ status: "working", call_at: "t" }), true,
+    "a session can raise a call mid-turn");
+  assert.equal(needsAttention({ status: "idle" }), false);
+});
+
+test("every blocking status counts, not just waiting", () => {
+  for (const status of ["waiting", "stalled", "error"]) {
+    assert.equal(needsAttention({ status }), true, `${status} must call the operator`);
+  }
+  for (const status of ["working", "thinking", "compacting", "idle", "stale", "ended"]) {
+    assert.equal(needsAttention({ status }), false, `${status} must not interrupt`);
+  }
+});
+
+test("needsAttention tolerates a missing session", () => {
+  assert.equal(needsAttention(null), false);
+  assert.equal(needsAttention(undefined), false);
+  assert.equal(needsAttention({}), false);
+});
+
+// The body has to say why: a stalled turn, an API error and a raised call all want
+// different things, and one wording for all three would misinform.
+test("the reason distinguishes the four signals", () => {
+  assert.equal(attentionReason({ status: "idle", call_at: "t", call_message: "build done" }), "build done");
+  assert.equal(attentionReason({ status: "idle", call_at: "t" }), "called you",
+    "a call with no message is still a call");
+  assert.match(attentionReason({ status: "waiting" }), /waiting/);
+  assert.match(attentionReason({ status: "stalled" }), /stalled/);
+  assert.match(attentionReason({ status: "error" }), /error/);
+  assert.equal(attentionReason({ status: "working" }), "");
+});
+
+test("a call outranks the status it rides on", () => {
+  assert.equal(attentionReason({ status: "waiting", call_at: "t", call_message: "done" }), "done",
+    "the session speaking beats an inference about it");
+});
+
+// The notification is edge-triggered off this set: anything already in it must not
+// re-notify on the next poll.
+test("attentionIds holds exactly the sessions calling for the operator", () => {
+  const sessions = [
+    { id: "a", status: "waiting" },
+    { id: "b", status: "working" },
+    { id: "c", status: "stalled" },
+    { id: "d", status: "idle", call_at: "t" },
+    { id: "e", status: "ended" },
+  ];
+  assert.deepEqual([...attentionIds(sessions)].sort(), ["a", "c", "d"]);
+  assert.equal(attentionIds([]).size, 0);
+  assert.equal(attentionIds(null).size, 0);
 });

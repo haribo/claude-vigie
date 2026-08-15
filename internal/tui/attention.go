@@ -6,14 +6,17 @@ import (
 	"sort"
 
 	"github.com/haribo/claude-vigie/internal/api"
+	"github.com/haribo/claude-vigie/internal/status"
 )
 
 // attentionStatuses are the states that call for the operator — the session is
 // blocked and needs a human: it is waiting on input, it errored, or a tool hung
 // (stalled, #256).
-var attentionStatuses = map[string]bool{"waiting": true, "error": true, "stalled": true}
+// The set itself lives in internal/status, so the TUI and the GNOME indicator
+// cannot disagree about when the operator should be interrupted (#466).
+func isAttentionStatus(s string) bool { return status.NeedsAttention(s) }
 
-func isAttention(status string) bool { return attentionStatuses[status] }
+func isAttention(s string) bool { return isAttentionStatus(s) }
 
 // nextAttention returns the id of the session that has been waiting on the
 // operator longest — the oldest by StatusChangedAt among the attention states —
