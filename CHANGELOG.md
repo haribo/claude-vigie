@@ -26,6 +26,17 @@ file is the single source of truth, not a second narrative.
 
 ### Fixed
 
+- The GNOME indicator now raises a badge and a notification for every signal that
+  calls for the operator, not only `waiting`. A stalled turn — a tool that hung and
+  will not resolve itself — raised nothing, and a session's own call, the headline
+  of 0.5.0, did not exist for the extension at all: on a machine where the operator
+  watches the top bar rather than a terminal, that feature was invisible. The
+  notification also says *why*, since a stalled turn, an API error and a raised
+  call want different things and one wording for all three misinforms. The set of
+  statuses that warrant an interruption is now declared once in `internal/status`
+  and shared, so the indicator and the TUI cannot disagree about when to interrupt
+  you (#466).
+
 - Sorting by status now places every status, in both dashboards. Only five of the
   nine were ranked: in the TUI the other four fell to an unranked default that put
   them **below `ended`**, so a session hitting an API error sorted under one that

@@ -23,6 +23,7 @@ const (
 	dashboardJS  = "../../internal/web/static/app.js"
 	dashboardLib = "../../internal/web/static/lib.js"
 	gnomeJS      = "../../gnome-extension/extension.js"
+	gnomeLib     = "../../gnome-extension/lib.js"
 )
 
 // statusesFromDoc reads § 1's table, which is where the vocabulary is specified.
@@ -205,4 +206,29 @@ func TestRankPutsTheUnknownLast(t *testing.T) {
 // first (#464).
 func TestDashboardRanksEveryStatus(t *testing.T) {
 	diff(t, dashboardLib+" RANK_ORDER", jsArray(t, dashboardLib, "RANK_ORDER"), Order)
+}
+
+// TestAttentionIsASubsetOfAll: an attention status that does not exist would
+// silently never fire.
+func TestAttentionIsASubsetOfAll(t *testing.T) {
+	for _, s := range Attention {
+		if !Known(s) {
+			t.Errorf("Attention names %q, which is not a status", s)
+		}
+		if !NeedsAttention(s) {
+			t.Errorf("NeedsAttention(%q) = false", s)
+		}
+	}
+	for _, s := range []string{"working", "idle", "ended", "thinking", "compacting", "stale", ""} {
+		if NeedsAttention(s) {
+			t.Errorf("NeedsAttention(%q) = true — it does not block the operator", s)
+		}
+	}
+}
+
+// TestGnomeExtensionSharesTheAttentionSet: the indicator exists to interrupt the
+// operator, so it must agree with the TUI on when that is warranted. A list
+// copied per consumer is what #421 and #422 were (#466).
+func TestGnomeExtensionSharesTheAttentionSet(t *testing.T) {
+	diff(t, gnomeLib+" ATTENTION", jsArray(t, gnomeLib, "ATTENTION"), Attention)
 }

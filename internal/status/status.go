@@ -71,3 +71,22 @@ func Rank(s string) int {
 	}
 	return len(Order)
 }
+
+// Attention are the statuses that call for the operator: the session is blocked
+// and needs a human — it is waiting on input, it errored, or a tool hung.
+//
+// A raised call is not here because it is not a status: it rides alongside one
+// (ADR-0010). Anything deciding whether to interrupt the operator has to consider
+// both, which is why this is a list to consult rather than a rule to reimplement.
+var Attention = []string{"waiting", "error", "stalled"}
+
+// NeedsAttention reports whether a status is one the operator should be told
+// about.
+func NeedsAttention(s string) bool {
+	for _, k := range Attention {
+		if k == s {
+			return true
+		}
+	}
+	return false
+}
