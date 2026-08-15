@@ -1078,7 +1078,11 @@ func (m model) summaryRight() string {
 // failed, ◍ reconnecting otherwise (the poll is still reaching the server).
 func (m model) connGlyph() string {
 	switch {
-	case m.sseLive:
+	// `sseLive` is an observation, and one made before a suspend is not evidence
+	// of anything now. A failing poll is present-tense proof the server is out of
+	// reach, so it outranks a stale "connected": the indicator must not assert the
+	// one thing it cannot currently know (#457).
+	case m.sseLive && m.err == nil:
 		return lipgloss.NewStyle().Foreground(cGreen).Render("●")
 	case m.err != nil:
 		return lipgloss.NewStyle().Foreground(cRed).Render("○")
