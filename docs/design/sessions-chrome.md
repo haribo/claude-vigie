@@ -274,6 +274,19 @@ Two rules, because this is where it gets botched:
   ground. It is chosen by hand, light and dark, and checked by eye in a real
   terminal — how a pulse is perceived cannot be judged from a mock.
 
+The pair that ships:
+
+| | light | dark |
+| --- | --- | --- |
+| amber | `#b45309` → `#d08a4a` | `#fbbf24` → `#c08f2a` |
+| red | `#dc2626` → `#ec7070` | `#f87171` → `#bd5555` |
+
+Both move *toward the ground*, which is why the direction flips between themes:
+the tone lightens on a light terminal and darkens on a dark one. A test measures
+the hue distance of each pair and fails past 20°, so the "same hue" rule is
+checked rather than merely stated. How a pulse is actually perceived still cannot
+be judged from a test — expect to adjust these by eye.
+
 A ~2 s cycle is 0.5 Hz, well under WCAG 2.3.1's three-flashes-per-second ceiling.
 Nothing to arbitrate, but it is the reason the cadence may be slowed and never
 sped up.
