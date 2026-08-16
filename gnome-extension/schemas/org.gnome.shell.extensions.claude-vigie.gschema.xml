@@ -21,7 +21,7 @@
     <key name="notify" type="b">
       <default>true</default>
       <summary>Desktop notifications</summary>
-      <description>Notify when a session starts waiting for input (edge-triggered).</description>
+      <description>Notify when a session starts calling for you — waiting on input, stalled on a tool, in error, or raising a call (edge-triggered).</description>
     </key>
   </schema>
 </schemalist>

@@ -25,7 +25,7 @@ Every session shows exactly one status. What each tells the operator:
 | `stale`    | No recent report **and the machine has no watcher**, so the true state is unknown. Shown (grey, dotted `◌`) instead of a false `ended`: *no news* ≠ *dead*. Resolves once a watcher runs there (#284/#285). |
 | `ended`    | The session is over (closed, or its process is gone).                   |
 
-`waiting` and `stalled` are the two statuses that call the operator: `waiting`
+`waiting`, `stalled` and `error` are the three statuses that call the operator, and a session can raise a call of its own on top of any status ([ADR-0010](../adr/0010-session-raised-operator-call.md)). `waiting`
 means *the operator is the blocker*; `stalled` means *a tool hung and the turn is
 stuck*. Both are what the dashboard exists to surface — the sessions that need a
 human right now.
@@ -91,8 +91,10 @@ hooks aren't installed). It derives status from two signals — is the session's
   the "Continue from where you left off." resume, and marks them `isMeta` — those
   land in the middle of a live tool call and must not close it (#483).
 
-The watcher can see `working`, `thinking`, `idle`, `stalled`, `ended`, and
-`error`. It **cannot** see `waiting`.
+The watcher can see `working`, `thinking`, `compacting`, `idle`, `stalled`,
+`ended`, and `error`. It **cannot** see `waiting`. `compacting` is the one it
+does not derive alone: the `PreCompact` hook opens it and the watcher closes it
+from the transcript's `compact_boundary` ([ADR-0008](../adr/0008-compacting-status.md)).
 
 **DETAIL refinements (no status change).** A few signals annotate the activity
 column without touching the base status — a lighter touch than a full status when
@@ -184,6 +186,7 @@ trust it:
 | `ended`    | hook `SessionEnd`; watcher (dead process, or no mapping + quiet); server (no report for ~60 s) | **Reliable** for a hooked end or a dead process; a **heuristic** for a hooks-free session that simply went quiet. |
 | `error`    | watcher (`isApiErrorMessage` in the transcript) | **Reliable signal, sampled.** The flag is unambiguous, but surfaced only at the next scan, not instantly (Claude Code has no error hook). |
 | `thinking` | watcher only (last content block is a `thinking` block) | **Best-effort heuristic.** No hook signals reasoning; it is inferred from the transcript, sampled every ~2 s, invisible in a hooks-only deployment, and can briefly mis-read when a `tool_use` block follows the thinking block. |
+| `compacting` | hook `PreCompact` opens it; watcher closes it on `compact_boundary` | **Reliable at both ends, sampled at the close.** The open is a hook, so it is instant; the close is read from the transcript at the next scan. Invisible in a hooks-only deployment, since nothing would close it. |
 | `stalled`  | watcher only (unresolved `tool_use`↔`tool_result` + quiet) | **Reliable signal, sampled.** The pairing is exact (an id match), not a timeout guess; surfaced at the next scan once the session has been quiet past a short threshold. Self-healing: a tool whose result never arrives is closed by the next operator prompt rather than pinning the session (§ 2). Invisible in a hooks-only deployment. |
 
 **Decision on `thinking` (#207): kept, as an explicit best-effort refinement.**

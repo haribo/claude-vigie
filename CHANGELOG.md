@@ -87,6 +87,18 @@ file is the single source of truth, not a second narrative.
 
 ### Fixed
 
+- The specifications describe the screen that exists. `session-list.md` was marked
+  **Accepted** while still specifying the `a` binding and the summary strip, both
+  removed weeks ago — so an implementer following it rebuilt a screen the tests
+  now reject. `sessions-chrome.md` contradicted itself about the same binding,
+  and `tui-viewport.md` still drew the pre-reorganization stack. Corrected, along
+  with the API table in `architecture.md`, which omitted the two routes deciding
+  whether a watcher may write; `session-status.md`, which counted two statuses
+  calling the operator where there are three plus a raised call, and declared
+  `compacting` in one section then forgot it in two others; and the notification
+  wording in the README and the GNOME schema, which both still promised
+  "waiting" only. A test now compares the API table with the routes the server
+  registers, so that table cannot drift again unnoticed (#511).
 - The daemon validates what a report carries instead of trusting it. An unknown
   event fell through to `working` **and** was stamped hook-owned, which the
   watcher could then no longer retract — the #201 failure mode, reachable from a

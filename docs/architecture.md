@@ -109,6 +109,8 @@ All `/api/*` routes require the shared token in the `Authorization` header.
 | POST | `/api/usage/lease` | Acquire the fleet's usage-fetch lease |
 | GET · POST | `/api/usage` | Read · post subscription usage (percentages only) |
 | GET | `/api/watcher` | Last watcher heartbeat (drives the "no watcher" warning) |
+| POST | `/api/watcher/heartbeat` | A watcher's liveness claim, independent of session reports ([design](design/watcher-liveness.md)) |
+| GET | `/api/version` | The daemon's build, so a client can flag a drift ([design](design/version-consistency.md)) |
 | GET | `/api/status` | Claude platform health (server-polled from status.claude.com) |
 | GET | `/api/stats` | Analytics rollups + top sessions |
 | GET · POST | `/api/settings` | Read · update server settings (session retention) |

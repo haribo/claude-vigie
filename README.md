@@ -27,7 +27,7 @@
 
 - **Every session, every machine, one board** — nine live statuses, grouped and filtered as you like.
 - **A session can call you** when its work is done.
-- **Desktop notifications** when a session starts waiting on you (libnotify), and `n` to jump straight to it.
+- **Desktop notifications** when a session starts calling for you — waiting on input, stalled on a tool, in error, or raising a call (libnotify) — and `n` to jump straight to it.
 - **Terminal and browser** — a TUI, and a read-only web mirror served by the daemon itself.
 - **Per-session insight** — tokens, context fill, reasoning effort, permission mode, `/rc` link.
 - **Usage and history** — subscription usage, plus daily rollups of tokens and of where your time went.
