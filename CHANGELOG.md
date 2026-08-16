@@ -68,6 +68,17 @@ file is the single source of truth, not a second narrative.
 
 ### Fixed
 
+- `TestWatcherRunning` no longer fails at random on CI. The probe it starts —
+  a copy of `sh` named like the watcher — ran `sleep 300; :`, so the shell forked;
+  and between that fork and its `execve` the child carries the parent's `comm`
+  *and* the parent's `cmdline`, because the kernel copies both and only `execve`
+  replaces them. For a few microseconds there was a process that was not the
+  probe's pid, was named like the probe, and had `watch` in its cmdline — exactly
+  what the scan looks for, so the test's own probe impersonated a second watcher.
+  It now runs `read line` with its stdin held open: `read` is a builtin, so the
+  shell blocks without forking and the window is gone by construction. A guard
+  fails the test if the probe ever forks again. The earlier attempt at this (a
+  per-process probe name) addressed a cause that was not the one (#476).
 - A session that calls you always blinks. The `blink` preference is removed, not
   exposed: it was the one setting whose "off" state was invisible — no control in
   the Settings tab, nothing on screen to say the marker was muted — so an operator
