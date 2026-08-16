@@ -129,10 +129,17 @@ watcher only ever sees a quiet-but-alive session as `idle`, so its `idle` must
 
 **A `waiting` is only cleared once the transcript moves.** To the watcher, "a
 tool is running" and "a permission prompt is blocking" look identical — a turn
-stopped on a tool call with a frozen transcript. So its inferred `working` may
-not clear a hook `waiting` until the transcript has actually changed past when
-waiting was posted (the report's timestamp is the transcript mtime). `error` and
-`ended` are positive observations and still win.
+stopped on a tool call with a frozen transcript. So **any** status it infers from
+that silence — `working`, `thinking`, `compacting`, `stalled` — may not clear a
+hook `waiting` until the transcript has actually changed past when waiting was
+posted (the report's timestamp is the transcript mtime). `error` and `ended` are
+positive observations and still win.
+
+The rule is stated as a *deny* list, and the code implements it as one: it was
+once an allow list naming three statuses, so `stalled` fell through it when that
+status was added and a permission prompt read as a hung tool for the rest of the
+session. A status added later is held by default — a late release costs less than
+naming the wrong cause (#508).
 
 **The watcher must retract its own stale state.** The key consequence: a `working`
 that the *watcher itself* set (a hooks-free session) falls back to `idle` when the
