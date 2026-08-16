@@ -472,8 +472,11 @@ func (m model) applySessions(msg sessionsMsg) model {
 		m.err = msg.err
 		return m
 	}
-	m = m.withNotifiedTransitions(msg.sessions) // desktop notify on working→attention (#260)
-	m.sessions = msg.sessions
+	// Cleaned before anything reads them, including the notification path below:
+	// a desktop notification is another program's input (#529).
+	clean := sanitizeSessions(msg.sessions)
+	m = m.withNotifiedTransitions(clean) // desktop notify on working→attention (#260)
+	m.sessions = clean
 	m.err = nil
 	m.sess.cursor = m.sess.cursorForSelection(m.visibleSessions()) // keep the cursor on the same session
 	return m
