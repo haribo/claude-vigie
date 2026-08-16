@@ -100,23 +100,6 @@ func TestCallTakesTheDoingCell(t *testing.T) {
 	}
 }
 
-func TestSummaryShowsCallCountOnlyWhenNonZero(t *testing.T) {
-	none := []api.SessionView{{Status: "idle"}}
-	counts, _ := summaryParts(none, nil)
-	if strings.Contains(strings.Join(counts, " "), "call") {
-		t.Error("no call must show no call counter")
-	}
-	some := []api.SessionView{{Status: "idle", CallAt: "t"}, {Status: "idle"}}
-	counts, _ = summaryParts(some, nil)
-	joined := strings.Join(counts, " ")
-	if !strings.Contains(joined, "call 1") {
-		t.Errorf("summary missing the call counter: %q", joined)
-	}
-	if !strings.HasPrefix(joined, counts[0]) || !strings.Contains(counts[0], "call") {
-		t.Errorf("the call counter should lead the summary, got %q", counts[0])
-	}
-}
-
 // TestNextAttentionPrefersACall: a call is explicit where waiting/error/stalled
 // are deductions, so it jumps first — oldest call first within the calls (#389).
 func TestNextAttentionPrefersACall(t *testing.T) {

@@ -109,7 +109,13 @@ func footerFit(t tab, width int) string {
 // renderTabBar renders the top-level tab bar: the labels, then a full-width
 // separator whose segment under the active tab is an accent underline.
 // Tabs are switched with Tab/Shift+Tab, so labels carry no numbers.
-func renderTabBar(active tab, width int) string {
+//
+// corner is drawn as the last character of the labels line, right-aligned. It
+// carries the connection glyph, which used to sit at the end of the deleted
+// summary row: that corner is where the eye checks for state, and it never
+// changes width, so the table below never jumps
+// (docs/design/sessions-chrome.md § 3, #492).
+func renderTabBar(active tab, width int, corner string) string {
 	const sep = "   "
 	parts := make([]string, len(tabNames))
 	start, end, pos := 0, 0, 0
@@ -134,7 +140,15 @@ func renderTabBar(active tab, width int) string {
 	underline := dimStyle.Render(strings.Repeat("─", start)) +
 		tabRuleStyle.Render(strings.Repeat("━", end-start)) +
 		dimStyle.Render(strings.Repeat("─", total-end))
-	return strings.Join(parts, sep) + "\n" + underline
+
+	labels := strings.Join(parts, sep)
+	if corner != "" && width > 0 {
+		lw, cw := lipgloss.Width(labels), lipgloss.Width(corner)
+		if lw+cw < width {
+			labels += strings.Repeat(" ", width-lw-cw) + corner
+		}
+	}
+	return labels + "\n" + underline
 }
 
 type column struct {
@@ -392,117 +406,12 @@ func rcLabel(on bool) string {
 	return rcOffStyle.Render("○ off")
 }
 
-// sparkWindow is how many recent polls the activity sparkline keeps.
-const sparkWindow = 30
-
 // Braille dot bits (offset from U+2800) for a column filled from the bottom up
 // to a height of 0..4. The left column uses dots 7,3,2,1; the right, 8,6,5,4.
 var (
 	brailleLeft  = [5]byte{0, 0x40, 0x44, 0x46, 0x47}
 	brailleRight = [5]byte{0, 0x80, 0xA0, 0xB0, 0xB8}
 )
-
-// renderSummary renders the fleet summary strip: status counts, total output
-// tokens across the fleet, and an activity sparkline (working sessions over the
-// recent polls held in history).
-// summaryParts splits the summary into its always-shown status counts and its
-// optional trailing extras (out, rc, activity), so the strip can drop whole
-// extras — activity first — to fit a narrow terminal (#334).
-func summaryParts(sessions []api.SessionView, history []int) (counts, extras []string) {
-	c := map[string]int{}
-	var totalOut int64
-	rcActive := 0
-	for _, s := range sessions {
-		c[s.Status]++
-		totalOut += s.Usage.OutputTokens
-		if s.RemoteControl {
-			rcActive++
-		}
-	}
-
-	counts = []string{}
-	// A call is explicit and the most urgent thing on screen, so it leads. It
-	// borrows the `waiting` color rather than introducing a tenth: a call *is*
-	// the operator being needed, and the word disambiguates it (ADR-0010).
-	if n := callCount(sessions); n > 0 {
-		counts = append(counts, statusStyle("waiting").Render(fmt.Sprintf("● call %d", n)))
-	}
-	counts = append(counts,
-		statusStyle("working").Render(fmt.Sprintf("● working %d", c["working"])),
-	)
-	if n := c["thinking"]; n > 0 { // a sub-state of active work: shown only when present
-		counts = append(counts, statusStyle("thinking").Render(fmt.Sprintf("● thinking %d", n)))
-	}
-	if n := c["compacting"]; n > 0 { // summarizing context: shown only when present (#342)
-		counts = append(counts, statusStyle("compacting").Render(fmt.Sprintf("● compacting %d", n)))
-	}
-	counts = append(counts,
-		statusStyle("waiting").Render(fmt.Sprintf("● waiting %d", c["waiting"])),
-		statusStyle("idle").Render(fmt.Sprintf("● idle %d", c["idle"])),
-	)
-	if n := c["stalled"]; n > 0 { // a hung tool: shown only when present
-		counts = append(counts, statusStyle("stalled").Render(fmt.Sprintf("● stalled %d", n)))
-	}
-	if n := c["error"]; n > 0 { // an alert: shown only when present
-		counts = append(counts, statusStyle("error").Render(fmt.Sprintf("● error %d", n)))
-	}
-	if n := c["stale"]; n > 0 { // unobserved machine: shown only when present (#285)
-		counts = append(counts, dimStyle.Render(fmt.Sprintf("◌ stale %d", n)))
-	}
-	counts = append(counts, dimStyle.Render(fmt.Sprintf("● ended %d", c["ended"])))
-
-	// extras are ordered most- to least-important; the fit logic drops from the end.
-	extras = []string{
-		labelStyle.Render("out ") + humanizeTokens(totalOut),
-		labelStyle.Render("rc ") + rcOnStyle.Render(fmt.Sprintf("◉ %d", rcActive)),
-	}
-	if s := sparkline(history); s != "" {
-		extras = append(extras, labelStyle.Render("activity ")+s)
-	}
-	return counts, extras
-}
-
-// assembleSummary joins the counts and the first n extras with the summary's
-// spacing (three spaces between counts, four before each extra).
-func assembleSummary(counts, extras []string, n int) string {
-	line := strings.Join(counts, "   ")
-	for _, e := range extras[:n] {
-		line += "    " + e
-	}
-	return line
-}
-
-func renderSummary(sessions []api.SessionView, history []int) string {
-	counts, extras := summaryParts(sessions, history)
-	return assembleSummary(counts, extras, len(extras))
-}
-
-// renderSummaryFit is renderSummary constrained to width: it drops the trailing
-// extras (activity, then rc, then out) when the line does not fit, so a narrow
-// terminal shows whole elements instead of a mid-glyph cut.
-//
-// When even the counts alone overflow, whole count entries go — least urgent
-// first, which is the order summaryParts builds them in — followed by an
-// ellipsis saying the list is cut. Clamping the line instead would slice a
-// number in half and turn `ended 25` into `ended 2`: a wrong figure presented as
-// a right one, which is worse than an absent one (#486).
-func renderSummaryFit(sessions []api.SessionView, history []int, width int) string {
-	counts, extras := summaryParts(sessions, history)
-	for n := len(extras); n >= 0; n-- {
-		line := assembleSummary(counts, extras, n)
-		if width <= 0 || lipgloss.Width(line) <= width {
-			return line
-		}
-	}
-	for k := len(counts) - 1; k >= 1; k-- {
-		line := assembleSummary(counts[:k], nil, 0) + dimStyle.Render(" …")
-		if lipgloss.Width(line) <= width {
-			return line
-		}
-	}
-	// Narrower than a single count: nothing degrades gracefully from here.
-	return clampWidth(assembleSummary(counts, extras, 0), width)
-}
 
 // sparkline renders values as a braille graph: two samples per glyph (2 columns
 // × 4 dot rows), doubling the horizontal resolution of block runes.
@@ -554,16 +463,6 @@ func activitySpark(samples []int64) string {
 		deltas = append(deltas, d)
 	}
 	return sparkline(deltas)
-}
-
-func countByStatus(sessions []api.SessionView, status string) int {
-	n := 0
-	for _, s := range sessions {
-		if s.Status == status {
-			n++
-		}
-	}
-	return n
 }
 
 // visibleColumns returns the columns that fit in width, dropping the

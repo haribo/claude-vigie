@@ -72,9 +72,13 @@ func compactGauge(label string, pct float64, reset string) string {
 	}
 	bar := lipgloss.NewStyle().Foreground(color).Render(strings.Repeat("▓", filled)) +
 		dimStyle.Render(strings.Repeat("░", width-filled))
-	s := labelStyle.Render(label+" ") + bar + fmt.Sprintf(" %3.0f%%", pct)
+	// Tight against the bar and against the reset: the gauges give up the space
+	// the chrome no longer has to spare (#492). The `%3.0f` padding that kept the
+	// 5h and 7d blocks aligned whatever the figure goes with it — a deliberate
+	// reading trade, not an oversight (docs/design/sessions-chrome.md § 2).
+	s := labelStyle.Render(label+" ") + bar + fmt.Sprintf("%.0f%%", pct)
 	if r := resetIn(reset); r != "" {
-		s += dimStyle.Render(" (" + r + ")")
+		s += dimStyle.Render("(" + r + ")")
 	}
 	return s
 }

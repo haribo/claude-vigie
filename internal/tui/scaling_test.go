@@ -41,7 +41,6 @@ func sampleModel(t tab) model {
 		tab:      t,
 		prefs:    defaultPrefs(),
 		sessions: sessions,
-		sess:     sessionsView{history: []int{0, 1, 2, 1, 3, 2, 4, 3, 2, 1, 2, 3}}, // populates the "activity" sparkline
 		usage: api.UsageReport{
 			FiveHourPct: 28, FiveHourReset: "2026-08-04T16:00:00Z",
 			SevenDayPct: 69, SevenDayReset: "2026-08-07T15:00:00Z",
@@ -83,29 +82,4 @@ func TestMachinesTabNeverOverflowsWidth(t *testing.T) {
 
 func TestSettingsTabNeverOverflowsWidth(t *testing.T) {
 	assertNoOverflow(t, sampleModel(tabSettings))
-}
-
-// TestSummaryDropsWholeElementsWhenNarrow is the #334 regression: the summary
-// clamps without overflowing, but at a width too narrow for the activity element
-// it must drop it whole rather than show a mid-glyph cut. Width 88 fits the
-// counts + out + rc (~76) but not the ~93-wide full line.
-func TestSummaryDropsWholeElementsWhenNarrow(t *testing.T) {
-	m := sampleModel(tabSessions)
-
-	m.width = 300 // wide: the activity element is present
-	if !strings.Contains(strings.Split(m.viewSessions(), "\n")[0], "activity") {
-		t.Fatal("activity should show when there is room")
-	}
-
-	m.width = 88 // narrow: activity does not fit and must be dropped whole
-	line := strings.Split(m.viewSessions(), "\n")[0]
-	if strings.Contains(line, "activ") {
-		t.Errorf("narrow summary shows a truncated activity element: %q", line)
-	}
-	if !strings.Contains(line, "working") {
-		t.Errorf("status counts must always survive: %q", line)
-	}
-	if lipgloss.Width(line) > m.width {
-		t.Errorf("summary overflows: %d > %d", lipgloss.Width(line), m.width)
-	}
 }
