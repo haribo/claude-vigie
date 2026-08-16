@@ -73,7 +73,7 @@ full design.
 ```
 vigied serve     # server: HTTP + SSE API, SQLite — runs on the host
 vigied token     # server: print/generate the shared auth token
-vigie  init      # client: install hooks + write the config
+vigie  init      # client: write the config (the watcher installs the hooks)
 vigie  hooks     # client: add/remove reporting hooks (one leg per VIGIE_CONFIG)
 vigie  report    # client: reporter invoked by Claude Code hooks
 vigie  call      # client: raise a call for the operator, from inside a session

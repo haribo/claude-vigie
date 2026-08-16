@@ -33,9 +33,12 @@ would have to inspect both independently.
   after an upgrade self-heals stale hooks. This makes *watcher version == hooks
   version*, so a single check downstream ([#356](https://github.com/haribo/claude-vigie/issues/356)/[#359](https://github.com/haribo/claude-vigie/issues/359))
   covers both.
-- **Manual commands stay.** `vigie init`, `vigie hooks install`, and
-  `vigie hooks uninstall` are unchanged — for a one-off machine or a host that
-  runs no watcher.
+- **Manual commands stay.** `vigie hooks install` and `vigie hooks uninstall`
+  are unchanged — for a one-off machine or a host that runs no watcher.
+  `vigie init` was listed here too when this ADR was accepted; #415 then removed
+  hook installation from it, so it now writes the client config and nothing else.
+  Amended in place rather than superseded: the decision — the watcher owns the
+  hooks — is what #415 carried further, not something it reversed.
 - **Scoped to vigie's own leg.** The merge only replaces the matchers of the
   leg identified by `VIGIE_CONFIG` (production when unset); foreign top-level
   settings keys and foreign hooks are preserved.

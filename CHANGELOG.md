@@ -80,6 +80,16 @@ file is the single source of truth, not a second narrative.
 
 ### Fixed
 
+- `vigie init` no longer claims to install hooks. The watcher has owned them
+  since ADR-0009, and #415 removed hook installation from `init` — but `vigie
+  help` and the README's command table still described the old contract, and the
+  README contradicted itself fifty lines later. An operator setting up a machine
+  reads the table, runs `init`, and believes the hooks are in place; on a machine
+  running no watcher they are not, and nothing reports. The help and the table are
+  corrected, ADR-0008's two stale instructions with them, and ADR-0009 is amended
+  in place to say that #415 carried its decision further rather than reversing it.
+  A test now compares the README's command table with what the CLI actually
+  offers, so the two cannot drift apart again unnoticed (#510).
 - The dashboard redraws when a session's effort, context or permission mode
   changes. The signature that decides whether a report is worth an SSE event
   covered nineteen fields and omitted four the dashboard renders, and the web
