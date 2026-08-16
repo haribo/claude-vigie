@@ -11,6 +11,13 @@ file is the single source of truth, not a second narrative.
 
 ### Changed
 
+- **Breaking:** the daemon refuses a usage snapshot from a machine that does not
+  hold the usage lease, and rejects percentages outside 0–100. The lease exists so
+  exactly one machine fetches, and nothing checked it at the write, so any holder
+  of the token could overwrite the figure the whole fleet reads, with any value.
+  A watcher older than this change posts no holder and is refused — during a fleet
+  upgrade the usage panel therefore ages instead of flapping, and the TUI's state
+  modal reports that age, so the staleness is visible rather than silent (#515).
 - **Breaking:** the daemon's shared token is supplied one way only, through
   `VIGIE_TOKEN`. The `--token` flag is removed and `FLEET_TOKEN` is no longer read.
   A token on the command line is published to every local user through
@@ -80,6 +87,16 @@ file is the single source of truth, not a second narrative.
 
 ### Fixed
 
+- The daemon validates what a report carries instead of trusting it. An unknown
+  event fell through to `working` **and** was stamped hook-owned, which the
+  watcher could then no longer retract — the #201 failure mode, reachable from a
+  single malformed request. Events and statuses are now checked against the
+  vocabularies that exist. The `/rc` resume URL is validated at ingestion and only
+  `https` is stored: the dashboard puts it in an `href`, and HTML escaping stops
+  an attribute being broken out of, not a `javascript:` scheme from being
+  followed. And the import barrier that keeps the server out of the client binary
+  named a package path that does not exist, so it matched nothing — corrected, and
+  widened from three client packages to all eight (#515).
 - `vigie init` no longer claims to install hooks. The watcher has owned them
   since ADR-0009, and #415 removed hook installation from `init` — but `vigie
   help` and the README's command table still described the old contract, and the

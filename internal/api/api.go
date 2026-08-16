@@ -128,6 +128,10 @@ type UsageReport struct {
 	SevenDayPct   float64 `json:"seven_day_pct"`
 	SevenDayReset string  `json:"seven_day_reset,omitempty"`
 	FetchedAt     string  `json:"fetched_at,omitempty"`
+	// Holder is the machine that fetched this snapshot. The server checks it
+	// against the usage lease, so only the machine that acquired the right to
+	// fetch can write the figure the whole fleet reads (#515).
+	Holder string `json:"holder,omitempty"`
 }
 
 // WatcherStatus reports when the server last received a watch report, so the

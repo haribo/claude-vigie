@@ -99,16 +99,26 @@ linters:
       rules:
         client-minimal:
           list-mode: lax
+          # Every client-side package, not the three that happened to be listed:
+          # watch, usage, install, presence and localwatch ship in the same
+          # minimal binary and were outside the barrier entirely (#515).
           files:
             - "**/internal/client/**"
             - "**/internal/report/**"
             - "**/internal/tui/**"
+            - "**/internal/watch/**"
+            - "**/internal/usage/**"
+            - "**/internal/install/**"
+            - "**/internal/presence/**"
+            - "**/internal/localwatch/**"
           deny:
             - pkg: github.com/haribo/claude-vigie/internal/server
               desc: client must not link the server (ADR-0003)
             - pkg: github.com/haribo/claude-vigie/internal/store
               desc: client must not link the store (ADR-0003)
-            - pkg: github.com/haribo/claude-vigie/web
+            # internal/web, not web: the path was wrong, so this rule matched
+            # nothing and the barrier it claims to enforce was not enforced (#515).
+            - pkg: github.com/haribo/claude-vigie/internal/web
               desc: client must not link the web dashboard (ADR-0003)
             - pkg: github.com/prometheus/client_golang
               desc: metrics live in the daemon only (ADR-0003); the client never links prometheus

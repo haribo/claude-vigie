@@ -840,6 +840,7 @@ func usageCycle(ctx context.Context, cfg *config.Config, fetcher *usage.Fetcher)
 	if !ok {
 		return // backing off
 	}
+	rep.Holder = cfg.Machine // the lease this machine just acquired (#515)
 	if err := postJSON(cfg, "/api/usage", rep, nil); err != nil {
 		fmt.Fprintf(os.Stderr, "watch: post usage: %v\n", err)
 	}

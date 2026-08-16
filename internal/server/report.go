@@ -6,9 +6,11 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"net/url"
 	"time"
 
 	"github.com/haribo/claude-vigie/internal/api"
+	"github.com/haribo/claude-vigie/internal/status"
 	"github.com/haribo/claude-vigie/internal/store"
 )
 
@@ -28,6 +30,21 @@ func (s *Server) handleReport(w http.ResponseWriter, r *http.Request) {
 	if req.SessionID == "" || req.Event == "" {
 		metricReportsRejected.WithLabelValues("missing_fields").Inc()
 		s.writeError(w, http.StatusBadRequest, "session_id and event are required")
+		return
+	}
+	// An unknown event used to fall through deriveStatus's default arm to
+	// `working`, *and* be stamped hook-owned — which the watcher could then no
+	// longer retract, the #201 failure mode. Both fields are now checked against
+	// the vocabularies that exist, rather than trusted because the caller holds
+	// the token (#515).
+	if !knownEvents[req.Event] {
+		metricReportsRejected.WithLabelValues("unknown_event").Inc()
+		s.writeError(w, http.StatusBadRequest, "unknown event")
+		return
+	}
+	if req.Status != "" && !status.Known(req.Status) {
+		metricReportsRejected.WithLabelValues("unknown_status").Inc()
+		s.writeError(w, http.StatusBadRequest, "unknown status")
 		return
 	}
 
@@ -245,8 +262,8 @@ func applyReport(sess store.Session, isNew bool, req api.ReportRequest) store.Se
 		sess.EndedAt = req.Timestamp
 	}
 	if req.RemoteControl != nil {
-		sess.RemoteControl = *req.RemoteControl // detected /rc state (read-only)
-		sess.RemoteURL = req.RemoteURL          // resume URL travels with the /rc flag; "" clears it
+		sess.RemoteControl = *req.RemoteControl       // detected /rc state (read-only)
+		sess.RemoteURL = safeRemoteURL(req.RemoteURL) // resume URL travels with the /rc flag; "" clears it (#515)
 	}
 	if req.LastTool != "" {
 		sess.LastTool = req.LastTool
@@ -395,6 +412,36 @@ func reconcileWatch(current, currentSource, incoming string) (status, source str
 		return current, currentSource // a confirmation doesn't transfer ownership
 	}
 	return incoming, "watch" // a positive change is the watcher's
+}
+
+// knownEvents are the events vigie emits: the Claude Code hooks it installs
+// (internal/client.defaultEvents), plus the watcher's scan and a session-raised
+// call. Anything else is a malformed or hostile report, not a future feature — a
+// new hook is added here at the same time as it is installed (#515).
+var knownEvents = map[string]bool{
+	"SessionStart": true, "UserPromptSubmit": true, "PostToolUse": true,
+	"Notification": true, "Stop": true, "PreCompact": true, "SessionEnd": true,
+	"watch": true, "call": true,
+}
+
+// safeRemoteURL returns the /rc resume URL if it is one a browser may safely be
+// pointed at, else "". It is validated here rather than at render: the dashboard
+// puts it in an href, and `javascript:` or `data:` survives HTML escaping
+// untouched — escaping stops an attribute being broken out of, not a scheme from
+// being followed. Validating at ingestion means a bad value never reaches the
+// store, so no client has to remember to check (#515).
+//
+// Only https is allowed. The URL is Claude's own resume link (ADR-0005: detected,
+// never set), so anything else is not a URL vigie has any business relaying.
+func safeRemoteURL(raw string) string {
+	if raw == "" {
+		return ""
+	}
+	u, err := url.Parse(raw)
+	if err != nil || u.Scheme != "https" || u.Host == "" {
+		return ""
+	}
+	return raw
 }
 
 // deriveStatus maps a hook event to a session status, keeping the current
