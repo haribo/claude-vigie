@@ -85,6 +85,21 @@ file is the single source of truth, not a second narrative.
   up the alignment `%3.0f` used to keep — a deliberate reading trade
   ([sessions-chrome](docs/design/sessions-chrome.md), #492).
 
+### Changed
+
+- The web dashboard's contract with the TUI is written down: **"mirror" binds
+  content and hierarchy, not gestures.** The word appeared in three places and
+  bound nothing, so the two clients drifted in both directions — the dashboard
+  still drew the summary strip #492 deleted, and had none of the TUI's filter,
+  grouping or idle-hiding — with no rule saying which side was the defect. The
+  tempting justification, that a browser has rows to spare where a terminal does
+  not, does not survive contact with the specification it appeals to:
+  sessions-chrome.md calls the row count "the smaller half of the problem", and
+  none of its three tests mentions screen size. So a divergence in *what is shown*
+  is debt, while a difference in *how it is operated* — a keyboard modal against a
+  mouse, an indicator against a button — is not. Where the boundary is checkable
+  it is a test rather than a sentence (#544).
+
 ### Fixed
 
 - The session id is stripped of control sequences like every other field the
