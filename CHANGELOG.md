@@ -80,6 +80,18 @@ file is the single source of truth, not a second narrative.
 
 ### Fixed
 
+- A session blocked on a permission prompt no longer reads `stalled`. The
+  `Notification` hook reports `waiting` — the one status only a hook can see — but
+  the prompt freezes the transcript on an unanswered tool call, which is exactly
+  the shape the watcher reads as a hung tool, and about 45 seconds later it said
+  so. It did not go quiet, it named the wrong cause: both statuses call the
+  operator, so the queue looked the same size while sending them to look at a tool
+  instead of answering the prompt waiting for them — and `stalled` is
+  watcher-owned, so the `waiting` did not come back. The guard that defends a
+  hook-set `waiting` was an allow list of three statuses, written before `stalled`
+  existed; it is now a deny list of the two the watcher establishes positively
+  (`error`, `ended`), so a status added later is held by default
+  ([session-status](docs/design/session-status.md) § 3, #508).
 - The README's animation shows the Sessions tab the TUI actually renders. It still
   drew the status-count row and its rule, the old gauge spacing, and no state
   pill — a screen deleted three pull requests ago, and the first thing a visitor
