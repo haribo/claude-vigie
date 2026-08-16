@@ -193,6 +193,35 @@ standing row.
 
 ---
 
+## 5bis. The shortcuts modal, behind `h`
+
+Eleven key hints sat permanently at the bottom of the Sessions tab. They need 134
+columns; below that the trailing ones are dropped and the cut marked with an
+ellipsis (#487) — a row permanently occupied *and* incomplete. Eleven reminders
+are never needed at once.
+
+**One hint, `h  help`**, at the end of the bottom bar. `h` opens a modal listing
+every shortcut of the active tab on two columns; `h` or `esc` closes it. Like the
+detail panel it replaces the body rather than pushing it, so the vertical budget
+never depends on it, and it captures keys while open.
+
+**`h` is the help key on every tab.** It was already bound in Settings as a vim
+alias for left/decrement, alongside `l`. Those two aliases are dropped: they were
+advertised nowhere — the Settings hints have always read `space/←→ change` — and
+one help key everywhere is worth more than an alias nobody was told about. `j`
+and `k` keep their row movement, and the arrows keep everything.
+
+**The `a` binding is removed.** It is not a view shortcut: it flips `hideEnded`
+and saves, so a bare unmodified letter silently rewrites `tui.toml`, with no
+confirmation and no undo, while the same setting sits one tab away under a
+readable label with its value on screen. The counter-argument would hold for a
+filter flipped ten times an hour; hiding ended sessions is set once.
+
+Tabs other than Sessions have no bottom bar; they keep a single-hint row so the
+help key is discoverable there too.
+
+---
+
 ## 6. The pulse
 
 **A degraded pill breathes — amber and red both. Green never animates.** A gentle
