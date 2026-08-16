@@ -83,3 +83,49 @@ func TestTheNotificationPathSeesCleanText(t *testing.T) {
 		t.Error("the stored session still carries an escape")
 	}
 }
+
+// #540. The twelve fields above were cleaned and `ID` was not, so the invariant
+// stated in sanitize.go — "the model never holds a string that can act on a
+// terminal" — was false for the one field nobody thought of.
+//
+// The id is attacker-chosen in the same sense every other field is: it arrives in
+// a report body and the server checks only that it is non-empty
+// (internal/server/report.go), unlike `event` and `status`, which are matched
+// against closed vocabularies (#515). It reaches the screen by three paths — the
+// detail panel prints it in full, `sessionName` falls back to it whenever a
+// session has no title yet, and the desktop notification is fed the same name.
+//
+// The fixtures above all use `ID: "a"`, which is exactly why this went unseen.
+const evilID = "sess\x1b]52;c;cGF5bG9hZA==\x07\x1b[2Jid"
+
+func TestAControlSequenceInTheSessionIdNeverReachesTheScreen(t *testing.T) {
+	m := stubModel()
+	m.width, m.height = 200, 40
+	// No Title: the id is what the row is named, which is the ordinary case for a
+	// session that has not been titled yet.
+	m = m.applySessions(sessionsMsg{gen: 1, sessions: []api.SessionView{
+		{ID: evilID, Machine: "m", Status: "working"},
+	}})
+
+	if got := m.sessions[0].ID; strings.ContainsAny(got, "\x1b\r") {
+		t.Errorf("the stored session id still carries a control character: %q", got)
+	}
+	for _, view := range []string{m.View(), renderDetail(m.sessions[0])} {
+		if strings.ContainsAny(view, "\x1b\r") {
+			t.Errorf("a control character reached the screen:\n%q", view)
+		}
+	}
+}
+
+// Cleaning must not rename the session: the id is a key, and replacing a
+// character is not the same as dropping it. Length in runes is preserved, so the
+// eight-rune row name still cuts where it always did.
+func TestTheSessionIdKeepsItsReadableTextAndLength(t *testing.T) {
+	got := sanitizeText(evilID)
+	if !strings.HasPrefix(got, "sess") || !strings.HasSuffix(got, "id") {
+		t.Errorf("id = %q — the readable text was lost with the escape", got)
+	}
+	if len([]rune(got)) != len([]rune(evilID)) {
+		t.Errorf("id length changed: %d runes, want %d", len([]rune(got)), len([]rune(evilID)))
+	}
+}

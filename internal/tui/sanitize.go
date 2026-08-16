@@ -59,6 +59,12 @@ func isControl(r rune) bool {
 func sanitizeSessions(sessions []api.SessionView) []api.SessionView {
 	out := make([]api.SessionView, len(sessions))
 	for i, s := range sessions {
+		// The id is not exempt for being an identifier: the server takes it from the
+		// report body and checks only that it is non-empty, and the TUI renders it —
+		// in full in the detail panel, and as the row's name whenever a session has
+		// no title yet. It was the one field left out of the twelve below, which is
+		// what made the invariant above false (#540).
+		s.ID = sanitizeText(s.ID)
 		s.Title = sanitizeText(s.Title)
 		s.User = sanitizeText(s.User)
 		s.Machine = sanitizeText(s.Machine)
