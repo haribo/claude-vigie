@@ -10,7 +10,7 @@ import { readFile } from "node:fs/promises";
 import {
   esc, dash, trim, hasCall, detailText, humanTokens, relAge, relResetHint,
   shortModel, projectName, totalTokens, sparkSVG, migrateKeys, fullColOrder, colHidden, rank,
-  adoptLegacyKey,
+  adoptLegacyKey, ATTENTION, needsAttention, attentionCount, streamIsSilent, SILENCE_MS,
 } from "../../internal/web/static/lib.js";
 
 // esc is the dashboard's only defence against DOM-based XSS: session titles,
@@ -237,4 +237,67 @@ test("an empty stored value is carried over, not dropped", () => {
   const s = fakeStorage({ cf_token: "" });
   assert.equal(adoptLegacyKey(s, "cf_token", "vigie_token"), "");
   assert.deepEqual(s.keys(), ["vigie_token"]);
+});
+
+// #538. Three clients decide when to interrupt the operator, and the dashboard
+// was the one that decided on its own: row highlighting was
+// `call || waiting || stalled`, so an `error` session carried no mark, and the
+// tab badge counted `waiting` alone. #466 had already settled this for the GNOME
+// indicator — one list, consulted rather than reimplemented — and left the
+// dashboard out. `TestDashboardSharesTheAttentionSet` pins the list to
+// internal/status.Attention; these pin what the dashboard does with it.
+test("needsAttention covers every attention status and a raised call", () => {
+  for (const status of ATTENTION) {
+    assert.equal(needsAttention({ status }), true, `${status} must call the operator`);
+  }
+  assert.equal(needsAttention({ status: "error" }), true,
+    "an API error is an attention status — this is the one the dashboard dropped");
+  // A call rides alongside a status rather than being one (ADR-0010).
+  assert.equal(needsAttention({ status: "working", call_at: "2026-08-16T10:00:00Z" }), true);
+  assert.equal(needsAttention({ status: "idle", call_at: "2026-08-16T10:00:00Z" }), true);
+});
+
+test("needsAttention leaves a session that needs nobody alone", () => {
+  for (const status of ["working", "thinking", "compacting", "idle", "stale", "ended"]) {
+    assert.equal(needsAttention({ status }), false, `${status} must not interrupt`);
+  }
+  assert.equal(needsAttention({ status: "waiting", call_at: "" }), true, "an empty call is not a call, the status still is");
+  assert.equal(needsAttention(null), false);
+  assert.equal(needsAttention(undefined), false);
+});
+
+test("attentionCount counts every reason to interrupt, not just waiting", () => {
+  const sessions = [
+    { id: "a", status: "waiting" },
+    { id: "b", status: "error" },
+    { id: "c", status: "stalled" },
+    { id: "d", status: "working", call_at: "2026-08-16T10:00:00Z" },
+    { id: "e", status: "working" },
+    { id: "f", status: "idle" },
+  ];
+  assert.equal(attentionCount(sessions), 4, "the badge must not count `waiting` alone");
+  assert.equal(attentionCount([]), 0);
+  assert.equal(attentionCount(null), 0);
+});
+
+// #538/#457. A silent stream is indistinguishable from a dead one. On a machine
+// that suspends, the connection dies with no FIN and no RST: the socket stays
+// open as far as the page is concerned and `read()` blocks for minutes, so the
+// reconnect path never runs. The server sends a keep-alive comment every 10 s
+// (internal/server/events.go), which makes silence measurable.
+test("streamIsSilent waits three missed beats before calling a stream dead", () => {
+  const t0 = 1_000_000;
+  assert.equal(SILENCE_MS, 30000, "three missed 10 s beats, same window the TUI uses");
+  assert.equal(streamIsSilent(t0, t0), false, "a stream heard from just now is alive");
+  assert.equal(streamIsSilent(t0, t0 + 10_000), false, "one beat late is not dead");
+  assert.equal(streamIsSilent(t0, t0 + SILENCE_MS), false, "the limit itself is not past it");
+  assert.equal(streamIsSilent(t0, t0 + SILENCE_MS + 1), true, "past the limit the stream is dead");
+});
+
+test("streamIsSilent never condemns a stream it has never heard from", () => {
+  // Nothing heard yet means the connection is still being established, not that
+  // it died — condemning it here would abort every connect before it opened.
+  assert.equal(streamIsSilent(0, 1_000_000), false);
+  assert.equal(streamIsSilent(null, 1_000_000), false);
+  assert.equal(streamIsSilent(undefined, 1_000_000), false);
 });

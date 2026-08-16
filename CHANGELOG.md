@@ -87,6 +87,25 @@ file is the single source of truth, not a second narrative.
 
 ### Fixed
 
+- The web dashboard keeps observing once its event stream is live. It stopped
+  asking for the session list the moment the stream connected, and `ended` and
+  `stale` are not stored values — the daemon derives them from the clock every
+  time the list is read, so that transition changes no field, publishes no event,
+  and reached a client that only listened never. A machine whose watcher had died
+  stayed `working` on screen for as long as the tab was left open, under a green
+  `live` chip, while the TUI settled within five seconds; relative ages froze with
+  it. The dashboard now refreshes on the same five-second tick the TUI has always
+  used for exactly this reason, and carries the silence watchdog the TUI gained in
+  #457: a suspended machine's connection dies without a FIN or an RST, so the read
+  blocks for minutes and the reconnect path is unreachable without one. Asking
+  often is not redrawing often — an unchanged fleet is left alone, so the scroll
+  position, the selection and the keyboard focus survive the tick (#538).
+- The web dashboard marks every session that calls for the operator. It decided
+  for itself which ones those were and dropped `error`, so a session stuck on a
+  529 was drawn like any working one, and the tab badge — the one number visible
+  from another tab — counted `waiting` alone. The set is now the shared one, read
+  from `internal/status` like the TUI's and the indicator's, with the Go guard
+  that already existed for GNOME and had no twin for the dashboard (#466, #538).
 - The last specifications that described a deleted screen are corrected, and the
   architecture map lists the GNOME indicator, which had never appeared in it
   despite being a shipped client with its own schema and release path. The two

@@ -119,3 +119,53 @@ export function rank(status) {
   const i = RANK_ORDER.indexOf(status);
   return i < 0 ? RANK_ORDER.length : i;
 }
+
+// The statuses that call for the operator: the session is blocked and needs a
+// human. Kept identical to internal/status.Attention — a Go test reads this
+// literal and fails on drift, because a dashboard that disagrees with the TUI
+// about when to interrupt you is worse than one that never tries (#466).
+//
+// The dashboard used to decide for itself, and dropped `error`: a session stuck
+// on a 529 was drawn like any working one (#538).
+export const ATTENTION = ["waiting", "error", "stalled"];
+
+// needsAttention covers both reasons to interrupt: a status that means the
+// session is blocked, and a call the session raised for itself (ADR-0010). The
+// call is not a status — it rides alongside one — so anything deciding whether to
+// interrupt has to look at both.
+export function needsAttention(session) {
+  if (!session) return false;
+  return hasCall(session) || ATTENTION.includes(session.status);
+}
+
+export function attentionCount(sessions) {
+  return (sessions || []).filter(needsAttention).length;
+}
+
+// REFRESH_MS is how often the dashboard asks for the session list, stream or no
+// stream. It matches the TUI's poll (internal/tui/model.go) and exists for the
+// same reason: `ended` and `stale` are not stored, they are derived from the
+// clock every time the list is read (internal/server/sessions.go). That
+// transition changes no field, so it publishes no event, so it reaches a client
+// that only listens — never. Relative ages are refreshed by the same tick.
+export const REFRESH_MS = 5000;
+
+// SILENCE_MS is how long the dashboard waits to hear anything at all before it
+// treats the stream as dead — three missed 10 s keep-alives, the same window the
+// TUI applies (internal/tui/sse.go).
+//
+// It exists because a suspended machine's connection dies without a FIN or an
+// RST: the socket stays open as far as the page is concerned, and `read()` blocks
+// until the OS gives up on its keepalive probes — minutes. The reconnect path is
+// correct and simply never runs, because the loop it guards has not returned
+// (#457).
+export const SILENCE_MS = 30000;
+
+// streamIsSilent reports whether nothing has been heard since lastHeardAt.
+// A stream nothing has ever been heard from is *not* silent: that is a connection
+// still being established, and condemning it would abort every connect attempt
+// before it opened.
+export function streamIsSilent(lastHeardAt, now, limitMs = SILENCE_MS) {
+  if (!lastHeardAt) return false;
+  return now - lastHeardAt > limitMs;
+}

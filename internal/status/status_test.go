@@ -232,3 +232,15 @@ func TestAttentionIsASubsetOfAll(t *testing.T) {
 func TestGnomeExtensionSharesTheAttentionSet(t *testing.T) {
 	diff(t, gnomeLib+" ATTENTION", jsArray(t, gnomeLib, "ATTENTION"), Attention)
 }
+
+// TestDashboardSharesTheAttentionSet is the twin of the GNOME guard, and it did
+// not exist. #466 gave the indicator the shared list and left the dashboard
+// deciding for itself: it highlighted a call, `waiting` and `stalled`, so an
+// `error` session — a status this very file calls one that blocks the operator —
+// carried no mark at all, and the tab badge counted `waiting` alone (#538).
+//
+// Two consumers agreeing and a third inventing its own answer is the same defect
+// #421 and #422 were, one consumer later.
+func TestDashboardSharesTheAttentionSet(t *testing.T) {
+	diff(t, dashboardLib+" ATTENTION", jsArray(t, dashboardLib, "ATTENTION"), Attention)
+}
