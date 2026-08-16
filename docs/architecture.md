@@ -49,6 +49,7 @@ A fleet is *N* client machines all reporting to one daemon.
 | Watcher | `vigie` | `watch` | Background service: refreshes its own hooks at startup ([ADR-0009](adr/0009-watcher-managed-hooks.md)), scans local transcripts, derives status from process presence + activity, reports every session (covering ones the hooks miss), and holds the usage lease to fetch subscription usage |
 | Terminal client | `vigie` | `tui` | Live dashboard in the terminal (Bubble Tea) |
 | Web dashboard | `vigied` | `serve` | Read-only browser mirror of the TUI, served at `GET /` (static assets embedded via `go:embed`) |
+| GNOME indicator | — | — | Top-bar indicator for GNOME Shell (`gnome-extension/`): polls `GET /api/sessions` and shows how many sessions are calling for the operator, with a desktop notification on each new one. Ships and versions separately from the binaries |
 
 The **web dashboard** is the second client, served by the daemon itself (no build
 step, no framework — plain HTML/CSS/JS as `go:embed` static files, consistent with
@@ -56,6 +57,17 @@ the single-binary ethos of [ADR-0002](adr/0002-single-go-binary-with-sqlite.md))
 daemon's URL in a browser and paste the shared token; it is kept in the browser and
 sent as a bearer token on same-origin API calls. Read-only, like every client
 (observe-only, [ADR-0005](adr/0005-observe-only.md)).
+
+The **GNOME indicator** is the third, and the only one that is not a Go binary:
+an ESM extension for GNOME Shell, in `gnome-extension/`, with its own README,
+GSettings schema and release path. It polls the same `GET /api/sessions` with the
+same shared token and shows how many sessions are calling for the operator, so a
+machine that is not the one running the TUI still surfaces a call. Read-only like
+the others.
+
+It is deliberately not a mirror of the TUI's screen — no state pill, no modals,
+no column picker. It answers one question from the top bar, and the two clients
+that show the whole fleet are the TUI and the web dashboard.
 
 ## Unit of tracking
 

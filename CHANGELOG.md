@@ -87,6 +87,15 @@ file is the single source of truth, not a second narrative.
 
 ### Fixed
 
+- The last specifications that described a deleted screen are corrected, and the
+  architecture map lists the GNOME indicator, which had never appeared in it
+  despite being a shipped client with its own schema and release path. The two
+  paragraphs that survived the earlier pass had both been missed the same way:
+  their heading was updated and the prose beneath it was not — one still described
+  the summary strip's status counts as the bottom bar's left half, the other a
+  footer whose eleven hints are now a single `h help`. The GNOME preferences
+  window also still promised notifications for "waiting" alone, where the schema
+  beside it had already been corrected (#531).
 - The terminal dashboard no longer relays control sequences to the terminal. A
   terminal does not merely display what it is sent: some sequences are commands to
   it — clear the screen, move the cursor, set the window title, write the

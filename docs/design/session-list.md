@@ -36,16 +36,20 @@ at all, and where they sit, is specified in
 [sessions-chrome.md](sessions-chrome.md) — the summary strip this section used to
 describe was deleted in #492.
 
-**One width budget, right side first.** The bottom bar has two halves — status counts
-and totals on the left, the view state (`sort`, `group`, `hidden`, the
-server-connection glyph) on the right. On a narrow terminal the right half is
-measured first and its space reserved; the left half then fits into what remains.
+**One width budget, right side first.** The bottom bar has two halves — the
+subscription gauges on the left, the view state (`sort`, `group`, `hidden`) and
+the `h help` hint on the right. On a narrow terminal the right half is measured
+first and its space reserved; the gauges then fit into what remains.
+
 The right half is the smaller and the more load-bearing: it carries the two
-promises above, and the glyph is the only permanent sign the client is still
-reaching the server. What gives way is the left half's decoration — `activity`,
-then `rc`, then `out`, then whole status counts from the least urgent end, with
-an ellipsis saying the list was cut. Counts are never sliced mid-value: a wrong
-figure shown as a right one is worse than an absent one (#486).
+promises above, and `hidden N` is the only thing on screen saying the list is
+filtered. The gauges are figures the Stats tab holds in full, so they are what
+gives way.
+
+This paragraph described the deleted summary strip until #531 — its counts,
+`activity`, `rc` and `out`, none of which the bottom bar has ever carried. The
+rule it states is #486's and still holds; only the bar it was about changed
+(#492).
 
 ---
 
