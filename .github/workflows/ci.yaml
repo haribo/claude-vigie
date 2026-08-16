@@ -105,8 +105,10 @@ jobs:
         with:
           node-version: "22"
 
+      # A glob, not a hand-kept list: a new test file that nobody remembers to add
+      # to both this job and `just code-test-js` is a test that never runs (#538).
       - name: JavaScript tests
-        run: node --test test/js/dashboard.test.mjs test/js/gnome.test.mjs test/js/boot.test.mjs
+        run: node --test test/js/*.test.mjs
 
       - name: Build
         run: go build ./...
