@@ -8,7 +8,7 @@
 import {
   esc, dash, trim, hasCall, detailText, humanTokens, ageSec, relAge, relResetHint,
   shortModel, projectName, totalTokens, sparkSVG, migrateKeys, fullColOrder, colHidden, rank,
-  adoptLegacyKey,
+  adoptLegacyKey, needsAttention, attentionCount, streamIsSilent, REFRESH_MS,
 } from "./lib.js";
 
 // Both keys were named for the old brand. They hold live state — a signed-in
@@ -25,9 +25,37 @@ let usage = null, platform = null, stats = null, settings = null, ver = null, wa
 let activeTab = "sessions", detailId = null, showEnded = false;
 let sortKey = "seen", sortDir = 1;           // 1 = descending
 let statsPeriod = "Week", statsLoaded = false, settingsLoaded = false;
-let liveCtrl = null, liveRetry = null, pollTimer = null, metaTimer = null;
+let liveCtrl = null, liveRetry = null, tickTimer = null, metaTimer = null;
+// When the stream last delivered any bytes, keep-alive comments included. It is
+// what the silence watchdog measures; 0 means nothing has been heard yet.
+let lastHeardAt = 0;
 
 const $ = (id) => document.getElementById(id);
+
+// paint writes html into an element only when it differs from what is already
+// there, and keeps the scroll position when it does write.
+//
+// The refresh tick redraws every 5 s whether or not anything changed (#538).
+// Rewriting innerHTML unconditionally throws away everything the DOM was holding:
+// the operator's text selection, keyboard focus on a row, and — because
+// #tab-sessions contains the scroll container — the scroll position, which would
+// send a long fleet list back to the top twelve times a minute. Identical HTML
+// means nothing on screen would differ, so the cheapest correct redraw is none.
+const painted = new Map();
+function paint(id, html) {
+  if (painted.get(id) === html) return false;
+  painted.set(id, html);
+  const el = $(id);
+  // Read before the write: replacing innerHTML destroys the old scroll container.
+  const scroller = el.querySelector(".table-scroll");
+  const top = scroller ? scroller.scrollTop : 0;
+  el.innerHTML = html;
+  if (top) {
+    const fresh = el.querySelector(".table-scroll");
+    if (fresh) fresh.scrollTop = top;
+  }
+  return true;
+}
 // ---------- API ----------
 function authHeaders() { return { "Authorization": "Bearer " + token }; }
 async function api(path) {
@@ -40,11 +68,14 @@ async function api(path) {
 // ---------- tabs ----------
 const TABS = [{ id: "sessions", label: "Sessions" }, { id: "stats", label: "Stats" }, { id: "machines", label: "Machines" }, { id: "settings", label: "Settings" }];
 function renderTabs() {
-  const waiting = sessions.filter((s) => s.status === "waiting").length;
-  $("tabbar").innerHTML = TABS.map((t) => {
-    const badge = (t.id === "sessions" && waiting) ? `<span class="badge">${waiting}</span>` : "";
+  // Every reason to interrupt, not just `waiting`: the badge is the one number an
+  // operator on another tab sees, and it counted a third of them (#538).
+  const attention = attentionCount(sessions);
+  const html = TABS.map((t) => {
+    const badge = (t.id === "sessions" && attention) ? `<span class="badge">${attention}</span>` : "";
     return `<button class="tab ${t.id === activeTab ? "active" : ""}" data-tab="${t.id}">${t.label}${badge}</button>`;
   }).join("");
+  if (!paint("tabbar", html)) return; // the tick calls this every 5 s; listeners survive
   $("tabbar").querySelectorAll(".tab").forEach((b) => b.addEventListener("click", () => switchTab(b.dataset.tab)));
 }
 function switchTab(id) {
@@ -176,14 +207,17 @@ function renderSessions() {
     const st = STATUSES.includes(s.status) ? s.status : "idle";
     // A call reuses the attention mechanism — the left border in --st — and adds
     // a faint tint of the same colour. No new colour anywhere (ADR-0010).
-    const attn = (hasCall(s) || s.status === "waiting" || s.status === "stalled") ? " attn" : "";
+    // The set is consulted, never restated: it is shared with the TUI and the
+    // GNOME indicator, and restating it here is how `error` went unmarked (#538).
+    const attn = needsAttention(s) ? " attn" : "";
     const call = hasCall(s) ? " call" : "";
     const cells = cols.map((c) => c.cell(s)).join("");
     return `<tr class="st-${st}${attn}${call}" data-id="${esc(s.id)}" tabindex="0">${cells}</tr>`;
   }).join("");
   const empty = visibleSessions().length ? "" : '<div class="empty">No sessions in view.</div>';
-  $("tab-sessions").innerHTML = renderSummary() +
+  const html = renderSummary() +
     `<div class="table-wrap"><div class="table-scroll"><table><thead><tr>${heads}</tr></thead><tbody>${rows}</tbody></table></div>${empty}</div>`;
+  if (!paint("tab-sessions", html)) return; // nothing on screen would change; listeners are still bound
   $("hidden-toggle").addEventListener("click", () => { showEnded = !showEnded; renderSessions(); });
   $("tab-sessions").querySelectorAll("th[data-sort]").forEach((th) => th.addEventListener("click", () => {
     const k = th.dataset.sort; if (k === sortKey) sortDir = -sortDir; else { sortKey = k; sortDir = 1; } renderSessions();
@@ -389,31 +423,57 @@ async function connectLive() {
   clearTimeout(liveRetry);
   if (liveCtrl) liveCtrl.abort();
   const ctrl = new AbortController(); liveCtrl = ctrl;
+  lastHeardAt = Date.now(); // the silence window starts at the attempt, not at the first byte
   try {
     const res = await fetch("/api/events", { headers: authHeaders(), signal: ctrl.signal });
     if (res.status === 401) { onUnauthorized(); return; }
     if (!res.ok || !res.body) throw new Error("events " + res.status);
-    setConn(true); stopPolling();
+    setConn(true);
     const reader = res.body.getReader(), dec = new TextDecoder(); let buf = "";
     for (;;) {
       const { value, done } = await reader.read(); if (done) break;
+      lastHeardAt = Date.now(); // any bytes, the keep-alive comment included, prove it is alive
       buf += dec.decode(value, { stream: true });
       let idx;
       while ((idx = buf.indexOf("\n\n")) >= 0) { const frame = buf.slice(0, idx); buf = buf.slice(idx + 2); if (frame.includes("event: sessions")) loadSessions().catch(() => {}); }
     }
     throw new Error("stream ended");
   } catch (e) {
-    if (ctrl.signal.aborted) return;
-    setConn(false); startPolling(); liveRetry = setTimeout(connectLive, 5000);
+    if (ctrl.signal.aborted) return; // superseded by a newer connect, which owns the state now
+    liveCtrl = null;                 // nothing left to watch; the retry below owns reconnection
+    setConn(false); liveRetry = setTimeout(connectLive, 5000);
   }
 }
-function startPolling() { if (!pollTimer) pollTimer = setInterval(() => loadSessions().catch(() => {}), 5000); }
-function stopPolling() { clearInterval(pollTimer); pollTimer = null; }
+
+// tick is the periodic refresh, and it runs whether or not the stream is live.
+//
+// It used to be a fallback that the stream switched off, which looked reasonable
+// and was not: `ended` and `stale` are never stored, the server derives them from
+// the clock each time the list is read (internal/server/sessions.go). That
+// transition changes no field, so the delta-gated fan-out has nothing to publish
+// (#258), so a client that only listens never learns of it. A machine whose
+// watcher had died stayed `working` on screen for as long as the tab was open,
+// under a green `live` chip — and the relative ages froze with it (#538).
+//
+// The TUI has always polled for exactly this reason, and says so
+// (internal/tui/model.go). One open tab now costs the server the same as one TUI.
+function tick() {
+  // A silent stream is indistinguishable from a dead one, and a suspended
+  // machine's socket never errors: `read()` above simply blocks for minutes, so
+  // the reconnect path is unreachable without a watchdog out here (#457).
+  if (liveCtrl && streamIsSilent(lastHeardAt, Date.now())) {
+    setConn(false);
+    connectLive(); // aborts the silent stream on its way in
+  }
+  loadSessions().catch(() => {});
+}
+function startTicker() { clearInterval(tickTimer); tickTimer = setInterval(tick, REFRESH_MS); }
+function stopTicker() { clearInterval(tickTimer); tickTimer = null; }
 function setConn(live) { const el = $("conn"); el.className = "chip conn " + (live ? "live" : "down"); el.querySelector(".txt").textContent = live ? "live" : "reconnecting…"; }
 
 // ---------- auth / gate ----------
 function onUnauthorized() { teardown(); localStorage.removeItem(TOKEN_KEY); token = ""; showGate(true); }
-function teardown() { if (liveCtrl) liveCtrl.abort(); liveCtrl = null; clearTimeout(liveRetry); stopPolling(); clearInterval(metaTimer); metaTimer = null; }
+function teardown() { if (liveCtrl) liveCtrl.abort(); liveCtrl = null; clearTimeout(liveRetry); stopTicker(); clearInterval(metaTimer); metaTimer = null; }
 function showGate(err) { $("gate").hidden = false; $("gate-err").hidden = !err; $("signout").hidden = true; $("botbar").hidden = true; $("ver").hidden = true; setConn(false); $("token-input").focus(); }
 function hideGate() { $("gate").hidden = true; $("signout").hidden = false; }
 function signOut() { teardown(); localStorage.removeItem(TOKEN_KEY); token = ""; showGate(false); }
@@ -425,6 +485,7 @@ async function start() {
   await loadSessions();
   loadMeta();
   metaTimer = setInterval(loadMeta, 60000);
+  startTicker();
   connectLive();
 }
 

@@ -178,7 +178,9 @@ code-test-cover:
 [group("code")]
 [doc("Run the JavaScript tests (dashboard + GNOME indicator)")]
 code-test-js:
-    node --test test/js/dashboard.test.mjs test/js/gnome.test.mjs test/js/boot.test.mjs
+    # A glob, not a hand-kept list: a new test file that nobody remembers to add
+    # to both this recipe and the CI job is a test that never runs (#538).
+    node --test test/js/*.test.mjs
 
 # Run tests with race detector
 [group("code")]

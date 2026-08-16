@@ -1,0 +1,249 @@
+// #538. What the dashboard does over time, tested against the shipped app.js.
+//
+// `boot.test.mjs` states — correctly — that behaviour asserted against its stub
+// would be asserted against a fiction: that stub answers every property access
+// with a permissive object, so a render assertion there proves nothing. This file
+// is not that. It fakes only the I/O boundary — the clock, the timers, `fetch`
+// and the stream body — and asserts what app.js *does* with them: which requests
+// it makes, and when. Those are not fictions; they are the whole defect.
+//
+// The defect: `ended` and `stale` are derived from the clock at read time
+// (internal/server/sessions.go), so the transition changes no stored field and
+// publishes no SSE event. A client that only refetches on an event never sees it.
+// The dashboard stopped polling the moment the stream connected, so a machine
+// whose watcher had died stayed `working` on screen for as long as the tab was
+// left open, under a green `live` chip.
+
+import assert from "node:assert/strict";
+import { test } from "node:test";
+
+const APP = new URL("../../internal/web/static/app.js", import.meta.url);
+
+// A fresh module instance per test: app.js holds its state at module scope, and
+// the ESM cache would otherwise hand every test the previous one's timers.
+let instance = 0;
+
+// flush lets app.js's pending microtasks (the awaited fetches) settle. Several
+// turns, because `start()` awaits a chain of them.
+const flush = async (n = 8) => { for (let i = 0; i < n; i++) await new Promise((r) => setImmediate(r)); };
+
+// harness replaces the browser surface app.js touches. Timers are recorded
+// rather than scheduled, so a test fires them when it means to and no test waits
+// on a real clock.
+function harness({ token = "t0k3n", sessions = [] } = {}) {
+  const h = {
+    now: 1_000_000,
+    fetches: [],          // every path app.js requested, in order
+    intervals: [],        // {fn, ms}
+    timeouts: [],         // {fn, ms}
+    aborts: 0,
+    stream: null,         // the reader handed to app.js for /api/events
+    sessions,             // what GET /api/sessions answers; a test may replace it
+  };
+
+  // A permissive DOM stand-in, as in boot.test.mjs — with one addition: an
+  // `innerHTML` write is recorded, per element id. That is not a fiction the way
+  // a rendered-output assertion would be; it is simply "did app.js redraw".
+  h.writes = [];
+  const elements = new Map();
+  const element = (id) => {
+    const node = new Proxy(function () {}, {
+      get: (_t, k) =>
+        k === "classList" || k === "style" || k === "dataset" ? node
+          : k === "hidden" || k === "value" || k === "innerHTML" || k === "textContent" ? ""
+            : k === "children" || k === "options" ? []
+              : k === Symbol.toPrimitive || k === "toString" ? () => ""
+                : node,
+      set: (_t, k, v) => { if (k === "innerHTML") h.writes.push({ id, html: v }); return true; },
+      apply: () => node,
+      has: () => true,
+    });
+    return node;
+  };
+  const byId = (id) => { if (!elements.has(id)) elements.set(id, element(id)); return elements.get(id); };
+  globalThis.document = {
+    getElementById: byId, querySelectorAll: () => [], createElement: () => byId("<new>"),
+    addEventListener: () => {}, documentElement: byId("<root>"), body: byId("<body>"),
+  };
+  globalThis.window = globalThis;
+  globalThis.localStorage = { getItem: (k) => (k === "vigie_token" ? token : null), setItem() {}, removeItem() {} };
+  globalThis.matchMedia = () => ({ matches: false, addEventListener() {} });
+
+  globalThis.Date.now = () => h.now;
+  globalThis.setInterval = (fn, ms) => { h.intervals.push({ fn, ms }); return h.intervals.length; };
+  globalThis.clearInterval = () => {};
+  globalThis.setTimeout = (fn, ms) => { h.timeouts.push({ fn, ms }); return h.timeouts.length; };
+  globalThis.clearTimeout = () => {};
+
+  globalThis.AbortController = class {
+    constructor() { this.signal = { aborted: false }; }
+    abort() { this.signal.aborted = true; h.aborts++; if (h.stream) h.stream.fail(); }
+  };
+
+  // A stream the test drives: `push` delivers bytes, `fail` unblocks a pending
+  // read the way an abort does.
+  function makeStream() {
+    const chunks = [];
+    let waiting = null, failed = false;
+    const s = {
+      push(text) {
+        const v = new TextEncoder().encode(text);
+        if (waiting) { const w = waiting; waiting = null; w.resolve({ value: v, done: false }); }
+        else chunks.push(v);
+      },
+      fail() { failed = true; if (waiting) { const w = waiting; waiting = null; w.reject(new Error("aborted")); } },
+      reader: {
+        read() {
+          if (chunks.length) return Promise.resolve({ value: chunks.shift(), done: false });
+          if (failed) return Promise.reject(new Error("aborted"));
+          return new Promise((resolve, reject) => { waiting = { resolve, reject }; });
+        },
+      },
+    };
+    return s;
+  }
+
+  globalThis.fetch = async (path) => {
+    h.fetches.push(path);
+    if (path === "/api/events") {
+      h.stream = makeStream();
+      return { ok: true, status: 200, body: { getReader: () => h.stream.reader } };
+    }
+    return { ok: true, status: 200, json: async () => (path === "/api/sessions" ? h.sessions : {}) };
+  };
+
+  h.boot = async () => { await import(`${APP}?i=${++instance}`); await flush(); };
+  h.count = (path) => h.fetches.filter((p) => p === path).length;
+  h.ticker = () => {
+    // The periodic refresh: app.js's only 5 s interval. `metaTimer` is 60 s.
+    const t = h.intervals.find((i) => i.ms === 5000);
+    assert.ok(t, `no 5 s refresh interval was registered — intervals: ${JSON.stringify(h.intervals.map((i) => i.ms))}`);
+    return t;
+  };
+  h.tick = async () => { h.ticker().fn(); await flush(); };
+  return h;
+}
+
+test("the dashboard keeps asking for sessions while the stream is live", async () => {
+  const h = harness();
+  await h.boot();
+
+  assert.equal(h.count("/api/events"), 1, "the stream must be opened at start");
+  const afterBoot = h.count("/api/sessions");
+  assert.ok(afterBoot >= 1, "the session list must be loaded at start");
+
+  // The stream is healthy and says nothing, which is the normal case for a quiet
+  // fleet. `ended` and `stale` still arrive on time only if the client asks.
+  await h.tick();
+  assert.equal(h.count("/api/sessions"), afterBoot + 1,
+    "a live stream is not a reason to stop asking: the stale→ended cutoff is evaluated server-side at read time and publishes no event (#538)");
+
+  await h.tick();
+  assert.equal(h.count("/api/sessions"), afterBoot + 2, "the refresh must be periodic, not once");
+});
+
+test("a keep-alive proves the stream is alive without refetching anything", async () => {
+  const h = harness();
+  await h.boot();
+  const before = h.count("/api/sessions");
+
+  // The server's idle heartbeat is a comment frame (internal/server/events.go).
+  h.stream.push(": keep-alive\n\n");
+  await flush();
+  assert.equal(h.count("/api/sessions"), before,
+    "a keep-alive carries no news — refetching on it would undo the delta gate of #258");
+
+  // But it is bytes, so the watchdog must count it as life: 29 s later, still short
+  // of the limit measured from the beat, nothing is torn down.
+  h.now += 29_000;
+  await h.tick();
+  assert.equal(h.aborts, 0, "a stream that beat 29 s ago is alive");
+  assert.equal(h.count("/api/events"), 1, "it must not be reconnected");
+});
+
+test("a sessions event refetches immediately, without waiting for the tick", async () => {
+  const h = harness();
+  await h.boot();
+  const before = h.count("/api/sessions");
+
+  h.stream.push("event: sessions\ndata: {}\n\n");
+  await flush();
+  assert.equal(h.count("/api/sessions"), before + 1, "an event is the whole point of the stream");
+});
+
+test("a stream that goes silent is torn down and reopened", async () => {
+  const h = harness();
+  await h.boot();
+  assert.equal(h.count("/api/events"), 1);
+
+  // A suspended machine: the socket never errors, `read()` simply never returns.
+  // Without a watchdog the reconnect path below is unreachable — the function
+  // guarding it has not returned (#457).
+  h.now += 31_000;
+  await h.tick();
+
+  assert.equal(h.aborts, 1, "a stream silent past the limit must be aborted, not waited on");
+  assert.equal(h.count("/api/events"), 2, "and reopened");
+});
+
+test("a silent stream is not condemned before the limit", async () => {
+  const h = harness();
+  await h.boot();
+
+  h.now += 20_000;
+  await h.tick();
+  assert.equal(h.aborts, 0, "20 s of quiet is two missed beats, not a death");
+  assert.equal(h.count("/api/events"), 1);
+});
+
+// The tick asks every 5 s, which is the fix — but redrawing every 5 s is not.
+// #tab-sessions contains the scroll container, so an unconditional innerHTML
+// write sends a long fleet list back to the top twelve times a minute, and takes
+// the operator's text selection and keyboard focus with it. Asking often and
+// redrawing rarely are different things.
+const FLEET = [
+  { id: "a", machine: "m1", status: "working", last_seen_at: "2026-08-16T09:59:00Z", usage: {} },
+  { id: "b", machine: "m1", status: "error", api_error_status: 529, last_seen_at: "2026-08-16T09:58:00Z", usage: {} },
+];
+
+test("a fleet that has not changed is not redrawn", async () => {
+  const h = harness({ sessions: FLEET });
+  await h.boot();
+  const drawn = () => h.writes.filter((w) => w.id === "tab-sessions").length;
+  assert.ok(drawn() >= 1, "the table must be drawn at start");
+
+  const before = drawn();
+  await h.tick();
+  await h.tick();
+  assert.equal(drawn(), before,
+    "identical data must not rewrite #tab-sessions — that is the scroll container, the selection and the focus");
+});
+
+test("a fleet that changed is redrawn", async () => {
+  const h = harness({ sessions: FLEET });
+  await h.boot();
+  const drawn = () => h.writes.filter((w) => w.id === "tab-sessions").length;
+  const before = drawn();
+
+  h.sessions = [{ ...FLEET[0], status: "waiting" }, FLEET[1]];
+  await h.tick();
+  assert.equal(drawn(), before + 1, "a status change must reach the screen");
+  assert.match(h.writes.at(-1).html, /st-waiting/, "and it must be the new status that is drawn");
+});
+
+// The guard must not swallow the very transition #538 is about: the row is
+// `working` in the payload until the server's read-time cutoff turns it `ended`,
+// and that answer arrives only because the tick asked again.
+test("the read-time transition to ended reaches the screen", async () => {
+  const h = harness({ sessions: FLEET });
+  await h.boot();
+  const drawn = () => h.writes.filter((w) => w.id === "tab-sessions").length;
+  const before = drawn();
+
+  // What the server starts answering once the reports stop (internal/server/sessions.go).
+  h.sessions = FLEET.map((s) => ({ ...s, status: "ended" }));
+  await h.tick();
+  assert.equal(drawn(), before + 1);
+  assert.match(h.writes.at(-1).html, /st-ended/,
+    "a dead watcher must stop reading as `working` — no event announces this, only the tick finds it");
+});
