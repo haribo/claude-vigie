@@ -55,7 +55,7 @@ Usage:
   vigie <command> [flags]
 
 Commands:
-  init       Install hooks and write the client config
+  init       Write the client config (the watcher installs the hooks)
   hooks      Install/remove reporting hooks for one leg (VIGIE_CONFIG-selected)
   report     Report a session event (invoked by Claude Code hooks)
   call       Raise a call for the operator from the current session
