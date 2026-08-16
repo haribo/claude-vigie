@@ -12,6 +12,7 @@ import {
   shortModel, projectName, totalTokens, sparkSVG, migrateKeys, fullColOrder, colHidden, rank,
   adoptLegacyKey, ATTENTION, needsAttention, attentionCount, streamIsSilent, SILENCE_MS,
   fuzzyMatch, sessionHaystack, sessionName, shortId, matchesFilter,
+  GROUP_MODES, groupKeyOf, groupSessions,
 } from "../../internal/web/static/lib.js";
 
 // esc is the dashboard's only defence against DOM-based XSS: session titles,
@@ -352,4 +353,51 @@ test("an empty filter selects everything", () => {
   assert.equal(matchesFilter(s, ""), true);
   assert.equal(matchesFilter(s, null), true);
   assert.equal(matchesFilter(s, undefined), true);
+});
+
+// #546. Grouping. The mode names are pinned against the Go enum by
+// TestDashboardSharesTheGroupModes; what is asserted here is what grouping does.
+const G = (id, machine, dir, out) => ({ id, machine, project_dir: dir, status: "idle", usage: { output_tokens: out } });
+
+test("off returns the list untouched, in one group with no key", () => {
+  const list = [G("a", "m1", "/h/x", 1), G("b", "m2", "/h/y", 2)];
+  const groups = groupSessions(list, "off");
+  assert.equal(groups.length, 1);
+  assert.equal(groups[0].key, null, "a null key is how the renderer knows to draw no header");
+  assert.deepEqual(groups[0].sessions.map((s) => s.id), ["a", "b"]);
+});
+
+test("the project key is the last path segment, so two roots meet in one group", () => {
+  assert.equal(groupKeyOf({ project_dir: "/home/nico/dev/api-gateway" }, "project"), "api-gateway");
+  assert.equal(groupKeyOf({ project_dir: "/srv/build/api-gateway" }, "project"), "api-gateway");
+  assert.equal(groupKeyOf({ machine: "minet-dev" }, "machine"), "minet-dev");
+});
+
+test("grouping keeps the operator's sort inside each group", () => {
+  // Already sorted by id descending; the re-sort by group must not disturb that.
+  const list = [G("a3", "beta", "/h/x", 0), G("a2", "alpha", "/h/x", 0), G("a1", "beta", "/h/x", 0)];
+  const groups = groupSessions(list, "machine");
+  assert.deepEqual(groups.map((g) => g.key), ["alpha", "beta"], "groups come out in key order");
+  assert.deepEqual(groups[1].sessions.map((s) => s.id), ["a3", "a1"],
+    "inside a group the incoming order survives — a single non-stable sort would lose it");
+});
+
+test("each group carries its count and its combined tokens", () => {
+  const list = [
+    { id: "a", machine: "m", status: "idle", usage: { input_tokens: 10, output_tokens: 5 } },
+    { id: "b", machine: "m", status: "idle", usage: { cache_read_tokens: 85 } },
+  ];
+  const [g] = groupSessions(list, "machine");
+  assert.equal(g.count, 2);
+  assert.equal(g.tokens, 100, "all four buckets, not output alone — the TUI's subtotal is totalTokens");
+});
+
+test("a session with no machine still groups, under the empty key", () => {
+  const groups = groupSessions([{ id: "a", status: "idle", usage: {} }], "machine");
+  assert.equal(groups.length, 1);
+  assert.equal(groups[0].key, "", "the renderer dashes it, the way the TUI's orDash does");
+});
+
+test("GROUP_MODES is the vocabulary, off first", () => {
+  assert.deepEqual(GROUP_MODES, ["off", "machine", "project"]);
 });

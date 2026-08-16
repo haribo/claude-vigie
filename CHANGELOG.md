@@ -11,6 +11,19 @@ file is the single source of truth, not a second narrative.
 
 ### Added
 
+- The web dashboard groups its table by machine or by project, as the TUI does.
+  Groups come out in key order while the operator's sort survives inside each
+  one — a stable re-sort on top of the active sort, not a single comparison that
+  would flatten it — and each group carries the two figures the terminal shows:
+  how many sessions, and their combined tokens across all four buckets rather
+  than output alone. The project key is the last path segment, so the same project
+  checked out under different roots on two machines lands in one group. Group
+  headers are rows of the same table, not a table per group: separate tables would
+  each pick their own column widths and the eye could no longer read down a
+  column. The mode is stored in the browser with the column layout and the sort,
+  and an unrecognised stored value degrades to ungrouped rather than blanking the
+  table. A Go test reads the mode names out of the shipped `lib.js`, so a
+  vocabulary renamed on one client and not the other cannot pass CI (#546).
 - The web dashboard filters its session list. The TUI has had `/` since the
   beginning; the browser — the window an operator actually leaves open all day —
   made them scroll instead. Same rule as the terminal: a case-insensitive
