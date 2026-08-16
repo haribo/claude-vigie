@@ -300,8 +300,11 @@ func TestWatcherStatusPerMachine(t *testing.T) {
 	srv := newTestServer(t)
 
 	// alpha reports through the watcher; beta has a session but reports on hooks alone.
+	// Status is what a real watch report always carries (statusFor never returns
+	// an empty string); omitting it here was a test convenience, and it is now
+	// refused (#527).
 	watch, _ := json.Marshal(api.ReportRequest{
-		Event: "watch", WatcherVersion: version.Version, WatcherCommit: version.Commit, SessionID: "a1", Machine: "alpha", ProjectDir: "/p",
+		Event: "watch", Status: "idle", WatcherVersion: version.Version, WatcherCommit: version.Commit, SessionID: "a1", Machine: "alpha", ProjectDir: "/p",
 	})
 	if rec := do(t, srv, http.MethodPost, "/api/report", watch, true); rec.Code != http.StatusNoContent {
 		t.Fatalf("alpha watch report = %d", rec.Code)

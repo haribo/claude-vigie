@@ -87,6 +87,16 @@ file is the single source of truth, not a second narrative.
 
 ### Fixed
 
+- A malformed watch report can no longer freeze a session. The server tells its
+  two informants apart by whether a report carries a status: one that does not is
+  taken for a hook and believed on its word, its state stamped as coming from a
+  reliable source — after which the watcher may never correct it. A report
+  claiming to come from the watcher with no status fell into that branch, so the
+  server invented `working` for it and locked the session there for the rest of
+  its life. The watcher's whole contribution *is* the status it inferred, so an
+  empty one says nothing; it is now refused. Hooks keep deriving theirs, which is
+  correct — a `Stop` carries no status and means idle by definition — and the real
+  watcher always sends one, so nothing legitimate is turned away (#527).
 - The daemon's database is readable by its owner alone. It holds the fleet's
   shared token, and SQLite created it with the process umask — `-rw-r--r--` on a
   default one, so every local account on the host could read the secret and, with

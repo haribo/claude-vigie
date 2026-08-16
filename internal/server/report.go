@@ -32,21 +32,6 @@ func (s *Server) handleReport(w http.ResponseWriter, r *http.Request) {
 		s.writeError(w, http.StatusBadRequest, "session_id and event are required")
 		return
 	}
-	// An unknown event used to fall through deriveStatus's default arm to
-	// `working`, *and* be stamped hook-owned — which the watcher could then no
-	// longer retract, the #201 failure mode. Both fields are now checked against
-	// the vocabularies that exist, rather than trusted because the caller holds
-	// the token (#515).
-	if !knownEvents[req.Event] {
-		metricReportsRejected.WithLabelValues("unknown_event").Inc()
-		s.writeError(w, http.StatusBadRequest, "unknown event")
-		return
-	}
-	if req.Status != "" && !status.Known(req.Status) {
-		metricReportsRejected.WithLabelValues("unknown_status").Inc()
-		s.writeError(w, http.StatusBadRequest, "unknown status")
-		return
-	}
 
 	ctx := r.Context()
 
@@ -61,6 +46,12 @@ func (s *Server) handleReport(w http.ResponseWriter, r *http.Request) {
 		s.recordWatchHeartbeat(ctx, req)
 		metricReportsRejected.WithLabelValues("version_drift").Inc()
 		s.writeError(w, http.StatusConflict, driftMessage(req))
+		return
+	}
+
+	if reason, msg := rejectReport(req); reason != "" {
+		metricReportsRejected.WithLabelValues(reason).Inc()
+		s.writeError(w, http.StatusBadRequest, msg)
 		return
 	}
 
@@ -412,6 +403,39 @@ func reconcileWatch(current, currentSource, incoming string) (status, source str
 		return current, currentSource // a confirmation doesn't transfer ownership
 	}
 	return incoming, "watch" // a positive change is the watcher's
+}
+
+// rejectReport validates a report's own fields, returning a metric reason and an
+// operator-facing message when it must be refused, or "" when it may proceed.
+//
+// It runs after the version gate on purpose: a drifted watcher is a *who*
+// question with a deliberate side effect (its heartbeat is still recorded so the
+// fleet can see which machine to upgrade), while this is a *what* question about
+// the payload.
+func rejectReport(req api.ReportRequest) (reason, message string) {
+	// An unknown event used to fall through deriveStatus's default arm to
+	// `working`, *and* be stamped hook-owned — which the watcher could then no
+	// longer retract, the #201 failure mode. Both fields are checked against the
+	// vocabularies that exist, rather than trusted because the caller holds the
+	// token (#515).
+	switch {
+	case !knownEvents[req.Event]:
+		return "unknown_event", "unknown event"
+	case req.Status != "" && !status.Known(req.Status):
+		return "unknown_status", "unknown status"
+	// The server tells its two informants apart by whether a report carries a
+	// status: one that does not is taken for a hook and believed on its word — its
+	// state is stamped `hook`, which the watcher may then never retract.
+	//
+	// A watch report's whole contribution *is* the status it inferred, so an empty
+	// one says nothing at all; believed anyway, it invents `working` on a new
+	// session and locks it there for the rest of its life (#201, #527). The real
+	// watcher always carries one — statusFor cannot return an empty string — so
+	// only a malformed report is refused here.
+	case req.Event == "watch" && req.Status == "":
+		return "watch_without_status", "a watch report must carry a status"
+	}
+	return "", ""
 }
 
 // knownEvents are the events vigie emits: the Claude Code hooks it installs
