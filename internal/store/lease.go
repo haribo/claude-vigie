@@ -50,3 +50,29 @@ func (s *Store) AcquireLease(ctx context.Context, holder string, ttl time.Durati
 	}
 	return true, newExpiry, nil
 }
+
+// LeaseHolder returns who currently holds the usage lease, and whether it is
+// still valid at now. An expired lease reports no holder: it belongs to nobody
+// until someone acquires it again.
+func (s *Store) LeaseHolder(ctx context.Context, now time.Time) (string, bool, error) {
+	var holder, expiry string
+	err := s.db.QueryRowContext(ctx, `SELECT holder, expires_at FROM usage_lease WHERE id = 1`).
+		Scan(&holder, &expiry)
+	if errors.Is(err, sql.ErrNoRows) {
+		return "", false, nil
+	}
+	if err != nil {
+		return "", false, fmt.Errorf("reading lease: %w", err)
+	}
+	// An unparsable expiry is treated as expired rather than as an error: the
+	// lease belongs to nobody, which is the safe reading — it lets another machine
+	// take it rather than locking the fleet out of fetching.
+	exp, perr := time.Parse(time.RFC3339, expiry)
+	if perr != nil {
+		return "", false, nil //nolint:nilerr // an unreadable expiry is "not held", not a failure
+	}
+	if !now.Before(exp) {
+		return "", false, nil
+	}
+	return holder, true, nil
+}

@@ -35,7 +35,8 @@ func TestUsageLeaseAndSnapshot(t *testing.T) {
 	}
 
 	// Post then read the usage snapshot.
-	u, _ := json.Marshal(api.UsageReport{FiveHourPct: 2, SevenDayPct: 27, FetchedAt: "2026-07-27T10:00:00Z"})
+	// The holder is checked against the lease acquired above (#515).
+	u, _ := json.Marshal(api.UsageReport{FiveHourPct: 2, SevenDayPct: 27, FetchedAt: "2026-07-27T10:00:00Z", Holder: "watcher-1"})
 	if rec := do(t, srv, http.MethodPost, "/api/usage", u, true); rec.Code != http.StatusNoContent {
 		t.Fatalf("post usage = %d", rec.Code)
 	}
