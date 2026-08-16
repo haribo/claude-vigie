@@ -151,9 +151,8 @@ type sessionsView struct {
 	cursor       int
 	selectedID   string // session under the cursor, tracked across reorders
 	detail       bool
-	detailOffset int   // scroll offset of the detail view (#378)
-	rowOffset    int   // sticky top of the sessions viewport, in body-line space (#378)
-	history      []int // recent working-count samples, for the activity sparkline
+	detailOffset int // scroll offset of the detail view (#378)
+	rowOffset    int // sticky top of the sessions viewport, in body-line space (#378)
 	filter       string
 	filtering    bool
 	sortKey      sortKey
@@ -431,10 +430,6 @@ func (m model) applySessions(msg sessionsMsg) model {
 	m = m.withNotifiedTransitions(msg.sessions) // desktop notify on working→attention (#260)
 	m.sessions = msg.sessions
 	m.err = nil
-	m.sess.history = append(m.sess.history, countByStatus(m.sessions, "working"))
-	if len(m.sess.history) > sparkWindow {
-		m.sess.history = m.sess.history[len(m.sess.history)-sparkWindow:]
-	}
 	m.sess.cursor = m.sess.cursorForSelection(m.visibleSessions()) // keep the cursor on the same session
 	return m
 }
@@ -692,7 +687,7 @@ func (m model) View() string {
 	var b strings.Builder
 
 	// No title/clock line: open straight on the tab bar.
-	b.WriteString(renderTabBar(m.tab, m.width))
+	b.WriteString(renderTabBar(m.tab, m.width, m.connGlyph()))
 	b.WriteString("\n")
 	if m.gotWatcher && m.watcherStale() {
 		b.WriteString(m.watcherWarn() + "\n")
@@ -710,7 +705,7 @@ func (m model) View() string {
 		b.WriteString(m.renderSettings())
 	}
 
-	b.WriteString("\n" + rule(m.width) + "\n" + m.footerBlock())
+	b.WriteString("\n" + m.footerBlock())
 	return b.String()
 }
 
@@ -737,11 +732,11 @@ func (m model) bodyHeight() int {
 	if m.height <= 0 {
 		return 0
 	}
-	chrome := lineCount(renderTabBar(m.tab, m.width))
+	chrome := lineCount(renderTabBar(m.tab, m.width, m.connGlyph()))
 	if m.gotWatcher && m.watcherStale() {
 		chrome += lineCount(m.watcherWarn())
 	}
-	chrome += 1 + lineCount(m.footerBlock()) // rule + footer
+	chrome += lineCount(m.footerBlock())
 	return m.height - chrome
 }
 
@@ -940,10 +935,6 @@ func (m model) viewSessions() string {
 
 	var b strings.Builder
 	b.WriteString(m.staleReason())
-	// The tab-bar separator frames the summary strip above; a rule below
-	// separates it from the table.
-	b.WriteString(m.summaryStrip() + "\n")
-	b.WriteString(rule(m.width) + "\n")
 	if m.sess.filtering || m.sess.filter != "" {
 		b.WriteString(m.sess.filterLine() + "\n")
 	}
@@ -956,8 +947,7 @@ func (m model) viewSessions() string {
 	} else {
 		b.WriteString(m.renderTableBand(m.sessionsBand(bodyHeight)))
 	}
-	b.WriteString("\n" + rule(m.width) + "\n" + usageStrip(m.usage, m.platform, m.width) +
-		m.staleMark(srcUsage, srcPlatform))
+	b.WriteString("\n" + rule(m.width) + "\n" + m.bottomBar())
 	return b.String()
 }
 
@@ -1005,10 +995,9 @@ func (m model) sessionsBand(bodyHeight int) (tableRows, int) {
 		return tr, 0
 	}
 	// Fixed chrome inside the sessions body, measured (never hard-coded): the
-	// summary strip, its rule, the optional filter and overflow-banner lines, the
-	// pinned table header, and the trailing rule + usage strip.
-	fixed := lineCount(m.summaryStrip())
-	fixed += lineCount(rule(m.width))
+	// optional filter and overflow-banner lines, the pinned table header, and the
+	// trailing rule + bottom bar.
+	fixed := 0
 	if m.sess.filtering || m.sess.filter != "" {
 		fixed += lineCount(m.sess.filterLine())
 	}
@@ -1016,7 +1005,7 @@ func (m model) sessionsBand(bodyHeight int) (tableRows, int) {
 		fixed += lineCount(banner)
 	}
 	fixed += len(tr.header)
-	fixed += lineCount(rule(m.width)) + lineCount(usageStrip(m.usage, m.platform, m.width))
+	fixed += lineCount(rule(m.width)) + lineCount(m.bottomBar())
 
 	base := bodyHeight - fixed
 	if len(tr.body) <= base {
@@ -1066,9 +1055,15 @@ func scrollIndicator(start, end, total, width int) string {
 	return lipgloss.NewStyle().Width(width).Align(lipgloss.Right).Render(label)
 }
 
-// summaryRight is the right-aligned side of the summary strip: the active sort
-// (and group), plus the relative last-update age.
-func (m model) summaryRight() string {
+// viewState is what the table cannot say about itself: the active sort and
+// grouping, and how many sessions the current filter is hiding.
+//
+// `hidden N` is the one element of the deleted summary row that exists nowhere
+// else on screen — `a` and `idle_hide_after` filter silently, so without it the
+// screen claims three sessions while the fleet has thirty. It is omitted when
+// nothing is hidden: a permanent zero is a row that trains the eye to skip the
+// place where the exception appears (docs/design/sessions-chrome.md § 2).
+func (m model) viewState() string {
 	parts := []string{labelStyle.Render("sort ") + sortNames[m.sess.sortKey] + sortArrow(m.sess.sortReversed)}
 	if m.sess.groupBy != groupNone {
 		parts = append(parts, labelStyle.Render("group ")+groupNames[m.sess.groupBy])
@@ -1076,7 +1071,6 @@ func (m model) summaryRight() string {
 	if h := m.hiddenCount(); h > 0 {
 		parts = append(parts, labelStyle.Render("hidden ")+strconv.Itoa(h))
 	}
-	parts = append(parts, m.connGlyph())
 	return strings.Join(parts, dimStyle.Render(" · "))
 }
 
@@ -1099,32 +1093,25 @@ func (m model) connGlyph() string {
 	}
 }
 
-// summaryStrip assembles the summary line under a single width budget: the right
-// block is measured first and its space reserved, then the left block is fitted
-// into what is left, dropping its trailing extras as it already does (#334).
-//
-// Each half used to be sized on its own — the left block against the *full*
-// terminal width, after which joinLR discovered there was no room for the right
-// one and dropped it whole. Below ~140 columns that cost the operator `sort`,
-// `group`, `hidden` and the connection glyph at once, with nothing left on
-// screen to say so. The glyph is the TUI's only permanent indication that it is
-// still reaching the server (#457); the left block's extras are decorative
-// beside it, so when something has to go it is `activity`, not the glyph (#486).
-func (m model) summaryStrip() string {
-	right := m.summaryRight()
+// bottomBar is the fixed bottom row: the subscription gauges on the left, the
+// view state on the right, under one width budget (#486). It replaces the
+// separate summary row, whose left half restated the STATUS column and whose
+// right half is what survives here (#492).
+func (m model) bottomBar() string {
+	right, mark := m.viewState(), m.staleMark(srcUsage, srcPlatform)
 	if m.width <= 0 {
-		// No width yet (before the first WindowSizeMsg): nothing to budget, and
-		// joinLR renders both halves unbounded.
-		return joinLR(renderSummaryFit(m.sessions, m.sess.history, 0), right, 0)
+		// No width yet (before the first WindowSizeMsg): nothing to budget.
+		return joinLR(usageStrip(m.usage, m.platform, 0)+mark, right, 0)
 	}
 	// The 3 columns are joinLR's minimum gap between the two halves.
-	avail := m.width - lipgloss.Width(right) - 3
+	avail := m.width - lipgloss.Width(right) - 3 - lipgloss.Width(mark)
 	if avail <= 0 {
-		// Narrower than the right block itself. Keep it — it is the half that
-		// carries the connection state — rather than a truncated count list.
+		// Narrower than the view state itself. Keep it: `hidden N` is the only
+		// thing on screen saying the list is filtered, and the gauges are figures
+		// the Stats tab carries in full.
 		return clampWidth(right, m.width)
 	}
-	return joinLR(renderSummaryFit(m.sessions, m.sess.history, avail), right, m.width)
+	return joinLR(usageStrip(m.usage, m.platform, avail)+mark, right, m.width)
 }
 
 // joinLR places left and right on one line, right-aligned to width when known.

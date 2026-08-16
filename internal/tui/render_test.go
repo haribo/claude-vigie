@@ -136,20 +136,12 @@ func TestRenderTableNarrowHidesColumns(t *testing.T) {
 	}
 }
 
-func TestRCCellAndSummary(t *testing.T) {
+func TestRCCell(t *testing.T) {
 	if got := rcCell(api.SessionView{RemoteControl: true}); got != "◉" {
 		t.Errorf("rc on = %q, want ◉", got)
 	}
 	if got := rcCell(api.SessionView{RemoteControl: false}); got != "○" {
 		t.Errorf("rc off = %q, want ○", got)
-	}
-	out := renderSummary([]api.SessionView{
-		{Status: "working", RemoteControl: true},
-		{Status: "idle", RemoteControl: true},
-		{Status: "idle"},
-	}, nil)
-	if !strings.Contains(out, "rc ") || !strings.Contains(out, "◉ 2") {
-		t.Errorf("summary missing rc counter (want ◉ 2):\n%s", out)
 	}
 }
 

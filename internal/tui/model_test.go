@@ -31,7 +31,7 @@ func TestOverflowBannerWrapsToWidth(t *testing.T) {
 }
 
 func TestRenderTabBar(t *testing.T) {
-	out := renderTabBar(tabMachines, 80)
+	out := renderTabBar(tabMachines, 80, "")
 	for _, want := range []string{"Sessions", "Machines", "Settings"} {
 		if !strings.Contains(out, want) {
 			t.Errorf("tab bar missing %q: %s", want, out)
@@ -123,20 +123,6 @@ func TestSparkline(t *testing.T) {
 	for _, g := range r {
 		if g < 0x2800 || g > 0x28FF {
 			t.Errorf("glyph %q outside the braille range", string(g))
-		}
-	}
-}
-
-func TestRenderSummary(t *testing.T) {
-	sessions := []api.SessionView{
-		{Status: "working", Usage: api.Usage{OutputTokens: 1000}},
-		{Status: "working", Usage: api.Usage{OutputTokens: 500}},
-		{Status: "idle", Usage: api.Usage{OutputTokens: 200}},
-	}
-	out := renderSummary(sessions, []int{1, 2, 2})
-	for _, want := range []string{"working 2", "idle 1", "waiting 0", "out ", "activity "} {
-		if !strings.Contains(out, want) {
-			t.Errorf("summary missing %q:\n%s", want, out)
 		}
 	}
 }

@@ -23,6 +23,19 @@ file is the single source of truth, not a second narrative.
   unchanged and remains the safest: supply nothing, and the token is generated,
   stored and printed once, with `vigied token` to read it back
   ([deployment](docs/deployment.md), #465).
+- The Sessions tab spends 7 rows on chrome instead of 10, and 3 full-width rules
+  instead of 5. The summary row is deleted: its status counts were the exact
+  aggregate of the STATUS column, `hidden 25` and `● ended 25` said the same
+  thing twice on one line, and the active sort is readable from the arrow in the
+  column header. What survives moves — the connection glyph to the end of the tab
+  line, where the eye checks for state and where the corner never changes width;
+  the sort, grouping and `hidden N` to the bottom bar, which now shares one width
+  budget between its two halves. `hidden N` is shown only when something is
+  hidden: it is the only thing on screen saying the list is filtered, and a
+  permanent zero trains the eye to skip the place where the exception appears.
+  The usage gauges are tightened against their percentage and their reset, giving
+  up the alignment `%3.0f` used to keep — a deliberate reading trade
+  ([sessions-chrome](docs/design/sessions-chrome.md), #492).
 
 ### Fixed
 
