@@ -123,7 +123,7 @@ func (s *Server) rollupTokens(ctx context.Context, _, sess store.Session, req ap
 	if delta <= 0 {
 		return
 	}
-	metricOutputTokens.WithLabelValues(sess.Model).Add(float64(delta))
+	metricOutputTokens.WithLabelValues(modelLabel(sess.Model)).Add(float64(delta)) // bounded: see modelFamilies (#528)
 	if err := s.store.AddDailyTokens(ctx, dayOf(req.Timestamp, s.now()), sess.Model, delta); err != nil {
 		s.log.Error("rolling up daily tokens", "error", err)
 	}
