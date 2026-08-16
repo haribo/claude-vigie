@@ -48,7 +48,7 @@ A fleet is *N* client machines all reporting to one daemon.
 | Call | `vigie` | `call` | Run *inside* a session to raise a call for the operator ([ADR-0010](adr/0010-session-raised-operator-call.md)); cleared when that session resumes or ends. Claude learns the command from a personal Agent Skill vigie installs and refreshes ([design](design/call-discoverability.md)) |
 | Watcher | `vigie` | `watch` | Background service: refreshes its own hooks at startup ([ADR-0009](adr/0009-watcher-managed-hooks.md)), scans local transcripts, derives status from process presence + activity, reports every session (covering ones the hooks miss), and holds the usage lease to fetch subscription usage |
 | Terminal client | `vigie` | `tui` | Live dashboard in the terminal (Bubble Tea) |
-| Web dashboard | `vigied` | `serve` | Read-only browser mirror of the TUI, served at `GET /` (static assets embedded via `go:embed`) |
+| Web dashboard | `vigied` | `serve` | Read-only browser client, served at `GET /` (static assets embedded via `go:embed`). Mirrors the TUI's content and hierarchy, not its gestures — see below |
 | GNOME indicator | — | — | Top-bar indicator for GNOME Shell (`gnome-extension/`): polls `GET /api/sessions` and shows how many sessions are calling for the operator, with a desktop notification on each new one. Ships and versions separately from the binaries |
 
 The **web dashboard** is the second client, served by the daemon itself (no build
@@ -57,6 +57,29 @@ the single-binary ethos of [ADR-0002](adr/0002-single-go-binary-with-sqlite.md))
 daemon's URL in a browser and paste the shared token; it is kept in the browser and
 sent as a bearer token on same-origin API calls. Read-only, like every client
 (observe-only, [ADR-0005](adr/0005-observe-only.md)).
+
+**What "mirror" binds — content and hierarchy, not gestures.** The dashboard owes
+the TUI agreement on *what is shown and what earns permanent space*: the same
+statuses, the same attention set, the same verdicts from
+[design/sessions-chrome.md](design/sessions-chrome.md) § 2 on what deserves a
+standing row. It is the same product answering the same question — *which session
+needs me* — and an operator must not carry two mental models across two windows.
+A divergence in content is debt, not design.
+
+It does not owe the same **mechanisms**. The input device differs, and a control
+built for a fixed-width terminal corner driven by the keyboard is not
+automatically right for a mouse: an `h` modal listing shortcuts is meaningless
+without a keyboard, and the state pill's overlay may legitimately be a standing
+sidebar in a browser. `hidden N` is an indicator in the terminal and a button in
+the browser, and that is not a divergence.
+
+**The line is not the row budget.** That was the tempting reading and it is wrong:
+sessions-chrome.md § 1 calls the row count *"the smaller half of the problem"*,
+and none of the three tests in § 2 mentions screen size. So the summary strip
+fails test 1 — *it is not already on screen* — in a browser exactly as it did in a
+terminal, while `hidden N` passes test 3 in both. Where the boundary is checkable
+it is a test rather than a sentence: the attention set (#538) and the status
+vocabulary (#423) already are.
 
 The **GNOME indicator** is the third, and the only one that is not a Go binary:
 an ESM extension for GNOME Shell, in `gnome-extension/`, with its own README,

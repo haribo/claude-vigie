@@ -28,7 +28,7 @@
 - **Every session, every machine, one board** — nine live statuses, grouped and filtered as you like.
 - **A session can call you** when its work is done.
 - **Desktop notifications** when a session starts calling for you — waiting on input, stalled on a tool, in error, or raising a call (libnotify) — and `n` to jump straight to it.
-- **Terminal and browser** — a TUI, and a read-only web mirror served by the daemon itself.
+- **Terminal and browser** — a TUI, and a read-only web dashboard served by the daemon itself. Same board and same answers; each suits its own medium.
 - **Per-session insight** — tokens, context fill, reasoning effort, permission mode, `/rc` link.
 - **Usage and history** — subscription usage, plus daily rollups of tokens and of where your time went.
 - **Observe-only** — vigie never writes into a session, and stores nothing about how *you* handled one.
@@ -85,9 +85,11 @@ vigie  tui       # client: terminal dashboard
 you install on every machine running Claude Code sessions. See
 [ADR-0003](docs/adr/0003-split-client-and-daemon-binaries.md).
 
-The daemon also serves a **read-only web dashboard** at its root URL — a browser
-mirror of the TUI. Open it, paste the server token, and watch every machine
-from a phone or laptop. No extra process: it is embedded in `vigied`.
+The daemon also serves a **read-only web dashboard** at its root URL. Open it,
+paste the server token, and watch every machine from a phone or laptop. No extra
+process: it is embedded in `vigied`. It shows the same board as the TUI — same
+statuses, same hierarchy — with the gestures a browser calls for rather than a
+terminal's ([architecture](docs/architecture.md)).
 
 ## Design choices
 
