@@ -23,6 +23,18 @@ file is the single source of truth, not a second narrative.
   unchanged and remains the safest: supply nothing, and the token is generated,
   stored and printed once, with `vigied token` to read it back
   ([deployment](docs/deployment.md), #465).
+- A degraded state pill breathes. One character in a corner will not be read if
+  it is still: peripheral vision detects motion and luminance, not hue or shape,
+  and since no text ever appears beside the pill, the pulse *is* the alert. Amber
+  and red both animate, green never does. The glyph is always present — only its
+  color modulates, toward a second tone of the same hue, chosen by hand for each
+  theme because the TUI cannot know the terminal's background. The cycle is two
+  seconds, four times slower than the call marker's: the cadence is what separates
+  "come now" from "still broken", and a slow one keeps a long-lived degraded state
+  from pinning the TUI to a redraw loop. There is no preference to mute it, for
+  the same reason `blink` was removed — an alert the operator cannot see is worse
+  than no alert. 0.5 Hz sits well under WCAG 2.3.1's three-flashes-per-second
+  ceiling ([sessions-chrome](docs/design/sessions-chrome.md), #495).
 - Six scattered health indicators become one state pill and one modal behind `i`.
   The connection glyph, the watcher warning, the two "could not refresh" marks and
   the `⟳` freshness glyph all asked one question at five granularities — *is what
