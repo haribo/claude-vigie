@@ -80,6 +80,17 @@ file is the single source of truth, not a second narrative.
 
 ### Fixed
 
+- The README's animation shows the Sessions tab the TUI actually renders. It still
+  drew the status-count row and its rule, the old gauge spacing, and no state
+  pill — a screen deleted three pull requests ago, and the first thing a visitor
+  sees. Five tests on the asset passed throughout, because every one of them
+  compares the four rendered files with each other and with the template they came
+  from: internal consistency, never truth. A new guard renders a fleet through the
+  real TUI and compares the chrome against the drawing — how many rows frame the
+  table, and which chrome elements are present or absent — and it fails from both
+  sides, whether the asset falls behind or the TUI grows a row. It states in the
+  test what it does not cover: the asset is a drawing, not a screenshot, so its
+  data, colors and layout are its own (#505).
 - `TestWatcherRunning` no longer fails at random on CI. The probe it starts —
   a copy of `sh` named like the watcher — ran `sleep 300; :`, so the shell forked;
   and between that fork and its `execve` the child carries the parent's `comm`
