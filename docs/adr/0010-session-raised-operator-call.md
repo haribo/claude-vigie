@@ -85,10 +85,17 @@ instead (a missed call costs an ordinary `idle`, which is the status quo).
 
 - **The marker is a blinking `●` that keeps its status colour** — no new glyph, no
   new colour, no new column.
-- **With blinking disabled**, a calling session is distinguishable only by its
+- **The marker always blinks.** It was originally switchable through a `blink`
+  preference, and a calling session with it off was distinguishable only by its
   `DETAIL` message (the column was named `DOING` when this ADR was accepted; it
-  was renamed in #393). Accepted: the call is an accelerator over the existing signals,
-  not a replacement for them.
+  was renamed in #393). That preference is removed: it was the one setting whose
+  "off" state was invisible — no control in the Settings tab, no trace on screen —
+  so an operator could sit in front of a silent call with no way to learn why. An
+  accelerator the operator cannot see is worse than no accelerator (#490). The
+  1 Hz half-period stays inside WCAG 2.3.1's three-flashes-per-second ceiling, so
+  there is nothing to arbitrate on accessibility. `call_marker` remains: it is a
+  font escape hatch for a terminal whose font lacks the glyph, not a comfort
+  setting.
 - **The call is orthogonal to status.** A calling session keeps whatever status it
   has; nothing in the status vocabulary changes.
 - **The signal is best-effort.** It rests on Claude following an instruction, so a
