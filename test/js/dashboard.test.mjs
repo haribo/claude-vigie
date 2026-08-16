@@ -11,6 +11,7 @@ import {
   esc, dash, trim, hasCall, detailText, humanTokens, relAge, relResetHint,
   shortModel, projectName, totalTokens, sparkSVG, migrateKeys, fullColOrder, colHidden, rank,
   adoptLegacyKey, ATTENTION, needsAttention, attentionCount, streamIsSilent, SILENCE_MS,
+  fuzzyMatch, sessionHaystack, sessionName, shortId, matchesFilter,
 } from "../../internal/web/static/lib.js";
 
 // esc is the dashboard's only defence against DOM-based XSS: session titles,
@@ -300,4 +301,55 @@ test("streamIsSilent never condemns a stream it has never heard from", () => {
   assert.equal(streamIsSilent(0, 1_000_000), false);
   assert.equal(streamIsSilent(null, 1_000_000), false);
   assert.equal(streamIsSilent(undefined, 1_000_000), false);
+});
+
+// #545. The dashboard's filter is a hand port of `fuzzyMatch` from
+// internal/tui/model.go. A rule copied per consumer is what #421, #422 and #466
+// were, so the copy is not trusted: this reads the same fixture that
+// internal/tui/filter_shared_test.go reads, and the two must agree case for case.
+test("fuzzyMatch agrees with the shared fixture the Go side reads", async () => {
+  const raw = await readFile(new URL("../fixtures/fuzzy-cases.json", import.meta.url), "utf8");
+  const { cases } = JSON.parse(raw);
+  assert.ok(cases.length > 0, "the shared fixture has no cases — the extraction is broken, not the code");
+  for (const c of cases) {
+    assert.equal(fuzzyMatch(c.pattern, c.text), c.want,
+      `fuzzyMatch(${JSON.stringify(c.pattern)}, ${JSON.stringify(c.text)}) — ${c.why}`);
+  }
+});
+
+// Field order and the single spaces are part of the rule: a pattern may run from
+// the end of one field into the start of the next. The Go side asserts the same
+// example in TestSessionHaystackShape.
+test("the haystack has the same shape as the TUI's", () => {
+  const s = { title: "api-gateway", machine: "minet-dev", project_dir: "/home/nico/gateway", git_branch: "main", status: "working" };
+  assert.equal(sessionHaystack(s), "api-gateway minet-dev gateway main working");
+});
+
+test("an untitled session is named, and searchable, by its short id", () => {
+  assert.equal(shortId("abcdefghij-the-rest"), "abcdefgh");
+  assert.equal(shortId("short"), "short");
+  assert.equal(sessionName({ title: "", id: "abcdefghij-the-rest" }), "abcdefgh");
+  assert.equal(sessionName({ title: "named", id: "abcdefghij" }), "named");
+  const s = { id: "abcdefghij-the-rest", machine: "m", status: "idle" };
+  assert.equal(fuzzyMatch("abcdefghij", sessionHaystack(s)), false,
+    "the ninth character of the id must not be searchable — the name shows eight");
+});
+
+test("rc is a token as a whole pattern, and ordinary text otherwise", () => {
+  const on = { id: "a", machine: "m", status: "idle", remote_control: true };
+  const off = { id: "b", machine: "m", status: "idle", remote_control: false };
+  assert.equal(matchesFilter(on, "rc"), true);
+  assert.equal(matchesFilter(off, "rc"), false, "the token selects, it does not text-match");
+  assert.equal(matchesFilter(on, "RC"), true, "the token is case-insensitive");
+  // As part of a longer pattern it is not the token: it must match the text.
+  const src = { id: "c", machine: "src-tool", status: "idle", remote_control: false };
+  assert.equal(matchesFilter(src, "rct"), true, "`rct` is a subsequence of `src-tool`, not the token");
+  assert.equal(matchesFilter(off, "rct"), false);
+});
+
+test("an empty filter selects everything", () => {
+  const s = { id: "a", machine: "m", status: "idle" };
+  assert.equal(matchesFilter(s, ""), true);
+  assert.equal(matchesFilter(s, null), true);
+  assert.equal(matchesFilter(s, undefined), true);
 });

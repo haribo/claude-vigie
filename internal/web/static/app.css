@@ -242,3 +242,12 @@ td.dim { color: var(--muted); } td.faint { color: var(--faint); }
 .gate-err { color: var(--error); font-size: 11.5px; }
 .gate-card button { width: 100%; padding: 10px 12px; border-radius: 9px; font-weight: 600; background: var(--accent); color: #fff; border: none; transition: filter 0.12s ease; }
 .gate-card button:hover { filter: brightness(1.05); }
+
+/* The filter bar sits outside the repainted table region (#545): the refresh
+   tick redraws #tab-sessions every 5 s, and an input inside it would lose the
+   caret and the typed text. */
+.filterbar { display: flex; align-items: center; gap: 10px; margin-bottom: 12px; }
+.filterbar input { flex: 1; min-width: 0; padding: 7px 12px; border-radius: 999px; border: 1px solid var(--border); background: var(--surface); color: var(--text); font-size: 13px; }
+.filterbar input:focus { outline: none; border-color: color-mix(in srgb, var(--accent) 45%, var(--border)); }
+.filterbar input::placeholder { color: var(--faint); }
+.filter-count { color: var(--muted); font-size: 11.5px; font-variant-numeric: tabular-nums; white-space: nowrap; }

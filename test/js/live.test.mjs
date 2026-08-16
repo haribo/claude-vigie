@@ -45,15 +45,17 @@ function harness({ token = "t0k3n", sessions = [] } = {}) {
   // `innerHTML` write is recorded, per element id. That is not a fiction the way
   // a rendered-output assertion would be; it is simply "did app.js redraw".
   h.writes = [];
+  h.listeners = new Map();   // "id:event" -> handler, so a test can fire one
   const elements = new Map();
   const element = (id) => {
     const node = new Proxy(function () {}, {
       get: (_t, k) =>
-        k === "classList" || k === "style" || k === "dataset" ? node
-          : k === "hidden" || k === "value" || k === "innerHTML" || k === "textContent" ? ""
-            : k === "children" || k === "options" ? []
-              : k === Symbol.toPrimitive || k === "toString" ? () => ""
-                : node,
+        k === "addEventListener" ? (ev, fn) => h.listeners.set(`${id}:${ev}`, fn)
+          : k === "classList" || k === "style" || k === "dataset" ? node
+            : k === "hidden" || k === "value" || k === "innerHTML" || k === "textContent" ? ""
+              : k === "children" || k === "options" ? []
+                : k === Symbol.toPrimitive || k === "toString" ? () => ""
+                  : node,
       set: (_t, k, v) => { if (k === "innerHTML") h.writes.push({ id, html: v }); return true; },
       apply: () => node,
       has: () => true,
@@ -121,6 +123,15 @@ function harness({ token = "t0k3n", sessions = [] } = {}) {
     return t;
   };
   h.tick = async () => { h.ticker().fn(); await flush(); };
+  h.fire = async (id, ev, e) => {
+    const fn = h.listeners.get(`${id}:${ev}`);
+    assert.ok(fn, `nothing listens for "${ev}" on #${id} — listeners: ${[...h.listeners.keys()]}`);
+    fn(e); await flush();
+  };
+  h.lastTable = () => {
+    const w = h.writes.filter((x) => x.id === "tab-sessions");
+    return w.length ? w[w.length - 1].html : "";
+  };
   return h;
 }
 
@@ -246,4 +257,67 @@ test("the read-time transition to ended reaches the screen", async () => {
   assert.equal(drawn(), before + 1);
   assert.match(h.writes.at(-1).html, /st-ended/,
     "a dead watcher must stop reading as `working` — no event announces this, only the tick finds it");
+});
+
+// #545. The rule itself is cross-checked against the Go implementation in
+// dashboard.test.mjs. What is asserted here is the wiring — typing must actually
+// reach the table — because that is the half a port gets wrong while every unit
+// test stays green.
+const FLEET3 = [
+  { id: "a", title: "api-gateway", machine: "minet-dev", project_dir: "/h/gateway", status: "working", usage: {} },
+  { id: "b", title: "web-app", machine: "minet-dev", project_dir: "/h/web", status: "idle", usage: {} },
+  { id: "c", title: "data-pipe", machine: "beta", project_dir: "/h/pipe", status: "idle", remote_control: true, usage: {} },
+];
+
+test("typing in the filter narrows the table", async () => {
+  const h = harness({ sessions: FLEET3 });
+  await h.boot();
+  assert.match(h.lastTable(), /api-gateway/);
+  assert.match(h.lastTable(), /web-app/);
+
+  await h.fire("filter-input", "input", { target: { value: "wapp" } });
+  const html = h.lastTable();
+  assert.match(html, /web-app/, "a subsequence match must survive the filter");
+  assert.ok(!html.includes("api-gateway"), "a session that does not match must leave the table");
+  assert.ok(!html.includes("data-pipe"));
+});
+
+test("the rc token reaches the table too", async () => {
+  const h = harness({ sessions: FLEET3 });
+  await h.boot();
+  await h.fire("filter-input", "input", { target: { value: "rc" } });
+  const html = h.lastTable();
+  assert.match(html, /data-pipe/, "the only remote-controlled session");
+  assert.ok(!html.includes("api-gateway"));
+});
+
+test("a filter that matches nothing says so instead of looking empty", async () => {
+  const h = harness({ sessions: FLEET3 });
+  await h.boot();
+  await h.fire("filter-input", "input", { target: { value: "zzzz" } });
+  assert.match(h.lastTable(), /No sessions match the filter/,
+    "an empty fleet and a filter that matched nothing must not look the same");
+});
+
+test("clearing the filter brings the fleet back", async () => {
+  const h = harness({ sessions: FLEET3 });
+  await h.boot();
+  await h.fire("filter-input", "input", { target: { value: "zzzz" } });
+  await h.fire("filter-input", "input", { target: { value: "" } });
+  const html = h.lastTable();
+  for (const name of ["api-gateway", "web-app", "data-pipe"]) {
+    assert.ok(html.includes(name), `${name} did not come back`);
+  }
+});
+
+// The filter survives the 5 s refresh: the bar lives outside the painted region
+// precisely so a repaint cannot drop what the operator typed (#538, #545).
+test("the refresh tick does not clear the filter", async () => {
+  const h = harness({ sessions: FLEET3 });
+  await h.boot();
+  await h.fire("filter-input", "input", { target: { value: "wapp" } });
+  await h.tick();
+  const html = h.lastTable();
+  assert.match(html, /web-app/);
+  assert.ok(!html.includes("api-gateway"), "the tick repainted the table and lost the filter");
 });

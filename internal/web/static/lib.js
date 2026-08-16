@@ -120,6 +120,64 @@ export function rank(status) {
   return i < 0 ? RANK_ORDER.length : i;
 }
 
+// shortId is the first eight characters of a session id, the fallback the table
+// shows for a session Claude has not titled yet. Kept at eight to match
+// `shortID` in internal/tui/render.go: the two clients must name a row the same
+// way, and the filter below searches that name (#545).
+export function shortId(id) {
+  const r = [...String(id == null ? "" : id)];
+  return r.length > 8 ? r.slice(0, 8).join("") : r.join("");
+}
+
+// sessionName is the conversation title, falling back to the short id — the twin
+// of `sessionName` in internal/tui/render.go.
+export function sessionName(s) {
+  if (!s) return "";
+  return s.title ? s.title : shortId(s.id);
+}
+
+// fuzzyMatch reports whether pattern appears in text as a subsequence, ignoring
+// case: every character of the pattern in order, gaps allowed. `wapp` matches
+// `web-app`. It is deliberately not a substring match and not a regex.
+//
+// This is a hand port of `fuzzyMatch` in internal/tui/model.go, and a copied rule
+// is what #421, #422 and #466 all were. So it is not trusted: a shared fixture
+// (test/fixtures/fuzzy-cases.json) is run against both implementations, the Go
+// one in internal/tui and this one under node. Iterating the lowered string by
+// code point matches Go's `range` over runes.
+//
+// The one place the two languages can still disagree is case folding outside
+// Latin — Go's strings.ToLower and JS toLowerCase differ on a handful of scripts.
+// The fixture stays inside what a session title, a machine name or a branch
+// realistically contains.
+export function fuzzyMatch(pattern, text) {
+  const pr = [...String(pattern == null ? "" : pattern).toLowerCase()];
+  let pi = 0;
+  for (const tr of String(text == null ? "" : text).toLowerCase()) {
+    if (pi < pr.length && tr === pr[pi]) pi++;
+  }
+  return pi === pr.length;
+}
+
+// sessionHaystack is the text the filter searches — the twin of the Go function
+// of the same name. Field order and the single spaces between them are part of
+// it: a pattern may span two fields, so a different join is a different filter.
+export function sessionHaystack(s) {
+  if (!s) return "";
+  const f = (v) => (v == null ? "" : String(v));
+  return [sessionName(s), f(s.machine), projectName(s.project_dir), f(s.git_branch), f(s.status)].join(" ");
+}
+
+// matchesFilter applies the active filter to one session. `rc` as the whole
+// pattern is a special token selecting remote-controlled sessions rather than a
+// text match — `internal/tui/sessionsview.go` does the same, and an operator who
+// learns it in one window must find it in the other.
+export function matchesFilter(s, filter) {
+  if (!filter) return true;
+  if (filter.toLowerCase() === "rc") return Boolean(s && s.remote_control);
+  return fuzzyMatch(filter, sessionHaystack(s));
+}
+
 // The statuses that call for the operator: the session is blocked and needs a
 // human. Kept identical to internal/status.Attention — a Go test reads this
 // literal and fails on drift, because a dashboard that disagrees with the TUI
