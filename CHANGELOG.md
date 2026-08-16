@@ -23,6 +23,19 @@ file is the single source of truth, not a second narrative.
   unchanged and remains the safest: supply nothing, and the token is generated,
   stored and printed once, with `vigied token` to read it back
   ([deployment](docs/deployment.md), #465).
+- The eleven key hints are behind `h`. They sat permanently at the bottom of the
+  Sessions tab, needed 134 columns, and below that were dropped one by one with an
+  ellipsis — a row both permanently occupied and incomplete. One hint remains on
+  screen, `h  help`, at the end of the bottom bar; `h` opens a modal listing every
+  shortcut of the active tab, `h` or `esc` closes it, and it swallows keys while
+  open so a key pressed at a list of keys never also acts on the table behind it.
+  With the hints folded into the bar the Sessions chrome reaches six rows. `h` is
+  now the help key on every tab, which costs the two undocumented vim aliases
+  (`h`/`l`) that Settings carried for left/right — the arrows and `space` are what
+  its hints have always advertised. The `a` binding is removed: a bare unmodified
+  letter that rewrites `tui.toml` with no confirmation and no undo, while the same
+  setting sits one tab away under a readable label with its value on screen
+  ([sessions-chrome](docs/design/sessions-chrome.md), #493).
 - The Sessions tab spends 7 rows on chrome instead of 10, and 3 full-width rules
   instead of 5. The summary row is deleted: its status counts were the exact
   aggregate of the STATUS column, `hidden 25` and `● ended 25` said the same
