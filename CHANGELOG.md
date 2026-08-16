@@ -87,6 +87,15 @@ file is the single source of truth, not a second narrative.
 
 ### Fixed
 
+- The session id is stripped of control sequences like every other field the
+  terminal renders. #529 cleaned twelve of them and stated in the code that the
+  model never holds a string able to act on a terminal; it left out the one field
+  nobody thinks of as text. The id arrives in a report body and the daemon checks
+  only that it is non-empty, while the TUI prints it in full in the detail panel
+  and uses it as the row's name for as long as a session has no title — so an
+  `OSC 52` clipboard write or a screen clear travelled straight through. The
+  fixtures guarding #529 all used `ID: "a"`, which is precisely why it went
+  unseen (#540).
 - The session-status specification describes the machine that exists. It stated
   twice that the watcher **cannot** observe `waiting` — true when it had only the
   transcript to read, where a permission prompt and a running tool are the same
