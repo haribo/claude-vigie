@@ -38,14 +38,16 @@ Which elements earn a permanent row at all is specified separately, in
 [sessions-chrome.md](sessions-chrome.md): this document budgets the rows, that
 one decides who gets them.
 
-**Chrome costs one row, whatever the width.** The key-hint footer is fitted to
-the terminal width rather than wrapped: hints are dropped whole, least essential
-first, and the cut is marked with an ellipsis. `q quit` is never dropped — the
-way out stays on screen at every width. Wrapping is measured correctly by the row
-budget below, so nothing is drawn out of place, but the row is genuinely spent:
-the Sessions footer needs 134 columns, so every narrower terminal paid a second
-row for it on every frame. Rows belong to the session table, and a standing
-reminder of `q quit` is not worth two of them on a 24-row terminal (#487).
+**Chrome costs one row, whatever the width.** The Sessions tab carries a single
+key hint — `h help` — at the end of its bottom bar, so there is nothing to drop
+and nothing to wrap at any width. The eleven hints it replaced needed 134
+columns; below that they wrapped, and the row was genuinely spent — measured
+correctly by the row budget below, so nothing was drawn out of place, simply one
+fewer session on every frame. Rows belong to the table, and a standing reminder
+of `q quit` is not worth one of them (#487, #493).
+
+The tabs without a bottom bar keep a one-line footer carrying the same hint, so
+the way to the shortcuts is reachable from all of them.
 
 ## 2. Row budget
 

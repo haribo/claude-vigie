@@ -44,7 +44,7 @@ export default class VigiePreferences extends ExtensionPreferences {
 
         const notifyRow = new Adw.SwitchRow({
             title: 'Desktop notifications',
-            subtitle: 'Notify when a session starts waiting for input',
+            subtitle: 'Notify when a session starts calling for you — waiting, stalled, in error, or raising a call',
         });
         settings.bind('notify', notifyRow, 'active', Gio.SettingsBindFlags.DEFAULT);
         group.add(notifyRow);
