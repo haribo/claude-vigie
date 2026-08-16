@@ -87,6 +87,16 @@ file is the single source of truth, not a second narrative.
 
 ### Fixed
 
+- The terminal dashboard no longer relays control sequences to the terminal. A
+  terminal does not merely display what it is sent: some sequences are commands to
+  it — clear the screen, move the cursor, set the window title, write the
+  clipboard. The strings vigie shows are transcript-derived, so a session's own
+  title or activity could act on the operator's terminal at every refresh; the web
+  dashboard has escaped its side since #161 for the same reason, and the terminal
+  had nothing. Session text is now cleaned as it enters the client, before
+  anything reads it — including the desktop-notification path, which is another
+  program's input. Each removed character leaves a visible `?` rather than
+  vanishing, so a title made only of them does not render as a blank line (#529).
 - The `vigie_output_tokens_total` metric can no longer grow the daemon without
   limit. Its `model` label came straight from the report body, and Prometheus
   holds a counter per distinct label value for the process's lifetime and never
