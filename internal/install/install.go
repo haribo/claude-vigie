@@ -41,14 +41,26 @@ func SettingsPath() (string, error) {
 	return filepath.Join(home, ".claude", "settings.json"), nil
 }
 
+// shellQuote wraps s so a POSIX shell reads it as a single word, whatever it
+// contains. Single quotes suspend every expansion, so the only character needing
+// care is a single quote itself: close, escape, reopen.
+//
+// Claude Code runs the hook command through a shell, and the paths in it come
+// from os.Executable() and the config resolution — either can hold a space
+// (`/home/me/My Tools/vigie`, `~/Library/Application Support/…`). Unquoted, the
+// shell executed `/home/me/My` and the hook silently never reported (#513).
+func shellQuote(s string) string {
+	return "'" + strings.ReplaceAll(s, "'", `'\''`) + "'"
+}
+
 // command builds the report hook command for one event and leg. configPath is
 // the config-path override for the leg ("" for the production leg); a dev leg
 // carries it as VIGIE_CONFIG.
 func command(binPath, configPath, event string) string {
 	if configPath == "" {
-		return fmt.Sprintf("%s report --event=%s", binPath, event)
+		return fmt.Sprintf("%s report --event=%s", shellQuote(binPath), event)
 	}
-	return fmt.Sprintf("VIGIE_CONFIG=%s %s report --event=%s", configPath, binPath, event)
+	return fmt.Sprintf("VIGIE_CONFIG=%s %s report --event=%s", shellQuote(configPath), shellQuote(binPath), event)
 }
 
 // legMarkers are the env-var prefixes that tag a dev leg: the current VIGIE_CONFIG
@@ -71,8 +83,11 @@ func owns(cmd, configPath string) bool {
 		}
 		return true
 	}
+	// Both forms: the quoted one this package writes now, and the bare one legs
+	// installed before #513 still carry in operators' settings.json. Failing to
+	// recognize the old form would duplicate every hook on the next install.
 	for _, m := range legMarkers {
-		if strings.Contains(cmd, m+configPath) {
+		if strings.Contains(cmd, m+shellQuote(configPath)) || strings.Contains(cmd, m+configPath) {
 			return true
 		}
 	}
