@@ -142,6 +142,7 @@ type model struct {
 	clock           func() time.Time // injected wall clock; defaults to clock.Now
 	focus           focusState       // what we know of the terminal focus (#411)
 	showHelp        bool             // the shortcuts modal is open (#493)
+	showState       bool             // the state modal is open (#494)
 }
 
 // sessionsView is the Sessions tab's private state — the cursor and selection,
@@ -487,10 +488,14 @@ func (m model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	// The shortcuts modal swallows everything but its own two closing keys and
 	// the way out of the program: a key pressed at a list of keys must not also
 	// act on the table behind it (#493).
-	if m.showHelp {
+	if m.showHelp || m.showState {
 		switch msg.String() {
-		case helpKey, "esc":
-			m.showHelp = false
+		case "esc":
+			m.showHelp, m.showState = false, false
+		case helpKey:
+			m.showHelp, m.showState = false, false
+		case stateKey:
+			m.showHelp, m.showState = false, false
 		case "q", "ctrl+c":
 			return m, tea.Quit
 		}
@@ -503,6 +508,9 @@ func (m model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, m.refreshSessions()
 	case helpKey:
 		m.showHelp = true
+		return m, nil
+	case stateKey:
+		m.showState = true
 		return m, nil
 	}
 	return m.handleViewKey(msg)
@@ -698,14 +706,18 @@ func (m model) View() string {
 	var b strings.Builder
 
 	// No title/clock line: open straight on the tab bar.
-	b.WriteString(renderTabBar(m.tab, m.width, m.connGlyph()))
+	b.WriteString(renderTabBar(m.tab, m.width, m.statePill()))
 	b.WriteString("\n")
 	if m.gotWatcher && m.watcherStale() {
 		b.WriteString(m.watcherWarn() + "\n")
 	}
 
-	if m.showHelp {
+	switch {
+	case m.showHelp:
 		b.WriteString(renderHelp(m.tab, m.width))
+		return b.String()
+	case m.showState:
+		b.WriteString(renderState(m.stateRows(), m.width))
 		return b.String()
 	}
 
@@ -751,7 +763,7 @@ func (m model) bodyHeight() int {
 	if m.height <= 0 {
 		return 0
 	}
-	chrome := lineCount(renderTabBar(m.tab, m.width, m.connGlyph()))
+	chrome := lineCount(renderTabBar(m.tab, m.width, m.statePill()))
 	if m.gotWatcher && m.watcherStale() {
 		chrome += lineCount(m.watcherWarn())
 	}
@@ -1119,10 +1131,10 @@ func (m model) connGlyph() string {
 // separate summary row, whose left half restated the STATUS column and whose
 // right half is what survives here (#492).
 func (m model) bottomBar() string {
-	right, mark := m.viewState()+dimStyle.Render(" · ")+helpHint(), m.staleMark(srcUsage, srcPlatform)
+	right, mark := m.viewState()+dimStyle.Render(" · ")+helpHint(), m.staleMark(srcUsage)
 	if m.width <= 0 {
 		// No width yet (before the first WindowSizeMsg): nothing to budget.
-		return joinLR(usageStrip(m.usage, m.platform, 0)+mark, right, 0)
+		return joinLR(usageStrip(m.usage, 0)+mark, right, 0)
 	}
 	// The 3 columns are joinLR's minimum gap between the two halves.
 	avail := m.width - lipgloss.Width(right) - 3 - lipgloss.Width(mark)
@@ -1132,7 +1144,7 @@ func (m model) bottomBar() string {
 		// the Stats tab carries in full.
 		return clampWidth(right, m.width)
 	}
-	return joinLR(usageStrip(m.usage, m.platform, avail)+mark, right, m.width)
+	return joinLR(usageStrip(m.usage, avail)+mark, right, m.width)
 }
 
 // joinLR places left and right on one line, right-aligned to width when known.

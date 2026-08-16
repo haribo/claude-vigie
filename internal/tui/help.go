@@ -22,20 +22,20 @@ func helpColumns(t tab) (left, right [][2]string) {
 	switch t {
 	case tabSettings:
 		return [][2]string{{"⇥", "next tab"}, {"↑↓", "select"}, {"esc", "back"}},
-			[][2]string{{"space/←→", "change"}, {"r", "refresh"}, {"q", "quit"}}
+			[][2]string{{"space/←→", "change"}, {"r", "refresh"}, {stateKey, "state"}, {"q", "quit"}}
 	case tabStats:
 		return [][2]string{{"⇥", "next tab"}, {"esc", "back"}},
-			[][2]string{{"d/w/m/y/t", "period"}, {"r", "refresh"}, {"q", "quit"}}
+			[][2]string{{"d/w/m/y/t", "period"}, {"r", "refresh"}, {stateKey, "state"}, {"q", "quit"}}
 	case tabMachines:
 		return [][2]string{{"⇥", "next tab"}, {"esc", "back"}},
-			[][2]string{{"r", "refresh"}, {"q", "quit"}}
+			[][2]string{{"r", "refresh"}, {stateKey, "state"}, {"q", "quit"}}
 	default:
 		return [][2]string{
 				{"⇥", "next tab"}, {"↑↓", "select"}, {"⏎", "detail"},
 				{"n", "next attention"}, {"/", "filter"}, {"esc", "back"},
 			}, [][2]string{
 				{"s", "sort"}, {"S", "reverse sort"}, {"g", "group"},
-				{"r", "refresh"}, {"q", "quit"},
+				{"r", "refresh"}, {stateKey, "state"}, {"q", "quit"},
 			}
 	}
 }

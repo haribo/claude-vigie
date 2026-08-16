@@ -23,6 +23,22 @@ file is the single source of truth, not a second narrative.
   unchanged and remains the safest: supply nothing, and the token is generated,
   stored and printed once, with `vigied token` to read it back
   ([deployment](docs/deployment.md), #465).
+- Six scattered health indicators become one state pill and one modal behind `i`.
+  The connection glyph, the watcher warning, the two "could not refresh" marks and
+  the `⟳` freshness glyph all asked one question at five granularities — *is what
+  I am looking at true?* — each with its own glyph, wording and place; the sixth,
+  `platform ● operational`, was not about vigie at all and read the same 99 % of
+  the time. The pill sits in the tab-line corner, preceded by its `[i]` keycap,
+  and never changes width. Its three levels are sorted by whether something on
+  screen is **false**, not by severity: a Claude outage stays amber, because vigie
+  is correctly reporting sessions that are correctly erroring. `i` opens the whole
+  observation chain, in dependency order, with the client/daemon version drift
+  that until now was buried in Settings. When the server is unreachable, what the
+  TUI establishes itself goes red, what it only knows *through* the server goes
+  grey — unknown, not failed — and the usage snapshot stays amber with its age,
+  which is the one thing still true about it offline. The failure banners are
+  unchanged: the modal is added to them, not substituted for them
+  ([sessions-chrome](docs/design/sessions-chrome.md), #494).
 - The eleven key hints are behind `h`. They sat permanently at the bottom of the
   Sessions tab, needed 134 columns, and below that were dropped one by one with an
   ellipsis — a row both permanently occupied and incomplete. One hint remains on
