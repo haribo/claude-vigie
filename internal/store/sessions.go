@@ -77,6 +77,44 @@ ON CONFLICT(id) DO UPDATE SET
 }
 
 // GetSession returns the session with the given ID, or ErrNotFound.
+// ApplySession runs merge against the session's current row and writes the
+// result, with no other report able to slip between the two.
+//
+// handleReport used to read, merge in Go, and write back with nothing holding the
+// row in between. SQLite serializes *writes*, not a read-modify-write cycle, so
+// two reports for the same session interleaved and the second write was computed
+// from a snapshot the first had already replaced. Measured on two concurrent
+// cycles, the overlap is ~300µs wide — the reads of both land before either
+// write. Every reconciliation rule in the server is "given the current status and
+// its source, decide"; reading a stale current made the outcome depend on commit
+// order instead of on the rules, which is #190/#201/#233 returning as a race
+// (#512).
+//
+// The lock is a process mutex rather than a SQL transaction. The daemon is
+// deployed as a single instance ([deployment.md]), and it is the only writer, so
+// serializing the cycle in-process makes it atomic for every writer there is —
+// while keeping the merge in Go, where it is readable and tested. A second daemon
+// on the same file would defeat it, which is a deployment that is already ruled
+// out for other reasons.
+//
+// merge receives the current row and whether it is new, exactly as the caller's
+// own logic expects.
+func (s *Store) ApplySession(ctx context.Context, id string, merge func(current Session, isNew bool) Session) (Session, error) {
+	s.applyMu.Lock()
+	defer s.applyMu.Unlock()
+
+	current, err := s.GetSession(ctx, id)
+	isNew := errors.Is(err, ErrNotFound)
+	if err != nil && !isNew {
+		return Session{}, err
+	}
+	merged := merge(current, isNew)
+	if err := s.UpsertSession(ctx, merged); err != nil {
+		return Session{}, err
+	}
+	return merged, nil
+}
+
 func (s *Store) GetSession(ctx context.Context, id string) (Session, error) {
 	row := s.db.QueryRowContext(ctx, `SELECT `+sessionColumns+` FROM sessions WHERE id = ?`, id)
 	sess, err := scanSession(row)

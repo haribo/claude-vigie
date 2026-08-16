@@ -21,6 +21,7 @@ import (
 type Store interface {
 	UpsertSession(ctx context.Context, s store.Session) error
 	GetSession(ctx context.Context, id string) (store.Session, error)
+	ApplySession(ctx context.Context, id string, merge func(store.Session, bool) store.Session) (store.Session, error)
 	ListSessions(ctx context.Context) ([]store.Session, error)
 	AppendEvent(ctx context.Context, e store.Event) error
 	LastEvent(ctx context.Context, sessionID string) (store.Event, bool, error)

@@ -8,6 +8,7 @@ import (
 	"database/sql"
 	"fmt"
 	"net/url"
+	"sync"
 
 	// Register the pure-Go SQLite driver under the name "sqlite".
 	_ "modernc.org/sqlite"
@@ -16,6 +17,9 @@ import (
 // Store is a handle to the SQLite-backed fleet database.
 type Store struct {
 	db *sql.DB
+	// applyMu serializes the read-modify-write cycle of ApplySession. See its
+	// doc comment for why a process mutex is the right scope here.
+	applyMu sync.Mutex
 }
 
 // Open opens (creating if needed) the SQLite database at path, applies

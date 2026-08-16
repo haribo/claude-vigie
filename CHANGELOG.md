@@ -80,6 +80,16 @@ file is the single source of truth, not a second narrative.
 
 ### Fixed
 
+- A report can no longer overwrite another one's. The server read a session,
+  merged the report in Go and wrote it back, with nothing holding the row in
+  between — and SQLite serializes writes, not a read-modify-write cycle. Measured
+  on two concurrent cycles, the overlap is about 300 microseconds wide: both reads
+  land before either write, so the second write is computed from a state the first
+  has already replaced. Every reconciliation rule in the server is "given the
+  current status and its source, decide", so reading a stale current made the
+  outcome depend on commit order rather than on the rules. The cycle is now one
+  atomic step. Without it, sixteen concurrent reports adding ten tokens each left
+  twenty tokens instead of a hundred and sixty (#512).
 - A session blocked on a permission prompt no longer reads `stalled`. The
   `Notification` hook reports `waiting` — the one status only a hook can see — but
   the prompt freezes the transcript on an unanswered tool call, which is exactly
