@@ -23,6 +23,34 @@ import (
 
 const metricsNamespace = "vigie"
 
+// modelFamilies are the label values vigie_output_tokens_total may take, besides
+// "other". A family, not a model id: a version is what changes often, and every
+// distinct label value is a counter Prometheus holds in memory for the process's
+// lifetime and never frees.
+//
+// The model name arrives in the report body, so without this a client sending a
+// different one each time grows the daemon without limit — no malice needed, a
+// name carrying a date or an id does it by accident (#528).
+//
+// The per-version breakdown is not lost: stats_daily keeps the exact model, and
+// the Stats tab reads it. That is what lets this be coarse.
+var modelFamilies = []string{"opus", "sonnet", "haiku", "fable"}
+
+// modelLabel folds a model id onto its family, or "other".
+//
+// "other" rather than dropping the sample: a counter that silently under-counts
+// is worse than one with a bucket whose name says it is a catch-all, because the
+// total still looks complete.
+func modelLabel(model string) string {
+	m := strings.ToLower(model)
+	for _, f := range modelFamilies {
+		if strings.Contains(m, f) {
+			return f
+		}
+	}
+	return "other"
+}
+
 var (
 	// reg is the daemon's registry: Go/process collectors, the vigie_* metrics
 	// below, and a scrape-time state collector the daemon registers separately.

@@ -87,6 +87,16 @@ file is the single source of truth, not a second narrative.
 
 ### Fixed
 
+- The `vigie_output_tokens_total` metric can no longer grow the daemon without
+  limit. Its `model` label came straight from the report body, and Prometheus
+  holds a counter per distinct label value for the process's lifetime and never
+  frees one — so a client sending a different model name each time grew memory
+  indefinitely, and one carrying a date or an id would have done it by accident.
+  The label is now the model's family (`opus`, `sonnet`, `haiku`, `fable`), with
+  anything unrecognized counted as `other` rather than dropped: a counter that
+  silently under-counts is worse than a bucket whose name says it is a catch-all.
+  Nothing visible is lost — the per-version breakdown lives in the daily stats
+  table, which the Stats tab reads (#528).
 - A malformed watch report can no longer freeze a session. The server tells its
   two informants apart by whether a report carries a status: one that does not is
   taken for a hook and believed on its word, its state stamped as coming from a
