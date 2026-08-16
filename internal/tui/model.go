@@ -350,7 +350,7 @@ func (m model) waitForConnCmd() tea.Cmd {
 
 // frame is the current animation state handed to the renderer (#389).
 func (m model) frame() frame {
-	return frame{blinkOn: m.sess.blinkOn, marker: m.prefs.callMarker, enabled: m.prefs.blink}
+	return frame{hidden: !m.sess.blinkOn, marker: m.prefs.callMarker}
 }
 
 type blinkMsg struct{}
