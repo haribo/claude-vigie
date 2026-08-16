@@ -1,6 +1,6 @@
 # Sessions chrome and the state pill — Design Specification
 
-**Status:** Proposed (#491).
+**Status:** Accepted (#491).
 
 Source of truth for what the Sessions tab keeps permanently on screen around the
 table, and for how the operator learns that something between them and the truth
@@ -310,6 +310,6 @@ is an alternative that gets proposed again.
 
 ## 8. Scope
 
-This document is the design. It is implemented by #492 (the chrome), #493 (the
-shortcuts modal), #494 (the state pill and its modal) and #495 (the pulse), in
-that order.
+This document is the design. It was implemented, in this order, by #492 (the
+chrome), #493 (the shortcuts modal), #494 (the state pill and its modal) and
+#495 (the pulse) — which is why the status above is Accepted and not Proposed.
