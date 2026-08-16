@@ -37,6 +37,10 @@ footer                      ┘
 Only the row band scrolls. Everything else stays put, so the operator never
 loses the header, the counts, or the key hints to scrolling.
 
+Which elements earn a permanent row at all is specified separately, in
+[sessions-chrome.md](sessions-chrome.md) (proposed): this document budgets the
+rows, that one decides who gets them.
+
 **Chrome costs one row, whatever the width.** The key-hint footer is fitted to
 the terminal width rather than wrapped: hints are dropped whole, least essential
 first, and the cut is marked with an ellipsis. `q quit` is never dropped — the
