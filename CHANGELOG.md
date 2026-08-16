@@ -26,6 +26,15 @@ file is the single source of truth, not a second narrative.
 
 ### Fixed
 
+- A session that calls you always blinks. The `blink` preference is removed, not
+  exposed: it was the one setting whose "off" state was invisible — no control in
+  the Settings tab, nothing on screen to say the marker was muted — so an operator
+  could sit in front of a silent call with no way to learn why, or to undo it from
+  inside vigie. An accelerator the operator cannot see is worse than no
+  accelerator. A `blink` key left in an existing `tui.toml` is ignored and dropped
+  on the next save, which is what clears the symptom. `call_marker` stays: it is a
+  font escape hatch, not a comfort setting
+  ([ADR-0010](docs/adr/0010-session-raised-operator-call.md), #490).
 - The summary strip keeps the view state on a narrow terminal. Its two halves did
   not share a width budget: the left block (status counts, totals) was fitted
   against the full terminal width, after which there was no room for the right one
