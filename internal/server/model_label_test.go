@@ -5,7 +5,7 @@ import (
 	"testing"
 
 	"github.com/prometheus/client_golang/prometheus"
-	dto "github.com/prometheus/client_model/go"
+	"github.com/prometheus/client_golang/prometheus/testutil"
 )
 
 // #528. The model name arrives in the report body and became a Prometheus label
@@ -17,25 +17,6 @@ import (
 // The per-version breakdown lives in stats_daily, which the Stats tab reads, so
 // the metric can afford to be coarse.
 
-// seriesFor counts the series a CounterVec currently holds.
-func seriesFor(t *testing.T, vec *prometheus.CounterVec) int {
-	t.Helper()
-	ch := make(chan prometheus.Metric, 4096)
-	go func() {
-		vec.Collect(ch)
-		close(ch)
-	}()
-	n := 0
-	for m := range ch {
-		var d dto.Metric
-		if err := m.Write(&d); err != nil {
-			t.Fatal(err)
-		}
-		n++
-	}
-	return n
-}
-
 // The cardinality assertion: many distinct names must not become many series.
 // Counting series is what makes this a cardinality test — asserting one string
 // would pass against the unbounded version.
@@ -45,7 +26,7 @@ func TestManyModelNamesStayBounded(t *testing.T) {
 		vec.WithLabelValues(modelLabel(fmt.Sprintf("claude-opus-4-8-2025%04d", i))).Inc()
 		vec.WithLabelValues(modelLabel(fmt.Sprintf("junk-%d", i))).Inc()
 	}
-	if got := seriesFor(t, vec); got > 8 {
+	if got := testutil.CollectAndCount(vec); got > 8 {
 		t.Errorf("1000 distinct model names produced %d series — the label is still unbounded", got)
 	}
 }
