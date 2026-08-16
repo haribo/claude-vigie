@@ -80,6 +80,16 @@ file is the single source of truth, not a second narrative.
 
 ### Fixed
 
+- The Machines tab no longer hides five statuses out of nine. Its per-machine
+  counts came from a hand-written switch covering `working`, `waiting`, `idle` and
+  `ended`; `thinking`, `compacting`, `stalled`, `error` and `stale` fell through it
+  while still counting towards the session total, so a machine running three
+  stalled sessions rendered "3 sessions, 0 everywhere". Two of the three statuses
+  that call the operator were among the invisible ones, and nothing looked wrong
+  because the totals still added up. Counts now come from the status vocabulary
+  itself, including a status this build has never heard of, and anything without a
+  column of its own is spelled out at the end of the row. A fleet whose statuses
+  all have columns renders exactly as before (#509).
 - A report can no longer overwrite another one's. The server read a session,
   merged the report in Go and wrote it back, with nothing holding the row in
   between — and SQLite serializes writes, not a read-modify-write cycle. Measured
