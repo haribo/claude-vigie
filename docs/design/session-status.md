@@ -77,8 +77,21 @@ hooks aren't installed). It derives status from two signals — is the session's
 - a foreground `tool_use` with no matching `tool_result` (paired by id) while the
   session is otherwise quiet and idle → `stalled` (the tool hung, the turn is
   parked). An unresolved *background* Bash (`run_in_background`) instead keeps the
-  session `working` — a real background task, not a hang. This exact pairing
-  replaces the old blind 5-minute "a tool may still be running" window.
+  session `working` — a real background task, not a hang.
+
+  **The pairing does not replace the 5-minute tool window, it completes it.** The
+  window is the grace period: a tool call may legitimately run that long, so the
+  session reads `working` throughout — without it a build, a test suite or a long
+  search would all be reported as a hung tool within 45 s, a false positive on one
+  of the statuses that call the operator. What the pairing adds is what happens
+  *after* the window: before it, a turn stopped on a tool simply fell to `idle`
+  once the window elapsed, so a hung tool looked exactly like a finished turn. Now
+  it reads `stalled`.
+
+  Measured on a transcript frozen on an unanswered `tool_use`: `working` at 5 s,
+  30 s, 1 min and 3 min; `stalled` at 6 min. An earlier version of this section
+  said the pairing *replaced* the window, which would have meant `stalled` at 45 s
+  for every slow tool (#530).
 
   **The pairing is scoped to the turn: a real user prompt closes every older
   unresolved `tool_use`.** A result that never arrives — Claude Code killed while
@@ -187,7 +200,7 @@ trust it:
 | `error`    | watcher (`isApiErrorMessage` in the transcript) | **Reliable signal, sampled.** The flag is unambiguous, but surfaced only at the next scan, not instantly (Claude Code has no error hook). |
 | `thinking` | watcher only (last content block is a `thinking` block) | **Best-effort heuristic.** No hook signals reasoning; it is inferred from the transcript, sampled every ~2 s, invisible in a hooks-only deployment, and can briefly mis-read when a `tool_use` block follows the thinking block. |
 | `compacting` | hook `PreCompact` opens it; watcher closes it on `compact_boundary` | **Reliable at both ends, sampled at the close.** The open is a hook, so it is instant; the close is read from the transcript at the next scan. Invisible in a hooks-only deployment, since nothing would close it. |
-| `stalled`  | watcher only (unresolved `tool_use`↔`tool_result` + quiet) | **Reliable signal, sampled.** The pairing is exact (an id match), not a timeout guess; surfaced at the next scan once the session has been quiet past a short threshold. Self-healing: a tool whose result never arrives is closed by the next operator prompt rather than pinning the session (§ 2). Invisible in a hooks-only deployment. |
+| `stalled`  | watcher only (unresolved `tool_use`↔`tool_result` + quiet) | **Reliable signal, sampled.** The pairing is exact (an id match), not a timeout guess. It surfaces once the tool window has elapsed — a tool call is allowed to run that long before silence means anything (§ 2), so the signal is deliberately late rather than wrong. Self-healing: a tool whose result never arrives is closed by the next operator prompt rather than pinning the session (§ 2). Invisible in a hooks-only deployment. |
 
 **Decision on `thinking` (#207): kept, as an explicit best-effort refinement.**
 Dropping it would lose a genuine, if imperfect, signal; hardening it to real-time
