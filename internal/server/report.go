@@ -47,18 +47,18 @@ func (s *Server) handleReport(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	existing, err := s.store.GetSession(ctx, req.SessionID)
-	isNew := errors.Is(err, store.ErrNotFound)
-	if err != nil && !isNew {
-		s.log.Error("loading session", "error", err)
-		s.writeError(w, http.StatusInternalServerError, "internal error")
-		return
-	}
-
-	sess := applyReport(existing, isNew, req)
-	sess.ReportedAt = s.now().UTC().Format(time.RFC3339) // server-side heartbeat
-	if err := s.store.UpsertSession(ctx, sess); err != nil {
-		s.log.Error("upserting session", "error", err)
+	// Read, merge and write as one step: nothing may land between them, or the
+	// merge decides from a state another report has already replaced (#512).
+	var existing store.Session
+	var isNew bool
+	sess, err := s.store.ApplySession(ctx, req.SessionID, func(current store.Session, fresh bool) store.Session {
+		existing, isNew = current, fresh
+		merged := applyReport(current, fresh, req)
+		merged.ReportedAt = s.now().UTC().Format(time.RFC3339) // server-side heartbeat
+		return merged
+	})
+	if err != nil {
+		s.log.Error("applying report", "error", err)
 		s.writeError(w, http.StatusInternalServerError, "internal error")
 		return
 	}
