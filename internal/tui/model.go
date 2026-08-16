@@ -141,6 +141,7 @@ type model struct {
 	sseLive         bool             // is the SSE stream currently connected
 	clock           func() time.Time // injected wall clock; defaults to clock.Now
 	focus           focusState       // what we know of the terminal focus (#411)
+	showHelp        bool             // the shortcuts modal is open (#493)
 }
 
 // sessionsView is the Sessions tab's private state — the cursor and selection,
@@ -483,11 +484,26 @@ func (m model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	if m.sess.filtering {
 		return m.handleFilterKey(msg), nil
 	}
+	// The shortcuts modal swallows everything but its own two closing keys and
+	// the way out of the program: a key pressed at a list of keys must not also
+	// act on the table behind it (#493).
+	if m.showHelp {
+		switch msg.String() {
+		case helpKey, "esc":
+			m.showHelp = false
+		case "q", "ctrl+c":
+			return m, tea.Quit
+		}
+		return m, nil
+	}
 	switch msg.String() {
 	case "q", "ctrl+c":
 		return m, tea.Quit
 	case "r":
 		return m, m.refreshSessions()
+	case helpKey:
+		m.showHelp = true
+		return m, nil
 	}
 	return m.handleViewKey(msg)
 }
@@ -531,11 +547,6 @@ func (m model) handleSessionsKey(msg tea.KeyMsg) model {
 	case "g":
 		m.sess.groupBy = (m.sess.groupBy + 1) % groupByCount
 		return m.saveViewPrefs().scrollToCursor()
-	case "a": // toggle the persistent hide-ended setting (#320); best-effort save,
-		// like the sort/group prefs (#237) — shaping one's view, allowed by ADR-0007
-		m.prefs.hideEnded = !m.prefs.hideEnded
-		savePrefs(m.prefs)
-		m.sess.cursor = 0
 	case "n": // jump to the oldest session waiting on the operator (#261) — pure
 		// navigation: looking is done in the session, not acknowledged in vigie (ADR-0007)
 		if id := nextAttention(m.sessions); id != "" {
@@ -580,11 +591,11 @@ func (m model) handleSettingsKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			return m.toggleColumnRow(), nil
 		}
 		return m.editSetting(1)
-	case "right", "l":
+	case "right":
 		if !onColumn {
 			return m.editSetting(1)
 		}
-	case "left", "h":
+	case "left":
 		if !onColumn {
 			return m.editSetting(-1)
 		}
@@ -693,6 +704,11 @@ func (m model) View() string {
 		b.WriteString(m.watcherWarn() + "\n")
 	}
 
+	if m.showHelp {
+		b.WriteString(renderHelp(m.tab, m.width))
+		return b.String()
+	}
+
 	switch m.tab {
 	case tabSessions:
 		b.WriteString(m.viewSessions())
@@ -705,7 +721,9 @@ func (m model) View() string {
 		b.WriteString(m.renderSettings())
 	}
 
-	b.WriteString("\n" + m.footerBlock())
+	if m.tab != tabSessions {
+		b.WriteString("\n" + m.footerBlock())
+	}
 	return b.String()
 }
 
@@ -714,9 +732,10 @@ func (m model) watcherWarn() string {
 	return warnStyle.Render("⚠ no watcher reporting — statuses may be stale")
 }
 
-// footerBlock is the key-hint footer, wrapped to width so it never overflows (#328).
+// footerBlock is the single-hint row for the tabs that have no bottom bar to
+// carry it. Sessions folds the hint into its bar instead (#493).
 func (m model) footerBlock() string {
-	foot := footerFit(m.tab, m.width)
+	foot := helpHint()
 	if m.width > 0 {
 		foot = lipgloss.NewStyle().Width(m.width).Render(foot)
 	}
@@ -736,7 +755,9 @@ func (m model) bodyHeight() int {
 	if m.gotWatcher && m.watcherStale() {
 		chrome += lineCount(m.watcherWarn())
 	}
-	chrome += lineCount(m.footerBlock())
+	if m.tab != tabSessions {
+		chrome += lineCount(m.footerBlock())
+	}
 	return m.height - chrome
 }
 
@@ -1098,7 +1119,7 @@ func (m model) connGlyph() string {
 // separate summary row, whose left half restated the STATUS column and whose
 // right half is what survives here (#492).
 func (m model) bottomBar() string {
-	right, mark := m.viewState(), m.staleMark(srcUsage, srcPlatform)
+	right, mark := m.viewState()+dimStyle.Render(" · ")+helpHint(), m.staleMark(srcUsage, srcPlatform)
 	if m.width <= 0 {
 		// No width yet (before the first WindowSizeMsg): nothing to budget.
 		return joinLR(usageStrip(m.usage, m.platform, 0)+mark, right, 0)

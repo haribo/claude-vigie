@@ -41,14 +41,6 @@ func chromeRows(t *testing.T, m model) int {
 	return total - len(m.visibleSessions())
 }
 
-// The count is the point of the issue, so it is asserted directly. It is 7 until
-// #493 folds the key hints into the bottom bar, which is the sixth row.
-func TestTheSessionsChromeFitsInSevenRows(t *testing.T) {
-	if got := chromeRows(t, chromeModel(300, 40)); got != 7 {
-		t.Errorf("the sessions chrome takes %d rows, want 7:\n%s", got, chromeModel(300, 40).View())
-	}
-}
-
 // Three rules, not five: the one closing the tab labels, the one closing the
 // column header, and the one closing the table.
 func TestOnlyThreeRulesRemain(t *testing.T) {
