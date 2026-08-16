@@ -325,18 +325,32 @@ func applyStatus(sess store.Session, req api.ReportRequest) store.Session {
 	return sess
 }
 
+// watcherObserves are the statuses the watcher establishes positively rather
+// than infers from a quiet transcript: the transcript carries an API error, or
+// the process is gone. They clear a hook-set `waiting` even while the transcript
+// is frozen (session-status.md § 3).
+//
+// Everything else the watcher can report about a frozen transcript is inferred
+// from silence — and a frozen transcript is what a permission prompt looks like.
+// The set is a *deny* list on purpose: it was an allow list of
+// working/thinking/compacting, so `stalled` (#256) fell straight through it when
+// it was added, and a permission prompt read as a hung tool for the rest of the
+// session (#508). A status added tomorrow is held by default, which is the safe
+// direction — the cost of holding one too long is a late release, the cost of
+// letting one through is telling the operator the wrong thing.
+var watcherObserves = map[string]bool{"error": true, "ended": true}
+
 // holdsWaiting reports whether a hook-set `waiting` must survive a watcher
 // report (#235). The watcher can't tell "a tool is running" from "a permission
 // prompt is blocking": both are a turn stopped on tool_use with a frozen
-// transcript. So its inferred working/thinking may only clear waiting once the
-// transcript has actually moved past when waiting was posted — i.e. the report's
-// timestamp (the transcript mtime) is newer than StatusChangedAt. error/ended
-// are positive observations and still win.
+// transcript. So an inferred status may only clear waiting once the transcript
+// has actually moved past when waiting was posted — i.e. the report's timestamp
+// (the transcript mtime) is newer than StatusChangedAt.
 func holdsWaiting(sess store.Session, req api.ReportRequest) bool {
 	if sess.Status != "waiting" || sess.StatusSource != "hook" || sess.StatusChangedAt == "" {
 		return false
 	}
-	if req.Status != "working" && req.Status != "thinking" && req.Status != "compacting" {
+	if watcherObserves[req.Status] {
 		return false
 	}
 	return !timeAfter(req.Timestamp, sess.StatusChangedAt)
