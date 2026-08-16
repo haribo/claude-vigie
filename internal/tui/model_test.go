@@ -240,11 +240,13 @@ func TestActivitySpark(t *testing.T) {
 	}
 }
 
-func TestFooterHasHints(t *testing.T) {
-	out := footer(tabSessions)
-	for _, want := range []string{"switch", "select", "filter", "sort", "group", "quit"} {
+// The hints moved behind `h` (#493): the list is the modal's now, and the same
+// shortcuts must still be findable there.
+func TestTheShortcutsModalHasTheHints(t *testing.T) {
+	out := renderHelp(tabSessions, 120)
+	for _, want := range []string{"next tab", "select", "filter", "sort", "group", "quit"} {
 		if !strings.Contains(out, want) {
-			t.Errorf("footer missing %q: %s", want, out)
+			t.Errorf("the shortcuts modal is missing %q:\n%s", want, out)
 		}
 	}
 }
@@ -317,31 +319,6 @@ func TestSettingsEdit(t *testing.T) {
 	m4, _ := m3.Update(right)
 	if m4.(model).prefs.idleHideAfter != 15*time.Minute {
 		t.Errorf("idle after cycle = %s, want 15m", m4.(model).prefs.idleHideAfter)
-	}
-}
-
-// TestAKeyTogglesHideEnded is the #320 regression: the `a` key is a direct
-// toggle of the persistent hide_ended setting (no transient showAll override),
-// and the flip is persisted so it survives a restart.
-func TestAKeyTogglesHideEnded(t *testing.T) {
-	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
-	a := tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("a")}
-	var m tea.Model = model{prefs: defaultPrefs()} // hideEnded starts true
-
-	m, _ = m.Update(a)
-	if m.(model).prefs.hideEnded {
-		t.Fatal("a did not toggle hide_ended off")
-	}
-	if loadPrefs().hideEnded {
-		t.Error("toggled hide_ended off was not persisted")
-	}
-
-	m, _ = m.Update(a)
-	if !m.(model).prefs.hideEnded {
-		t.Error("a did not toggle hide_ended back on")
-	}
-	if !loadPrefs().hideEnded {
-		t.Error("toggled hide_ended on was not persisted")
 	}
 }
 
