@@ -80,6 +80,16 @@ file is the single source of truth, not a second narrative.
 
 ### Fixed
 
+- A hook installed from a path containing a space now reports. The command
+  written into `settings.json` was built by concatenation and never quoted, so a
+  binary at `/home/me/My Tools/vigie` produced a command the shell split — it ran
+  `/home/me/My` and failed. Nothing said so: the hook was installed, the file
+  looked right, `vigie hooks install` reported success, and no event ever arrived,
+  which makes `waiting` — the one status only a hook can see — permanently
+  invisible. Both the binary path and the config override are quoted now, and the
+  matching that recognizes vigie's own hook legs accepts the quoted form as well
+  as the bare one, so legs installed before this are replaced rather than
+  duplicated (#513).
 - The Machines tab no longer hides five statuses out of nine. Its per-machine
   counts came from a hand-written switch covering `working`, `waiting`, `idle` and
   `ended`; `thinking`, `compacting`, `stalled`, `error` and `stale` fell through it
