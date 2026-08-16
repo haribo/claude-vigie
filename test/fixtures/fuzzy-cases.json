@@ -1,0 +1,33 @@
+{
+  "_comment": [
+    "Shared cases for the session filter's subsequence match (#545).",
+    "Two implementations exist because the TUI is Go and the dashboard is JavaScript:",
+    "fuzzyMatch in internal/tui/model.go, and its twin in internal/web/static/lib.js.",
+    "A rule copied per consumer is what #421, #422 and #466 were, so neither copy is",
+    "trusted: internal/tui/filter_shared_test.go and test/js/dashboard.test.mjs both",
+    "read this file and must agree on every case.",
+    "Keep the text to what a session title, machine name or branch realistically",
+    "holds — Go and JavaScript case-fold a few non-Latin scripts differently, and",
+    "this fixture is not the place to discover which."
+  ],
+  "cases": [
+    { "why": "an empty pattern matches anything", "pattern": "", "text": "web-app", "want": true },
+    { "why": "a plain substring is a subsequence", "pattern": "web", "text": "web-app", "want": true },
+    { "why": "gaps are allowed — the point of the rule", "pattern": "wapp", "text": "web-app", "want": true },
+    { "why": "order is not", "pattern": "appweb", "text": "web-app", "want": false },
+    { "why": "case is ignored in the pattern", "pattern": "WAPP", "text": "web-app", "want": true },
+    { "why": "case is ignored in the text", "pattern": "wapp", "text": "WEB-APP", "want": true },
+    { "why": "a character absent from the text fails the whole match", "pattern": "webz", "text": "web-app", "want": false },
+    { "why": "a pattern longer than the text cannot match", "pattern": "web-application", "text": "web-app", "want": false },
+    { "why": "an exact match", "pattern": "web-app", "text": "web-app", "want": true },
+    { "why": "spaces are ordinary characters and must be matched too", "pattern": "b a", "text": "web app", "want": true },
+    { "why": "a repeated pattern character needs two occurrences", "pattern": "pp", "text": "web-app", "want": true },
+    { "why": "three of them do not exist here", "pattern": "ppp", "text": "web-app", "want": false },
+    { "why": "the empty text matches only the empty pattern", "pattern": "a", "text": "", "want": false },
+    { "why": "a pattern may span two fields of the haystack", "pattern": "appmin", "text": "web-app minet-dev", "want": true },
+    { "why": "accented Latin folds the same in both languages", "pattern": "ÉTÉ", "text": "un été chaud", "want": true },
+    { "why": "digits and punctuation are ordinary characters", "pattern": "v2.1", "text": "release v2.1.0", "want": true },
+    { "why": "a status is searchable, it is part of the haystack", "pattern": "wait", "text": "api-gateway minet-dev gw main waiting", "want": true },
+    { "why": "rc is only special as a whole pattern; as text it matches normally", "pattern": "rc", "text": "src-tool", "want": true }
+  ]
+}

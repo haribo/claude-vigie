@@ -9,6 +9,22 @@ file is the single source of truth, not a second narrative.
 
 ## [Unreleased]
 
+### Added
+
+- The web dashboard filters its session list. The TUI has had `/` since the
+  beginning; the browser — the window an operator actually leaves open all day —
+  made them scroll instead. Same rule as the terminal: a case-insensitive
+  subsequence match, so `wapp` finds `web-app`, over the session's name, machine,
+  project, branch and status, plus the `rc` token that selects the
+  remote-controlled sessions rather than text-matching. Under the boundary written
+  in #544 that rule is content, so it is shared rather than restated — the
+  JavaScript port and the Go original are run against one fixture and must agree
+  case for case, since a rule copied per consumer is exactly what #421, #422 and
+  #466 were. The input sits outside the region the refresh tick repaints, so a
+  redraw cannot take the caret or the typed text with it. An untitled session is
+  now named by the first eight characters of its id, as in the TUI: the column
+  showed all thirty-six while the filter could only reach eight (#545).
+
 ### Changed
 
 - **Breaking:** the daemon refuses a usage snapshot from a machine that does not
@@ -84,9 +100,6 @@ file is the single source of truth, not a second narrative.
   The usage gauges are tightened against their percentage and their reset, giving
   up the alignment `%3.0f` used to keep — a deliberate reading trade
   ([sessions-chrome](docs/design/sessions-chrome.md), #492).
-
-### Changed
-
 - The web dashboard's contract with the TUI is written down: **"mirror" binds
   content and hierarchy, not gestures.** The word appeared in three places and
   bound nothing, so the two clients drifted in both directions — the dashboard

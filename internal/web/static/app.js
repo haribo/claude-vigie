@@ -9,6 +9,7 @@ import {
   esc, dash, trim, hasCall, detailText, humanTokens, ageSec, relAge, relResetHint,
   shortModel, projectName, totalTokens, sparkSVG, migrateKeys, fullColOrder, colHidden, rank,
   adoptLegacyKey, needsAttention, attentionCount, streamIsSilent, REFRESH_MS,
+  sessionName, matchesFilter,
 } from "./lib.js";
 
 // Both keys were named for the old brand. They hold live state — a signed-in
@@ -23,6 +24,9 @@ let token = adoptLegacyKey(localStorage, "cf_token", TOKEN_KEY) || "";
 let sessions = [], byId = new Map();
 let usage = null, platform = null, stats = null, settings = null, ver = null, watcher = null;
 let activeTab = "sessions", detailId = null, showEnded = false;
+// The active filter. Held here rather than read from the DOM so a repaint of the
+// table can never change it (#545).
+let filter = "";
 let sortKey = "seen", sortDir = 1;           // 1 = descending
 let statsPeriod = "Week", statsLoaded = false, settingsLoaded = false;
 let liveCtrl = null, liveRetry = null, tickTimer = null, metaTimer = null;
@@ -78,21 +82,35 @@ function renderTabs() {
   if (!paint("tabbar", html)) return; // the tick calls this every 5 s; listeners survive
   $("tabbar").querySelectorAll(".tab").forEach((b) => b.addEventListener("click", () => switchTab(b.dataset.tab)));
 }
+// syncFilterBar keeps the bar on the Sessions tab only, and its count in step
+// with the table. The bar lives outside the painted region, so nothing else
+// updates it.
+function syncFilterBar() {
+  const show = activeTab === "sessions" && !detailId && $("gate").hidden;
+  $("filterbar").hidden = !show;
+  if (!show) return;
+  const shown = showEnded ? sessions : sessions.filter((s) => s.status !== "ended");
+  $("filter-count").textContent = filter ? `${visibleSessions().length} of ${shown.length}` : "";
+}
+
 function switchTab(id) {
   activeTab = id; detailId = null; $("view-detail").hidden = true;
   ["sessions", "stats", "machines", "settings"].forEach((t) => $("tab-" + t).hidden = (t !== id));
   if (id === "machines") renderMachines();
   if (id === "stats") { if (!statsLoaded) loadStats(); else renderStats(); }
   if (id === "settings") { if (!settingsLoaded) loadSettings(); else renderSettings(); }
-  renderTabs(); window.scrollTo(0, 0);
+  renderTabs(); syncFilterBar(); window.scrollTo(0, 0);
 }
 
 // ---------- Sessions ----------
 // Each column carries how to render its cell, so the header and the rows are both
 // driven by the (operator-ordered, filtered) column list — see activeCols (#309).
 const COLS = [
-  { key: "name", label: "Session", cmp: (a, b) => (a.title || a.id).localeCompare(b.title || b.id),
-    cell: (s) => { const n = esc(s.title || s.id); return `<td class="name" title="${n}"><span class="nm">${n}</span></td>`; } },
+  // sessionName, not `title || id`: an untitled session is named by the first
+  // eight characters of its id in the TUI, and the filter searches that name — a
+  // column showing 36 characters of a key the filter cannot reach is a trap (#545).
+  { key: "name", label: "Session", cmp: (a, b) => sessionName(a).localeCompare(sessionName(b)),
+    cell: (s) => { const n = esc(sessionName(s)); return `<td class="name" title="${esc(s.title || s.id)}"><span class="nm">${n}</span></td>`; } },
   { key: "machine", label: "Machine", cmp: (a, b) => a.machine.localeCompare(b.machine),
     cell: (s) => `<td class="dim">${esc(s.machine)}</td>` },
   { key: "project", label: "Project", cmp: (a, b) => projectName(a.project_dir).localeCompare(projectName(b.project_dir)),
@@ -166,7 +184,10 @@ function moveCol(key, dir) {
   saveLayout(l);
 }
 function visibleSessions() {
-  const list = showEnded ? sessions : sessions.filter((s) => s.status !== "ended");
+  // Same order as the TUI (internal/tui/sessionsview.go): the visibility
+  // preferences first, then the filter, then the sort.
+  const shown = showEnded ? sessions : sessions.filter((s) => s.status !== "ended");
+  const list = shown.filter((s) => matchesFilter(s, filter));
   const col = COLS.find((c) => c.key === sortKey);
   return col && col.cmp ? [...list].sort((a, b) => col.cmp(a, b) * sortDir) : list;
 }
@@ -214,7 +235,10 @@ function renderSessions() {
     const cells = cols.map((c) => c.cell(s)).join("");
     return `<tr class="st-${st}${attn}${call}" data-id="${esc(s.id)}" tabindex="0">${cells}</tr>`;
   }).join("");
-  const empty = visibleSessions().length ? "" : '<div class="empty">No sessions in view.</div>';
+  // The TUI says which of the two silences this is, and so must this: an empty
+  // fleet and a filter that matched nothing look identical otherwise.
+  const empty = visibleSessions().length ? ""
+    : `<div class="empty">${filter ? "No sessions match the filter." : "No sessions in view."}</div>`;
   const html = renderSummary() +
     `<div class="table-wrap"><div class="table-scroll"><table><thead><tr>${heads}</tr></thead><tbody>${rows}</tbody></table></div>${empty}</div>`;
   if (!paint("tab-sessions", html)) return; // nothing on screen would change; listeners are still bound
@@ -222,6 +246,7 @@ function renderSessions() {
   $("tab-sessions").querySelectorAll("th[data-sort]").forEach((th) => th.addEventListener("click", () => {
     const k = th.dataset.sort; if (k === sortKey) sortDir = -sortDir; else { sortKey = k; sortDir = 1; } renderSessions();
   }));
+  syncFilterBar();
   $("tab-sessions").querySelectorAll("tbody tr").forEach((tr) => {
     const go = () => openDetail(tr.dataset.id);
     tr.addEventListener("click", go);
@@ -386,10 +411,11 @@ function openDetail(id) {
     </div>`;
   $("tab-" + activeTab).hidden = true;
   $("view-detail").hidden = false;
+  syncFilterBar();
   $("back").addEventListener("click", closeDetail);
   window.scrollTo(0, 0);
 }
-function closeDetail() { detailId = null; $("view-detail").hidden = true; $("tab-" + activeTab).hidden = false; window.scrollTo(0, 0); }
+function closeDetail() { detailId = null; $("view-detail").hidden = true; $("tab-" + activeTab).hidden = false; syncFilterBar(); window.scrollTo(0, 0); }
 
 // ---------- loading ----------
 async function loadSessions() {
@@ -474,8 +500,8 @@ function setConn(live) { const el = $("conn"); el.className = "chip conn " + (li
 // ---------- auth / gate ----------
 function onUnauthorized() { teardown(); localStorage.removeItem(TOKEN_KEY); token = ""; showGate(true); }
 function teardown() { if (liveCtrl) liveCtrl.abort(); liveCtrl = null; clearTimeout(liveRetry); stopTicker(); clearInterval(metaTimer); metaTimer = null; }
-function showGate(err) { $("gate").hidden = false; $("gate-err").hidden = !err; $("signout").hidden = true; $("botbar").hidden = true; $("ver").hidden = true; setConn(false); $("token-input").focus(); }
-function hideGate() { $("gate").hidden = true; $("signout").hidden = false; }
+function showGate(err) { $("gate").hidden = false; $("filterbar").hidden = true; $("gate-err").hidden = !err; $("signout").hidden = true; $("botbar").hidden = true; $("ver").hidden = true; setConn(false); $("token-input").focus(); }
+function hideGate() { $("gate").hidden = true; $("signout").hidden = false; syncFilterBar(); }
 function signOut() { teardown(); localStorage.removeItem(TOKEN_KEY); token = ""; showGate(false); }
 
 async function start() {
@@ -497,6 +523,10 @@ $("gate-form").addEventListener("submit", (e) => {
   token = v; localStorage.setItem(TOKEN_KEY, token); start().catch(() => {});
 });
 $("signout").addEventListener("click", signOut);
+$("filter-input").addEventListener("input", (e) => {
+  filter = e.target.value.trim();
+  if (activeTab === "sessions" && !detailId) renderSessions(); else syncFilterBar();
+});
 
 renderTabs();
 if (token) start().catch(() => {}); else showGate(false);
