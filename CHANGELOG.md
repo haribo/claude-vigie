@@ -87,6 +87,17 @@ file is the single source of truth, not a second narrative.
 
 ### Fixed
 
+- The daemon's database is readable by its owner alone. It holds the fleet's
+  shared token, and SQLite created it with the process umask — `-rw-r--r--` on a
+  default one, so every local account on the host could read the secret and, with
+  it, post reports or set the retention to `1ns` and wipe the session table. The
+  client had always written its copy of the same secret at `0600`; the daemon,
+  which holds the copy that matters, had no mode set at all. All three files are
+  covered — the `-wal` carries committed pages — and an existing database is
+  tightened when it is opened, not only a new one, since the operators who need
+  this are the ones already running. The file is also created before SQLite can,
+  so the database that persists between runs is never world-readable, not even
+  for the moment between its creation and the chmod (#526).
 - The specifications describe the screen that exists. `session-list.md` was marked
   **Accepted** while still specifying the `a` binding and the summary strip, both
   removed weeks ago — so an implementer following it rebuilt a screen the tests
