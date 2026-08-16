@@ -56,8 +56,10 @@ Three tests, all of which a permanent element must pass:
    the default, and a row that reads `operational` 99 % of the time trains the eye
    to skip the place where the exception will appear.
 3. **The operator can act on it, or is misled without it.** `hidden N` survives on
-   this test alone: `a` and `hide idle after` filter silently, and without it the
-   screen claims five sessions while the fleet has thirty.
+   this test alone: `hide_ended` and `idle_hide_after` filter silently, and
+   without it the screen claims five sessions while the fleet has thirty. (Both
+   are Settings preferences; the `a` keystroke that used to flip the first is
+   removed in § 5bis.)
 
 Target: **6 chrome rows, 3 rules, two scopes** — navigation on top, figures at
 the bottom, nothing but sessions between them.

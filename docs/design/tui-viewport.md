@@ -21,21 +21,18 @@ band**:
 ```
 tab bar                     ┐
 [⚠ watcher-stale]           │ fixed (top)
-summary strip               │
 rule                        │
 [filter line]               │
 [overflow banner]           ┘
 column header               ← pinned
  …session rows…             ← the only scrollable band
 [position indicator]        ← pinned (only when the band overflows)
-rule                        ┐
-usage / platform strip      │ fixed (bottom)
-rule                        │
-footer                      ┘
+rule                        ┐ fixed (bottom)
+bottom bar                  ┘ usage · view state · h help
 ```
 
 Only the row band scrolls. Everything else stays put, so the operator never
-loses the header, the counts, or the key hints to scrolling.
+loses the header, the column titles, or the way to the shortcuts.
 
 Which elements earn a permanent row at all is specified separately, in
 [sessions-chrome.md](sessions-chrome.md): this document budgets the rows, that

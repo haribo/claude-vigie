@@ -23,16 +23,20 @@ The table is a live operator view, not an archive. By default it hides the noise
 - **Optionally, long-idle sessions are hidden** after a configurable duration
   (Settings tab; off by default). A session idle longer than that threshold
   disappears until it resumes.
-- **`a` toggles hiding ended sessions** — a live switch of the persistent
-  `hide_ended` preference (the same one in Settings), saved immediately. One
-  mechanism, one state: the ended rows appear or vanish and the Settings row
-  follows. It does **not** touch `idle_hide_after`, which is a set-and-forget
-  Settings threshold, not a per-glance override.
+- **Hiding ended sessions is a Settings preference** (`hide_ended`), not a
+  keystroke. It was bound to `a` until #493 removed it: a bare unmodified letter
+  that rewrote `tui.toml` with no confirmation and no undo, while the same setting
+  sits one tab away under a readable label with its value on screen. It does
+  **not** touch `idle_hide_after`, which is a set-and-forget threshold, not a
+  per-glance override.
 
-The summary strip reports how many sessions the default view is hiding, so the
-operator always knows there is more behind the current filter.
+The bottom bar reports how many sessions the current filter is hiding, so the
+operator always knows there is more behind it. Which elements earn a permanent row
+at all, and where they sit, is specified in
+[sessions-chrome.md](sessions-chrome.md) — the summary strip this section used to
+describe was deleted in #492.
 
-**One width budget, right side first.** The strip has two halves — status counts
+**One width budget, right side first.** The bottom bar has two halves — status counts
 and totals on the left, the view state (`sort`, `group`, `hidden`, the
 server-connection glyph) on the right. On a narrow terminal the right half is
 measured first and its space reserved; the left half then fits into what remains.
@@ -95,7 +99,8 @@ answer, not as an oversight.
 
 `tokens`, `status`, and `rc` break ties by most-recently-seen, so within a rank
 the freshest session is on top. The active key and direction are shown in the
-summary strip.
+bottom bar, and the direction is also readable from the arrow in the column
+header.
 
 ---
 
