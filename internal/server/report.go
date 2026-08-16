@@ -185,11 +185,17 @@ func (s *Server) maybeSample(ctx context.Context, sessionID, at string, output i
 // wasted (#258).
 func visibleSignature(s store.Session) string {
 	u := s.Usage
-	return fmt.Sprintf("%s|%s|%s|%s|%s|%s|%s|%s|%s|%s|%t|%s|%d|%s|%s|%d|%d|%d|%d",
+	return fmt.Sprintf("%s|%s|%s|%s|%s|%s|%s|%s|%s|%s|%t|%s|%d|%s|%s|%d|%d|%d|%d|%s|%d|%t|%s",
 		s.Status, s.StatusChangedAt, s.Detail, s.Title, s.User, s.Machine, s.Model,
 		s.GitBranch, s.ProjectDir, s.LastTool, s.RemoteControl, s.RemoteURL, s.APIErrorStatus,
 		s.CallAt, s.CallMessage, // raising or clearing a call must reach the dashboards (#388)
-		u.InputTokens, u.OutputTokens, u.CacheCreationTokens, u.CacheReadTokens)
+		u.InputTokens, u.OutputTokens, u.CacheCreationTokens, u.CacheReadTokens,
+		// The dashboard renders these too, and stops polling once the stream is
+		// live — so a session switching to plan mode, changing effort or filling
+		// its context never redrew while they were missing (#514). ContextKnown
+		// travels separately from the figure: "unknown" and "known to be zero"
+		// are different states on screen (#367).
+		s.Effort, s.ContextTokens, s.ContextKnown, s.PermissionMode)
 }
 
 // applyReport merges a report into the session state (read-modify-write).

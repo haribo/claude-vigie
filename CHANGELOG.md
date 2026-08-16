@@ -80,6 +80,16 @@ file is the single source of truth, not a second narrative.
 
 ### Fixed
 
+- The dashboard redraws when a session's effort, context or permission mode
+  changes. The signature that decides whether a report is worth an SSE event
+  covered nineteen fields and omitted four the dashboard renders, and the web
+  client stops polling once the stream is live — so a session switching to plan
+  mode, changing reasoning effort or filling its context window never redrew. The
+  TUI hid it by refetching every five seconds regardless. A dashboard that has
+  stopped updating one column looks exactly like one where nothing changed. The
+  four are covered, and a test over the API view now fails when a field is added
+  without being either covered or excluded with a reason — the list is what
+  drifted, because nothing tied it to what it was meant to cover (#514).
 - A hook installed from a path containing a space now reports. The command
   written into `settings.json` was built by concatenation and never quoted, so a
   binary at `/home/me/My Tools/vigie` produced a command the shell split — it ran
