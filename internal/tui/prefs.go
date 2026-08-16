@@ -23,7 +23,6 @@ type prefs struct {
 	notify        bool          // desktop notifications on working→attention (#260)
 	columnOrder   []string      // display order of ALL table columns; empty = built-in default (#308)
 	columnHidden  []string      // hidden table columns (#315)
-	blink         bool          // animate the marker of a calling session (#389)
 	// loadFailed says the preferences file exists but could not be used — it was
 	// unreadable, empty, or not valid TOML. It is not a preference: it is a latch
 	// that stops savePrefs stamping defaults over a file whose contents are still
@@ -39,7 +38,7 @@ type prefs struct {
 func defaultPrefs() prefs {
 	return prefs{
 		hideEnded: true, idleHideAfter: 0, sortKey: sortLastSeen, groupBy: groupNone,
-		notify: true, blink: true, callMarker: defaultCallMarker,
+		notify: true, callMarker: defaultCallMarker,
 	}
 }
 
@@ -66,7 +65,6 @@ type prefsFile struct {
 	Notify        *bool    `toml:"notify"`        // pointer: absent = default (on)
 	ColumnOrder   []string `toml:"column_order"`  // display order of all columns; empty = default (#308)
 	ColumnHidden  []string `toml:"column_hidden"` // hidden columns (#315)
-	Blink         *bool    `toml:"blink"`         // pointer: absent = default (on) (#389)
 	CallMarker    string   `toml:"call_marker"`   // glyph for a calling session's dot (#389)
 }
 
@@ -122,15 +120,11 @@ group_by = %q
 column_order = %s
 column_hidden = %s
 
-# Blink the status dot of a session that has called you (vigie call). Off leaves
-# the call readable only in the DETAIL column.
-blink = %t
-
 # Glyph for a calling session's dot. Must be exactly one terminal cell wide: a
 # two-cell glyph (an emoji, an ideograph) would shift every column to its right,
 # so anything wider is ignored and the default is kept.
 call_marker = %q
-`, p.notify, p.hideEnded, idle, sortNames[p.sortKey], p.sortReversed, groupNames[p.groupBy], list(p.columnOrder), list(p.columnHidden), p.blink, p.callMarker)
+`, p.notify, p.hideEnded, idle, sortNames[p.sortKey], p.sortReversed, groupNames[p.groupBy], list(p.columnOrder), list(p.columnHidden), p.callMarker)
 }
 
 // savePrefs writes the preferences file (best-effort; the UI must not block).
@@ -260,9 +254,6 @@ func loadPrefs() prefs {
 	// A layout saved before a column rename keeps its old key (#393).
 	p.columnOrder = migrateColumnKeys(f.ColumnOrder)
 	p.columnHidden = migrateColumnKeys(f.ColumnHidden)
-	if f.Blink != nil { // absent keeps the default (on)
-		p.blink = *f.Blink
-	}
 	// A marker wider than one cell would shift every column to its right, since
 	// the table pads by rune count and vigie carries no display-width dependency.
 	// An invalid value is ignored rather than obeyed (#389).
