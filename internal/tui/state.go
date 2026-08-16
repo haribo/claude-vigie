@@ -47,17 +47,84 @@ type stateRow struct {
 
 // glyph renders a level. Shape carries the meaning as well as color, so a
 // monochrome terminal and a colorblind operator read the same thing.
-func (l level) glyph() string {
+func (l level) glyph() string { return l.glyphAt(false) }
+
+// glyphAt renders a level on the given half of the pulse cycle. `dim` swaps the
+// color for the second tone of the same hue; the glyph itself never changes and
+// is never blanked — unlike the call marker, which substitutes a space. That is
+// one of the three things keeping the two animations apart (ADR-0010, #495).
+func (l level) glyphAt(dim bool) string {
+	if l == levelUnknown {
+		return dimStyle.Render("◌")
+	}
+	return lipgloss.NewStyle().Foreground(levelColor(l, dim)).Render(l.shape())
+}
+
+// shape is the glyph alone. It is what a monochrome terminal reads, so it never
+// depends on the pulse.
+func (l level) shape() string {
 	switch l {
 	case levelBroken:
-		return lipgloss.NewStyle().Foreground(cRed).Render("○")
+		return "○"
 	case levelDegrade:
-		return lipgloss.NewStyle().Foreground(cAmber).Render("◍")
+		return "◍"
 	case levelUnknown:
-		return dimStyle.Render("◌")
+		return "◌"
 	default:
-		return lipgloss.NewStyle().Foreground(cGreen).Render("●")
+		return "●"
 	}
+}
+
+// levelColor is the tone a level renders in, on either half of the pulse cycle.
+// Green never animates — a healthy state is the default and needs no alarm — so
+// it answers the same color for both halves.
+//
+// Split out from the rendering on purpose: a terminal with color disabled (every
+// test run, among others) renders both halves to the same bare glyph, so an
+// assertion on the rendered string would pass whether or not the pulse exists.
+func levelColor(l level, dim bool) lipgloss.AdaptiveColor {
+	switch l {
+	case levelBroken:
+		if dim {
+			return cRedDim
+		}
+		return cRed
+	case levelDegrade:
+		if dim {
+			return cAmberDim
+		}
+		return cAmber
+	default:
+		return cGreen
+	}
+}
+
+// pulseInterval is the half-period of the state pulse: one full cycle every two
+// seconds, i.e. 0.5 Hz.
+//
+// Four times slower than the call marker's blinkInterval, and deliberately so:
+// the cadence is what separates "come now" from "still broken". There is a cost
+// argument too — the tick is only scheduled while something animates, so a
+// long-lived degraded state would otherwise pin the TUI to a permanent 500 ms
+// redraw loop, on a tool meant to stay open all day. 0.5 Hz is also well under
+// WCAG 2.3.1's three-flashes-per-second ceiling, which is why this cadence may be
+// slowed and never sped up (#495).
+const pulseInterval = time.Second
+
+// pulsing reports whether the pill is animating — the only condition under which
+// the pulse tick is scheduled at all. A degraded pill breathes, amber and red
+// both; a healthy one is still.
+//
+// There is no preference to mute it. With no text beside the pill the pulse *is*
+// the alert, so muting it would make a degraded state completely silent — the
+// same reasoning that removed prefs.blink (#490).
+func (m model) pulsing() bool { return m.stateLevel() != levelOK }
+
+// statePill is the tab line's trailing corner: the `[i]` keycap that opens the
+// modal, then the pill. It never changes width — no text ever appears beside it,
+// so the table below never jumps.
+func (m model) statePill() string {
+	return keycapStyle.Render(" "+stateKey+" ") + " " + m.stateLevel().glyphAt(m.pulseOn)
 }
 
 // linkDown reports whether the TUI has lost its channel to the vigie server. It
@@ -185,13 +252,6 @@ func (m model) stateLevel() level {
 		}
 	}
 	return worst
-}
-
-// statePill is the tab line's trailing corner: the `[i]` keycap that opens the
-// modal, then the pill. It never changes width — no text ever appears beside it,
-// so the table below never jumps.
-func (m model) statePill() string {
-	return keycapStyle.Render(" "+stateKey+" ") + " " + m.stateLevel().glyph()
 }
 
 // renderState draws the state modal: the whole observation chain, one line per

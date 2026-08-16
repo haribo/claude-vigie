@@ -143,6 +143,8 @@ type model struct {
 	focus           focusState       // what we know of the terminal focus (#411)
 	showHelp        bool             // the shortcuts modal is open (#493)
 	showState       bool             // the state modal is open (#494)
+	pulseOn         bool             // the state pill is on the second tone of its cycle (#495)
+	pulseTicking    bool             // a pulse tick is in flight (never stack two)
 }
 
 // sessionsView is the Sessions tab's private state — the cursor and selection,
@@ -354,12 +356,30 @@ func (m model) frame() frame {
 	return frame{hidden: !m.sess.blinkOn, marker: m.prefs.callMarker}
 }
 
+type pulseMsg struct{}
+
 type blinkMsg struct{}
 
 // blinkCmd schedules the next marker half-cycle. It is only ever scheduled while
 // a call is on screen: the ambient poll is 5 s and must not be raised to animate.
 func blinkCmd() tea.Cmd {
 	return tea.Tick(blinkInterval, func(time.Time) tea.Msg { return blinkMsg{} })
+}
+
+// pulseCmd schedules the next half-cycle of the state pulse. Like the blink, it
+// exists exactly as long as something is animating (#495).
+func pulseCmd() tea.Cmd {
+	return tea.Tick(pulseInterval, func(time.Time) tea.Msg { return pulseMsg{} })
+}
+
+// withPulseTick starts the pulse if the pill is degraded and no tick is in
+// flight yet.
+func (m model) withPulseTick() (tea.Model, tea.Cmd) {
+	if m.pulseTicking || !m.pulsing() {
+		return m, nil
+	}
+	m.pulseTicking = true
+	return m, pulseCmd()
 }
 
 // withBlinkTick starts the animation when a call appears and nothing is animating
@@ -402,6 +422,14 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tickMsg:
 		sc := m.refreshSessions()
 		return m, tea.Batch(sc, m.fetchUsageCmd(), m.watcherCmd(), m.statsCmd(), m.fetchPlatformCmd(), tickCmd())
+	case pulseMsg:
+		// The pill recovered: stop the tick and leave the glyph on its full tone.
+		if !m.pulsing() {
+			m.pulseTicking, m.pulseOn = false, false
+			return m, nil
+		}
+		m.pulseOn = !m.pulseOn
+		return m, pulseCmd()
 	case blinkMsg:
 		// Stop as soon as nothing is calling: the animation must not outlive its
 		// reason, and the marker is left visible so no row keeps a blank dot.
@@ -412,9 +440,24 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.sess.blinkOn = !m.sess.blinkOn
 		return m, blinkCmd()
 	default:
-		return m.applyDataMsg(msg).withBlinkTick()
+		return m.applyDataMsg(msg).withAnimationTicks()
 	}
 	return m, nil
+}
+
+// withAnimationTicks starts whichever of the two animations now has a reason to
+// run. They are independent: a call blinking in the table must not decide whether
+// a degraded pill breathes, and neither must the other way round (#495).
+func (m model) withAnimationTicks() (tea.Model, tea.Cmd) {
+	blinked, blinkCmd := m.withBlinkTick()
+	pulsed, pulseCmd := blinked.(model).withPulseTick()
+	if blinkCmd == nil {
+		return pulsed, pulseCmd
+	}
+	if pulseCmd == nil {
+		return pulsed, blinkCmd
+	}
+	return pulsed, tea.Batch(blinkCmd, pulseCmd)
 }
 
 // applySessions folds a sessions fetch into the model, dropping stale

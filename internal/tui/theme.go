@@ -19,3 +19,16 @@ var (
 	cCyan    = lipgloss.AdaptiveColor{Light: "#0891b2", Dark: "#22d3ee"} // compacting — summarizing context (#342)
 	cSel     = lipgloss.AdaptiveColor{Light: "#e0f2fe", Dark: "#16273c"} // selected-row fill
 )
+
+// The second tone of the state pill's pulse (#495). Each stays inside its own
+// hue — an amber drifting toward orange, or a red toward pink, would move the
+// meaning, since color already carries severity.
+//
+// The direction differs by theme because both move toward the ground: on a light
+// terminal the tone lightens, on a dark one it darkens. That cannot be computed
+// — the TUI does not know the terminal's background color — so each pair is
+// chosen by hand and checked by eye in a real terminal.
+var (
+	cAmberDim = lipgloss.AdaptiveColor{Light: "#d08a4a", Dark: "#c08f2a"}
+	cRedDim   = lipgloss.AdaptiveColor{Light: "#ec7070", Dark: "#bd5555"}
+)
