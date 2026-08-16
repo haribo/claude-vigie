@@ -187,9 +187,16 @@ versions are global.
 ### What this does not destroy
 
 Per-source granularity exists because a panel that fails silently is a lie the
-operator cannot see through (#449, #456). It does not disappear — it changes
-address. It lives in the modal, in full, one keystroke away, and stops costing a
-standing row.
+operator cannot see through (#449, #456). It does not disappear and it does not
+move: the modal is **added** to it, not substituted for it.
+
+An earlier draft had the failure banners (`staleNote`, `staleReason`, the watcher
+warning) removed in favour of the modal, on the grounds that they stopped costing
+a standing row. That premise is wrong — those lines are conditional, so they cost
+nothing while everything is healthy, and they appear exactly when the operator
+needs them, in the panel they are about. Deleting them would trade a warning at
+the point of use for one a keystroke away, and buy nothing. They stay; the modal
+answers a different question, which is *why*, for the whole chain at once.
 
 ---
 
