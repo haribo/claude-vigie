@@ -244,3 +244,64 @@ func TestGnomeExtensionSharesTheAttentionSet(t *testing.T) {
 func TestDashboardSharesTheAttentionSet(t *testing.T) {
 	diff(t, dashboardLib+" ATTENTION", jsArray(t, dashboardLib, "ATTENTION"), Attention)
 }
+
+// docSection isolates a numbered section of the design document, the way
+// sectionOne does for § 1. It exists so a claim in one section is never read as
+// if it belonged to another.
+func docSection(doc, heading string) string {
+	start := strings.Index(doc, heading)
+	if start < 0 {
+		return ""
+	}
+	rest := doc[start+len(heading):]
+	if end := strings.Index(rest, "\n## "); end >= 0 {
+		return rest[:end]
+	}
+	return rest
+}
+
+// TestEveryStatusHasADetectionRow guards § 5, which answers "what produces this
+// status, and how much should I trust it" — one row per status.
+//
+// `stale` had no row. The one status whose entire meaning is *nothing is
+// observing this machine* was missing from the table about who observes what,
+// and § 3 two sections above still claimed a silent session simply reads `ended`
+// — the behavior #284/#285 replaced (#539).
+//
+// Nothing would have caught it. #423 pinned § 1's vocabulary against the code and
+// the two JavaScript copies; the table that says where each of those statuses
+// comes from was checked by nobody. A status added to § 1 and never given a row
+// is one the reader is invited to trust with no stated basis.
+func TestEveryStatusHasADetectionRow(t *testing.T) {
+	b, err := os.ReadFile(designDoc)
+	if err != nil {
+		t.Fatalf("reading the design document: %v", err)
+	}
+	five := docSection(string(b), "## 5.")
+	if five == "" {
+		t.Fatalf("%s has no `## 5.` section — this guard needs updating", designDoc)
+	}
+	// Each row opens with the status in backticks, as in § 1.
+	row := regexp.MustCompile("(?m)^\\|\\s*`([a-z]+)`\\s*\\|")
+	rows := map[string]bool{}
+	for _, m := range row.FindAllStringSubmatch(five, -1) {
+		rows[m[1]] = true
+	}
+	if len(rows) == 0 {
+		t.Fatalf("no status rows parsed out of %s § 5 — has the table moved?", designDoc)
+	}
+	var missing []string
+	for _, s := range All {
+		if !rows[s] {
+			missing = append(missing, s)
+		}
+	}
+	if len(missing) > 0 {
+		t.Errorf("§ 5 has no detection row for %v — each status must say what produces it", missing)
+	}
+	for s := range rows {
+		if !Known(s) {
+			t.Errorf("§ 5 has a row for %q, which is not a status", s)
+		}
+	}
+}

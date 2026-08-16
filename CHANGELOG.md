@@ -87,6 +87,20 @@ file is the single source of truth, not a second narrative.
 
 ### Fixed
 
+- The session-status specification describes the machine that exists. It stated
+  twice that the watcher **cannot** observe `waiting` — true when it had only the
+  transcript to read, where a permission prompt and a running tool are the same
+  frozen file, and false since Claude Code began publishing a session registry
+  that says so outright, reason included. The specification is the source of
+  truth, so the honest reading of it was an instruction to delete the only way a
+  machine with no hooks installed ever shows that a human is the blocker. The same
+  document also claimed a session that stops reporting simply reads `ended`, the
+  behaviour #284/#285 replaced and which its own § 1 already contradicted: silence
+  on a machine whose watcher is still beating means gone, silence with no watcher
+  at all means unobserved. The registry now appears in § 2 as what it is — a third
+  signal, authoritative over the transcript heuristic where it covers a session —
+  and `stale` has the detection row it never had. A test counts the statuses § 5
+  fails to account for, since nothing checked that table before (#539).
 - The web dashboard keeps observing once its event stream is live. It stopped
   asking for the session list the moment the stream connected, and `ended` and
   `stale` are not stored values — the daemon derives them from the clock every
