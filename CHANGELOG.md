@@ -185,6 +185,19 @@ file is the single source of truth, not a second narrative.
 
 ### Fixed
 
+- ADR-0008 no longer states a consequence that #508 reversed. It said `compacting`
+  clears a hook-posted `waiting` "like `working`/`thinking`" — true when it was
+  written, and false since the reconciler became a deny list. The reason has
+  nothing to do with compaction: to the watcher a running tool and a blocking
+  permission prompt are the same frozen transcript, so nothing it infers from that
+  silence may retract a `waiting` a hook established. The rule was an allow list,
+  `stalled` fell through it when #256 added that status, and a permission prompt
+  read as a hung tool for the rest of the session. An ADR is consulted before
+  behaviour is changed, so one that argues clearly for a reversed position is how
+  a fixed defect comes back: acting on that bullet would have rebuilt #508. The
+  decision itself stands — the marker, the boundary close, the timeout cap, the
+  rollup behaviour — and only the overtaken sentence carries an amendment (#559).
+
 - Three small defects, none urgent, all real. The desktop notifier called `Start`
   and never `Wait`, so every attention transition and every raised call left an
   unreaped child until the TUI exited — on a tool meant to stay open all day. It

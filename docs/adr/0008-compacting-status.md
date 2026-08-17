@@ -64,6 +64,25 @@ opaque two minutes legible.
   `thinking`, it is a display refinement: the time-by-status rollups bucket only
   the base `working`/`waiting`/`idle`, so a refinement is not separately counted
   (consistent with the existing `thinking` behavior, not a regression).
+
+  > **Amended by #508.** The first sentence no longer holds: `compacting` does
+  > **not** clear a hook-posted `waiting`. The reason has nothing to do with
+  > compaction. To the watcher, "a tool is running" and "a permission prompt is
+  > blocking" are the same thing — a turn stopped on `tool_use` with a frozen
+  > transcript — so *any* status it infers from that silence may not retract a
+  > `waiting` a hook established, until the transcript actually moves past when
+  > that `waiting` was posted. The rule was an allow list naming
+  > `working`/`thinking`/`compacting`; `stalled` fell straight through it when
+  > #256 added that status, and a permission prompt read as a hung tool for the
+  > rest of the session. It is a **deny** list now — `error` and `ended`, the two
+  > the watcher observes positively — so a status added later is held by default,
+  > which is the safe direction: a late release costs less than naming the wrong
+  > cause. See [session-status.md](../design/session-status.md) § 3 and
+  > `watcherObserves` in `internal/server/report.go`.
+  >
+  > The rest of this decision stands: the `PreCompact` marker, the
+  > `compact_boundary` close, the timeout cap, the rollup behaviour, and that
+  > `compacting` is not an attention status.
 - **Not an attention status.** Excluded from `attentionStatuses`: no desktop
   notification, no slot in the jump-to-next-waiting queue. Compaction needs
   nobody.
