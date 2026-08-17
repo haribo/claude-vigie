@@ -80,8 +80,16 @@ fields, and its behaviour is unchanged.
 `~/.local/state/vigie/watcher`, alongside the existing `sessions/` (presence) and
 `compacting/` (compaction markers) state.
 
-- Written by `vigie watch` on each heartbeat (every 5 s), same cadence as the
-  server heartbeat it already sends ([watcher-liveness](watcher-liveness.md)).
+- Written by `vigie watch` **after each successful scan**, on the scan interval —
+  not on the liveness heartbeat, which is a different clock
+  ([watcher-liveness](watcher-liveness.md)). The distinction is deliberate: the
+  mark claims *"transcripts on this machine are being read"*, and only a scan
+  makes that true.
+- **A drifted watcher does not write it.** A watcher whose build no longer matches
+  the daemon goes inert and stops scanning ([version-consistency](version-consistency.md)),
+  so it stops claiming the mark, and the hooks resume reading transcripts for
+  themselves within the window below. The same property as a dead watcher, for the
+  same reason.
 - **Freshness is the file's mtime**, not its contents; the file body carries the
   watcher's pid for a human reading the directory, and nothing reads it.
 - Considered live for 15 s — three missed beats, the same window the TUI already

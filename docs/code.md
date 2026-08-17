@@ -63,7 +63,7 @@ the client never imports the server/store packages, so it never links them.
 
 | Package | Used by | Role |
 |---------|---------|------|
-| `internal/client` | client | Client command dispatch (init, report, tui) |
+| `internal/client` | client | Client command dispatch (init, hooks, report, call, watch, tui) |
 | `internal/daemon` | daemon | Daemon command dispatch (serve) |
 | `internal/report` | client | Parse hook payloads + transcripts, POST to the server |
 | `internal/tui` | client | Terminal dashboard client (Bubble Tea) |

@@ -1,7 +1,7 @@
 {
   "uuid": "claude-vigie@haribo.github.io",
   "name": "Claude Vigie",
-  "description": "Top-bar indicator for Claude Code sessions across your fleet: shows how many sessions are waiting for input. Read-only client of a vigie server.",
+  "description": "Top-bar indicator for Claude Code sessions across your fleet: shows how many sessions are calling for you — waiting on input, stalled on a tool, or in error. Read-only client of a vigie server.",
   "shell-version": ["45", "46", "47", "48", "49", "50"],
   "url": "https://github.com/haribo/claude-vigie",
   "settings-schema": "org.gnome.shell.extensions.claude-vigie",
