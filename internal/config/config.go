@@ -123,6 +123,13 @@ func Load() (*Config, error) {
 
 // Save writes the config as TOML with 0600 permissions (it holds a secret),
 // creating the parent directory if needed. It returns the written path.
+//
+// The chmod after the write is not redundant: os.WriteFile applies its mode when
+// it *creates* the file, so a config.toml left at 0644 by an older build keeps
+// those bits and the token stays readable by every local account on the machine.
+// The daemon tightens its existing database for the same reason (#526,
+// store.restrictToOwner) — the operators who need it are the ones already running
+// a file an earlier version created (#560).
 func Save(cfg *Config) (string, error) {
 	path, err := Path()
 	if err != nil {
@@ -137,6 +144,9 @@ func Save(cfg *Config) (string, error) {
 	}
 	if err := os.WriteFile(path, data, 0o600); err != nil {
 		return "", fmt.Errorf("writing config %s: %w", path, err)
+	}
+	if err := os.Chmod(path, 0o600); err != nil {
+		return "", fmt.Errorf("restricting config %s: %w", path, err)
 	}
 	return path, nil
 }

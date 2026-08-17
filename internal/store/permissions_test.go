@@ -13,8 +13,9 @@ import (
 // 0644 — every local account on the daemon host can read the fleet's secret, and
 // with it post reports or set the retention to 1ns and wipe the session table.
 //
-// The client already gets this right: internal/config writes config.toml at 0600
-// because it holds the same secret. The daemon holds the copy that matters.
+// The client writes config.toml at 0600 because it holds the same secret — though
+// only on creation, which #560 fixed there too. The daemon holds the copy that
+// matters.
 //
 // Three files carry it, not one: `-wal` holds committed pages, and both sidecars
 // exist as soon as Open returns because the DSN sets journal_mode(WAL).

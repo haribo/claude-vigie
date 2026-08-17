@@ -185,6 +185,19 @@ file is the single source of truth, not a second narrative.
 
 ### Fixed
 
+- Three small defects, none urgent, all real. The desktop notifier called `Start`
+  and never `Wait`, so every attention transition and every raised call left an
+  unreaped child until the TUI exited — on a tool meant to stay open all day. It
+  is waited on in a goroutine now: `Run` would have fixed the zombie and blocked
+  the update path instead. `Save` wrote `config.toml` at 0600, which applies on
+  *creation* only, so a file left at 0644 by an older build kept the fleet token
+  readable by every local account — the same case the daemon's database fixed in
+  #526, and the comment there claimed the client already handled it. And neither
+  HTTP listener set `IdleTimeout`, so a keep-alive connection was never closed;
+  `WriteTimeout` stays deliberately unset, since it would sever the SSE stream at
+  `/api/events`, and a test now pins that asymmetry so the next reader does not
+  "complete" it (#560).
+
 - The session id is stripped of control sequences like every other field the
   terminal renders. #529 cleaned twelve of them and stated in the code that the
   model never holds a string able to act on a terminal; it left out the one field

@@ -106,7 +106,32 @@ func notifySend(name, status string) {
 		return
 	}
 	// Fixed argv, no shell: name/status are notify-send's title/body text, not a
-	// command, so there is no injection surface. Start (not Run): fire-and-forget.
+	// command, so there is no injection surface.
 	//nolint:gosec // constant command, arguments are display text only
-	_ = exec.Command("notify-send", "-u", "normal", "-a", "vigie", "vigie — "+name, "is "+status).Start()
+	startAndReap(exec.Command("notify-send", "-u", "normal", "-a", "vigie", "vigie — "+name, "is "+status), nil)
+}
+
+// startAndReap starts cmd and waits for it somewhere the render loop is not.
+//
+// `Start` alone leaves the child unreaped — Go's runtime does not do it for you —
+// so every attention transition and every raised call added a zombie that lived
+// until the TUI exited, on a tool meant to stay open all day. `Run` would fix the
+// zombie and introduce a worse bug: it blocks, and this is called from the update
+// path. So: start here, wait in a goroutine.
+//
+// done is nil in production and a signal in tests, which is the only way to
+// assert the reap without racing the goroutine that performs it (#560).
+func startAndReap(cmd *exec.Cmd, done func()) {
+	if err := cmd.Start(); err != nil {
+		if done != nil {
+			done()
+		}
+		return
+	}
+	go func() {
+		_ = cmd.Wait()
+		if done != nil {
+			done()
+		}
+	}()
 }

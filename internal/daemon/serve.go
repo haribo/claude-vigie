@@ -68,10 +68,7 @@ func runServe(args []string) int {
 		startOpsListener(*metricsAddr, srvInst, log)
 	}
 
-	srv := &http.Server{
-		Handler:           srvInst.Handler(),
-		ReadHeaderTimeout: 5 * time.Second,
-	}
+	srv := apiServer(srvInst.Handler())
 
 	idle := make(chan struct{})
 	go func() {
@@ -99,13 +96,43 @@ func runServe(args []string) int {
 	return 0
 }
 
+// The timeouts both listeners carry.
+//
+// **WriteTimeout is deliberately absent, and must stay absent**: it bounds the
+// whole response, and `GET /api/events` is a Server-Sent Events stream that stays
+// open for as long as the client is watching. Setting it would cut every
+// dashboard's stream on a fixed cadence, which is not a timeout, it is a bug.
+//
+// idleTimeout was absent too, and that one was an oversight: unset, Go falls back
+// to ReadTimeout, which is also unset, so a keep-alive connection is never closed
+// and a client that opens sockets and goes quiet holds them forever. Dormant
+// while the bind is 127.0.0.1 — the default — and not dormant in the
+// cross-machine deployment `deployment.md` documents (#560).
+//
+// They are set in each literal rather than by a shared helper so gosec can see
+// ReadHeaderTimeout is configured; the constants are what keeps the two in step.
+const (
+	readHeaderTimeout = 5 * time.Second
+	idleTimeout       = 120 * time.Second
+)
+
+// apiServer is the token-protected API listener.
+func apiServer(h http.Handler) *http.Server {
+	return &http.Server{Handler: h, ReadHeaderTimeout: readHeaderTimeout, IdleTimeout: idleTimeout}
+}
+
+// opsServer is the unauthenticated /healthz and /metrics listener.
+func opsServer(addr string, h http.Handler) *http.Server {
+	return &http.Server{Addr: addr, Handler: h, ReadHeaderTimeout: readHeaderTimeout, IdleTimeout: idleTimeout}
+}
+
 // startOpsListener serves /healthz and /metrics on a separate address, so the
 // main API port carries only the token-protected API.
 func startOpsListener(addr string, srv *server.Server, log *slog.Logger) {
 	mux := http.NewServeMux()
 	mux.Handle("GET /healthz", srv.HealthHandler())
 	mux.Handle("GET /metrics", server.MetricsHandler())
-	ops := &http.Server{Addr: addr, Handler: mux, ReadHeaderTimeout: 5 * time.Second}
+	ops := opsServer(addr, mux)
 	go func() {
 		log.Info("ops listener", "addr", addr)
 		if err := ops.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
