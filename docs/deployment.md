@@ -128,6 +128,47 @@ unauthenticated `/healthz` and `/metrics` live on the separate ops listener (see
 above). So a public `vigied` behind TLS leaks nothing to someone who does not
 hold the token.
 
+### What the token actually reaches
+
+The section above is about keeping the token from strangers. This one is about
+what it is worth once someone has it, because "full read/write" understates it.
+
+**A token holder can empty the board.** `POST /api/settings` sets the session
+retention window, and the prune loop takes `now - retention` as its cutoff. Set it
+short enough and the next pass deletes every session, every event and every token
+sample — including sessions that are running, since the cutoff is on last-report
+time and not on status. The API refuses anything under an hour (#558), which
+stops a mistyped duration; it does not stop someone who means it, since an hour
+of history is not the point.
+
+**A token holder can make the board lie.** Reports are believed on their word:
+any session id, any status, any usage figure. That is not a flaw, it is the
+protocol — but it means a compromised token does not merely leak the fleet, it
+lets someone forge it.
+
+**Every Claude session on a client machine can read the token.** It lives in
+`~/.config/vigie/config.toml`, and the reporting hooks read it because they have
+to. Those hooks run inside your Claude Code sessions. The `0600` mode stops the
+*other accounts* on the machine; it does not stop a process running as you, and a
+session that has been steered by hostile content in a transcript, a web page or a
+repository is such a process.
+
+This deserves saying plainly because of what vigie is for: it watches autonomous
+agents, and it hands each of them the key to the room.
+
+**What follows from that**, if it matters to your deployment:
+
+- Treat the fleet database as losable. Nothing in vigie is a system of record;
+  back it up if its history is worth anything to you.
+- The dashboard's `read-only` chip describes the *clients*. The API is not
+  read-only, and no client-side property makes it so ([ADR-0005](adr/0005-observe-only.md)
+  is about what vigie writes into sessions, not about what the API accepts).
+- Splitting the token in two — one to report, one to administer — was considered
+  and not done. On a single-operator fleet both halves live on the same machine,
+  so whatever reads one reads the other, and the report half alone is already
+  enough to forge the board. It would be worth doing only if the admin half never
+  touched the machines running Claude.
+
 ## The token
 
 - **The default is the safest path**: with nothing supplied, the daemon generates a

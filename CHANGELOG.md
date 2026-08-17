@@ -67,6 +67,29 @@ file is the single source of truth, not a second narrative.
 
 ### Changed
 
+- **Breaking:** the daemon refuses a session-retention window shorter than an
+  hour. Below that the setting stops being a retention policy and becomes a
+  delete button: the prune loop takes `now - retention` as its cutoff and removes
+  every session, event and token sample older than it — running sessions included,
+  since the predicate is last-report time and not status. This is not a security
+  control, and it is not sold as one: anyone who can set it holds the fleet token,
+  and a token holder can already forge the board. It guards a mistake. Go
+  durations have no month unit, so an operator who means thirty days and types
+  `30s` rather than `720h` deletes their own history with nothing in between. The
+  floor sits far below the smallest window the TUI offers, 24 h, so no value
+  anyone would set deliberately is affected (#558).
+- `deployment.md` says what the shared token actually reaches, which "full
+  read/write" understated: a holder can empty the fleet database, and can forge
+  any session's status or usage, because reports are believed on their word. It
+  also says who holds it in practice — the token lives in the client config, the
+  reporting hooks read it because they must, and those hooks run inside Claude
+  Code sessions. The `0600` mode stops the other accounts on the machine, not a
+  process running as the operator. That is worth stating plainly in a tool whose
+  subject is autonomous agents. Splitting the credential in two was considered
+  and rejected in the same section, with the reason: on a single-operator fleet
+  both halves live on the same machine, so whatever reads one reads the other
+  (#558).
+
 - Four guards now check what they claim. `depguard` enforces ADR-0003's barrier
   over a list of packages kept by hand, and the list was eight short: `api`,
   `apiclient`, `clock`, `compaction`, `config`, `status`, `transcript` and
