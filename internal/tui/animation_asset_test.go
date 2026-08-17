@@ -142,12 +142,19 @@ func TestTheAssetAndTheTuiAgreeOnTheChromeVocabulary(t *testing.T) {
 	}
 }
 
-// The gauges were tightened against their percentage and their reset (#492); an
-// asset drawn from the old spacing is the drift this issue is about.
+// The asset must draw the strip the TUI renders. Both halves of this assertion
+// have flipped once and the direction is not obvious, so it is stated rather than
+// assumed:
+//
+//   - the bar is **separated** from its percentage (#568). #492 had tightened it,
+//     this guard enforced that, and it went on enforcing it after the TUI moved —
+//     which is how a guard ends up defending the drift it was written to catch;
+//   - the reset stays **tight** against the percentage (#492), unchanged: it
+//     qualifies that figure, where the bar is a different element.
 func TestTheAssetDrawsTheGaugesTheTuiRenders(t *testing.T) {
 	asset := strings.Join(assetRows(t), "\n")
-	if regexp.MustCompile(`░\s+\d+%`).MatchString(asset) {
-		t.Errorf("the asset still puts a gap between the bar and its percentage:\n%s", asset)
+	if !regexp.MustCompile(`[░▓] \d+%`).MatchString(asset) {
+		t.Errorf("the asset runs the bar into its percentage; the TUI separates them (#568):\n%s", asset)
 	}
 	if !strings.Contains(asset, "%(") {
 		t.Errorf("the asset does not draw the reset tight against the percentage:\n%s", asset)

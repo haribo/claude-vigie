@@ -9,6 +9,12 @@ file is the single source of truth, not a second narrative.
 
 ## [Unreleased]
 
+### Changed
+
+- The usage strip spends its spacing inside the gauges rather than between them:
+  the bar no longer runs into its percentage, and the two gauges are two spaces
+  apart instead of four. One column narrower overall (#568).
+
 ## [0.6.0] - 2026-08-17
 
 ### Added
