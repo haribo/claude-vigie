@@ -30,7 +30,7 @@ const flush = async (n = 8) => { for (let i = 0; i < n; i++) await new Promise((
 // harness replaces the browser surface app.js touches. Timers are recorded
 // rather than scheduled, so a test fires them when it means to and no test waits
 // on a real clock.
-function harness({ token = "t0k3n", sessions = [], group = null } = {}) {
+function harness({ token = "t0k3n", sessions = [], group = null, idle = null } = {}) {
   const h = {
     now: 1_000_000,
     fetches: [],          // every path app.js requested, in order
@@ -69,7 +69,7 @@ function harness({ token = "t0k3n", sessions = [], group = null } = {}) {
   };
   globalThis.window = globalThis;
   globalThis.localStorage = {
-    getItem: (k) => (k === "vigie_token" ? token : k === "vigie_group" ? group : null),
+    getItem: (k) => (k === "vigie_token" ? token : k === "vigie_group" ? group : k === "vigie_idle_hide" ? idle : null),
     setItem() {}, removeItem() {},
   };
   globalThis.matchMedia = () => ({ matches: false, addEventListener() {} });
@@ -376,4 +376,51 @@ test("grouping composes with the filter — the counts follow what is shown", as
   const html = h.lastTable();
   assert.ok(!html.includes("beta"), "a group with no matching session must not be drawn");
   assert.match(html, /minet-dev<\/span> <span class="gm">\(1 ·/, "the count is of the filtered rows, not the fleet");
+});
+
+// #547. The wiring, and the count that goes with it. `hidden N` exists because
+// these preferences filter silently: without it the screen claims five sessions
+// while the fleet has thirty (sessions-chrome.md § 2, test 3). It counted only
+// ended sessions, so switching idle-hiding on would have made it lie.
+const AT = Date.parse("2026-08-17T12:00:00Z");
+const agoMin = (m) => new Date(AT - m * 60000).toISOString();
+const FLEET_I = [
+  { id: "a", title: "fresh", machine: "m", status: "working", last_seen_at: agoMin(1), usage: {} },
+  { id: "b", title: "quiet", machine: "m", status: "idle", last_seen_at: agoMin(45), usage: {} },
+  { id: "c", title: "older", machine: "m", status: "idle", last_seen_at: agoMin(600), usage: {} },
+];
+
+test("an idle-hide preference removes the quiet sessions from the table", async () => {
+  const h = harness({ sessions: FLEET_I, idle: String(30 * 60000) });
+  h.now = AT;
+  await h.boot();
+  const html = h.lastTable();
+  assert.match(html, /fresh/, "a session heard from a minute ago stays");
+  assert.ok(!html.includes("quiet"), "45 minutes of silence is past a 30-minute window");
+  assert.ok(!html.includes("older"));
+});
+
+test("off shows everything, and is the default", async () => {
+  const h = harness({ sessions: FLEET_I });
+  h.now = AT;
+  await h.boot();
+  const html = h.lastTable();
+  for (const t of ["fresh", "quiet", "older"]) assert.ok(html.includes(t), `${t} was hidden with the preference off`);
+});
+
+test("the hidden count includes the idle-hidden, not just the ended", async () => {
+  const h = harness({ sessions: FLEET_I, idle: String(30 * 60000) });
+  h.now = AT;
+  await h.boot();
+  // Two of the three are filtered out; the screen must say so, or it claims a
+  // fleet of one.
+  assert.match(h.lastTable(), /hidden<\/span> 2/,
+    "the count still reports only the ended sessions — the screen understates the fleet");
+});
+
+test("a session whose timestamp will not parse is kept, not lost", async () => {
+  const h = harness({ sessions: [{ id: "x", title: "unparseable", machine: "m", status: "idle", last_seen_at: "soon", usage: {} }], idle: String(60000) });
+  h.now = AT;
+  await h.boot();
+  assert.match(h.lastTable(), /unparseable/, "a row must not disappear over a date that would not parse");
 });
