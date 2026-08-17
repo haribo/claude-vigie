@@ -111,6 +111,20 @@ linters:
             - "**/internal/install/**"
             - "**/internal/presence/**"
             - "**/internal/localwatch/**"
+            # …and the packages those import: api, apiclient, clock, compaction,
+            # config, status, transcript and version all ship in the same binary.
+            # #515 widened this list from three to eight and still left these
+            # eight outside, which is why the list is no longer trusted:
+            # TestDepguardCoversEveryClientPackage derives it from
+            # `go list -deps ./cmd/vigie` and fails when one is missing (#556).
+            - "**/internal/api/**"
+            - "**/internal/apiclient/**"
+            - "**/internal/clock/**"
+            - "**/internal/compaction/**"
+            - "**/internal/config/**"
+            - "**/internal/status/**"
+            - "**/internal/transcript/**"
+            - "**/internal/version/**"
           deny:
             - pkg: github.com/haribo/claude-vigie/internal/server
               desc: client must not link the server (ADR-0003)

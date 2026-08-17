@@ -22,8 +22,12 @@ import (
 // compared is the set of commands — the part an operator acts on, and the part
 // that silently gains or loses an entry.
 
-// readmeCommands are the client commands the README's "Two binaries" block lists.
-func readmeCommands(t *testing.T) map[string]bool {
+// readmeCommands are the commands the README's "Two binaries" block lists for
+// one binary. It reads both: the block is titled "Two binaries" and the guard
+// covered one of them, so `vigied stats-repair` was documented in
+// architecture.md, printed by the CLI, and absent from the README with nothing
+// to notice it (#556).
+func readmeCommands(t *testing.T, binary string) map[string]bool {
 	t.Helper()
 	body := read(t, "../../README.md")
 	block := regexp.MustCompile("(?s)## Two binaries.*?```\n(.*?)```").FindStringSubmatch(body)
@@ -33,22 +37,25 @@ func readmeCommands(t *testing.T) map[string]bool {
 	out := map[string]bool{}
 	for _, line := range strings.Split(block[1], "\n") {
 		fields := strings.Fields(line)
-		if len(fields) >= 2 && fields[0] == "vigie" {
+		if len(fields) >= 2 && fields[0] == binary {
 			out[fields[1]] = true
 		}
 	}
 	if len(out) == 0 {
-		t.Fatal("no `vigie <command>` line found in the block — the extraction is broken")
+		t.Fatalf("no `%s <command>` line found in the block — the extraction is broken", binary)
 	}
 	return out
 }
 
-// helpCommands are the commands `vigie help` prints.
-func helpCommands(t *testing.T) map[string]bool {
+// helpCommands are the commands `<binary> help` prints.
+func helpCommands(t *testing.T, binary string) map[string]bool {
 	t.Helper()
-	out, err := exec.Command("go", "run", "../../cmd/vigie", "help").CombinedOutput()
+	// The binary comes from a literal list in the caller, not from anything a
+	// user or a file supplies — same reasoning as internal/tui/attention.go.
+	//nolint:gosec // fixed command, argument from a hard-coded set of two
+	out, err := exec.Command("go", "run", "../../cmd/"+binary, "help").CombinedOutput()
 	if err != nil {
-		t.Fatalf("running vigie help: %v\n%s", err, out)
+		t.Fatalf("running %s help: %v\n%s", binary, err, out)
 	}
 	body := string(out)
 	i := strings.Index(body, "Commands:")
@@ -69,21 +76,22 @@ func helpCommands(t *testing.T) map[string]bool {
 	return cmds
 }
 
-// The README's table and the CLI list the same client commands. `help` and
-// `version` are the two the README leaves out on purpose — they are not part of
-// setting a machine up.
+// The README's table and the CLI list the same commands, for *both* binaries.
+// `help` and `version` are the two the README leaves out on purpose — they are
+// not part of setting a machine up.
 func TestTheReadmeTableMatchesTheCli(t *testing.T) {
-	readme, help := readmeCommands(t), helpCommands(t)
 	notInReadme := map[string]bool{"help": true, "version": true}
-
-	for cmd := range help {
-		if !readme[cmd] && !notInReadme[cmd] {
-			t.Errorf("`vigie %s` exists and the README's command table does not list it", cmd)
+	for _, binary := range []string{"vigie", "vigied"} {
+		readme, help := readmeCommands(t, binary), helpCommands(t, binary)
+		for cmd := range help {
+			if !readme[cmd] && !notInReadme[cmd] {
+				t.Errorf("`%s %s` exists and the README's command table does not list it", binary, cmd)
+			}
 		}
-	}
-	for cmd := range readme {
-		if !help[cmd] {
-			t.Errorf("the README's command table lists `vigie %s`, which the CLI does not have", cmd)
+		for cmd := range readme {
+			if !help[cmd] {
+				t.Errorf("the README's command table lists `%s %s`, which the CLI does not have", binary, cmd)
+			}
 		}
 	}
 }
