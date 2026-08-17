@@ -13,7 +13,6 @@ boundary and the security implications; it changes no defaults.
 |------|---------|---------|
 | `--addr` | `127.0.0.1:8080` | listen address (bind a reachable interface for cross-machine clients) |
 | `--db` | `vigie.db` | SQLite file path |
-| `--token` | — | shared auth token (else `$FLEET_TOKEN`, else the stored one, else generated) |
 | `--session-retention` | `24h` | delete sessions not reported within this window (`0` disables) |
 | `--metrics-addr` | `127.0.0.1:9464` | ops listener for `/metrics` and `/healthz` (empty disables) |
 
@@ -33,8 +32,8 @@ from the bind address (`127.0.0.1` by default). Expose it only to your scraper:
   internet. It carries no session content: labels are bounded (`status`, `event`,
   `model`, `route`), never a session id, machine, or project.
 
-Metrics are namespaced `fleet_*` (RED HTTP metrics, ingestion counters, a
-scrape-time `fleet_sessions` gauge by reconciled status, SSE and prune counters,
+Metrics are namespaced `vigie_*` (RED HTTP metrics, ingestion counters, a
+scrape-time `vigie_sessions` gauge by reconciled status, SSE and prune counters,
 DB size, watcher heartbeat) plus the default Go/process collectors.
 
 A ready-made Grafana dashboard ships in [`dashboards/vigie.json`](../dashboards/vigie.json)
@@ -101,12 +100,12 @@ only matters once traffic crosses an untrusted one.
 
 ## Public exposure
 
-If `fleetd` is reachable from the internet, two rules:
+If `vigied` is reachable from the internet, two rules:
 
 1. **Put a TLS front in front of it** (Caddy, nginx, Traefik). The front holds the
-   certificate and forwards to `fleetd`. Clients talk `https://` to the front;
-   `fleetd` stays plain HTTP on the host.
-2. **Keep `fleetd` on `127.0.0.1`** (the default) so only the front (same host)
+   certificate and forwards to `vigied`. Clients talk `https://` to the front;
+   `vigied` stays plain HTTP on the host.
+2. **Keep `vigied` on `127.0.0.1`** (the default) so only the front (same host)
    reaches it — no extra flag needed. Expose the raw port widely only by an
    explicit choice (`--addr :8080`); a public HTTP port would let someone hit it
    directly, **bypassing your TLS front**. They still need the token (every
@@ -126,14 +125,63 @@ gets `401` and no data (enforced by `TestEveryAPIRouteRejectsUnauthenticated`).
 The token is 256-bit, compared in constant time — not guessable, no timing
 oracle. The API port serves **only** authenticated `/api/*` routes; the
 unauthenticated `/healthz` and `/metrics` live on the separate ops listener (see
-above). So a public `fleetd` behind TLS leaks nothing to someone who does not
+above). So a public `vigied` behind TLS leaks nothing to someone who does not
 hold the token.
+
+### What the token actually reaches
+
+The section above is about keeping the token from strangers. This one is about
+what it is worth once someone has it, because "full read/write" understates it.
+
+**A token holder can empty the board.** `POST /api/settings` sets the session
+retention window, and the prune loop takes `now - retention` as its cutoff. Set it
+short enough and the next pass deletes every session, every event and every token
+sample — including sessions that are running, since the cutoff is on last-report
+time and not on status. The API refuses anything under an hour (#558), which
+stops a mistyped duration; it does not stop someone who means it, since an hour
+of history is not the point.
+
+**A token holder can make the board lie.** Reports are believed on their word:
+any session id, any status, any usage figure. That is not a flaw, it is the
+protocol — but it means a compromised token does not merely leak the fleet, it
+lets someone forge it.
+
+**Every Claude session on a client machine can read the token.** It lives in
+`~/.config/vigie/config.toml`, and the reporting hooks read it because they have
+to. Those hooks run inside your Claude Code sessions. The `0600` mode stops the
+*other accounts* on the machine; it does not stop a process running as you, and a
+session that has been steered by hostile content in a transcript, a web page or a
+repository is such a process.
+
+This deserves saying plainly because of what vigie is for: it watches autonomous
+agents, and it hands each of them the key to the room.
+
+**What follows from that**, if it matters to your deployment:
+
+- Treat the fleet database as losable. Nothing in vigie is a system of record;
+  back it up if its history is worth anything to you.
+- The dashboard's `read-only` chip describes the *clients*. The API is not
+  read-only, and no client-side property makes it so ([ADR-0005](adr/0005-observe-only.md)
+  is about what vigie writes into sessions, not about what the API accepts).
+- Splitting the token in two — one to report, one to administer — was considered
+  and not done. On a single-operator fleet both halves live on the same machine,
+  so whatever reads one reads the other, and the report half alone is already
+  enough to forge the board. It would be worth doing only if the admin half never
+  touched the machines running Claude.
 
 ## The token
 
-- Supply it as a secret via `FLEET_TOKEN` (or `--token`). If none is provided and
-  none is stored, `fleetd` generates one and logs it once — fine for a first run,
-  but prefer providing it explicitly in production.
+- **The default is the safest path**: with nothing supplied, the daemon generates a
+  token, stores it, and logs it once. It then lives only in the database, and
+  `vigied token` prints it whenever you need to hand it to a client. Prefer this
+  unless the token has to come from somewhere else.
+- **To choose the token**, set `VIGIE_TOKEN`. It takes precedence over the stored
+  one. There is no flag: a token on the command line is published to every local
+  user through `/proc/PID/cmdline`, which is world-readable, whereas
+  `/proc/PID/environ` is readable only by the process owner.
+- **Setting it safely matters as much as the name.** `Environment=VIGIE_TOKEN=…`
+  in a unit file is readable by anyone who can read that file and shows up in
+  `systemctl show`. Use `EnvironmentFile=` on a `0600` file, or `LoadCredential=`.
 - The client stores it in `~/.config/vigie/config.toml` (written `0600`).
 - It is a **single shared, static** credential with no per-machine revocation. If
   one machine leaks it, rotate everywhere.
@@ -158,6 +206,6 @@ against the OS trust store — no client-side TLS code, no flags.
 
 If the watcher/TUI machines have changing IPs, a **private overlay network**
 (Tailscale, WireGuard) is the simplest robust option: it gives each machine a
-stable identity regardless of its public IP, and `fleetd` needs **no public port
+stable identity regardless of its public IP, and `vigied` needs **no public port
 at all** — zero internet attack surface, no certificate to manage. Reach for a
 public TLS front only if you must serve clients that can't join the overlay.

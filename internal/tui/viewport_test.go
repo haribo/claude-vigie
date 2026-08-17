@@ -69,9 +69,17 @@ func TestSessionsViewportFitsHeight(t *testing.T) {
 		if !strings.Contains(view, "▎") {
 			t.Errorf("height %d: cursor row not visible", h)
 		}
-		// The pinned summary and column header must always be present.
-		if !strings.Contains(view, "working") {
-			t.Errorf("height %d: summary counts missing", h)
+		// The pinned column header must always be present, whatever the height:
+		// a windowed table whose header scrolled away is unreadable.
+		//
+		// This used to assert `working` under the message "summary counts
+		// missing". The summary it was named for was deleted in #492, and the
+		// string went on matching a STATUS cell of one of the three working
+		// sessions in the fixture — so it passed for a reason unrelated to what it
+		// claimed, and would have passed with no header at all. A column header is
+		// something that still exists and that the spec still requires (#556).
+		if !strings.Contains(view, "STATUS") {
+			t.Errorf("height %d: the pinned column header is missing", h)
 		}
 		// The indicator appears iff the body was actually windowed.
 		_, budget := m.sessionsBand(m.bodyHeight())

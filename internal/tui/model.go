@@ -12,6 +12,7 @@ import (
 
 	"github.com/haribo/claude-vigie/internal/api"
 	"github.com/haribo/claude-vigie/internal/clock"
+	"github.com/haribo/claude-vigie/internal/status"
 	"github.com/haribo/claude-vigie/internal/version"
 )
 
@@ -102,14 +103,18 @@ func groupByName(name string) groupBy {
 }
 
 type model struct {
-	fetch           func() ([]api.SessionView, error)
-	fetchUsage      func() (api.UsageReport, error)
-	fetchWatcher    func() (api.WatcherStatus, error)
-	fetchSettings   func() (api.Settings, error)
-	fetchStats      func() (api.StatsResponse, error)
-	fetchPlatform   func() (api.PlatformStatus, error)
-	fetchVersion    func() (api.VersionInfo, error)
-	setRetention    func(v string) error
+	fetch         func() ([]api.SessionView, error)
+	fetchUsage    func() (api.UsageReport, error)
+	fetchWatcher  func() (api.WatcherStatus, error)
+	fetchSettings func() (api.Settings, error)
+	fetchStats    func() (api.StatsResponse, error)
+	fetchPlatform func() (api.PlatformStatus, error)
+	fetchVersion  func() (api.VersionInfo, error)
+	setRetention  func(v string) error
+
+	// refreshFailed records which sources failed their last refresh, so a panel
+	// says it is showing figures it could not refresh (#449).
+	refreshFailed   map[string]bool
 	serverURL       string // read-only; set via `vigie init`
 	serverRetention time.Duration
 	stats           api.StatsResponse
@@ -136,6 +141,10 @@ type model struct {
 	sseLive         bool             // is the SSE stream currently connected
 	clock           func() time.Time // injected wall clock; defaults to clock.Now
 	focus           focusState       // what we know of the terminal focus (#411)
+	showHelp        bool             // the shortcuts modal is open (#493)
+	showState       bool             // the state modal is open (#494)
+	pulseOn         bool             // the state pill is on the second tone of its cycle (#495)
+	pulseTicking    bool             // a pulse tick is in flight (never stack two)
 }
 
 // sessionsView is the Sessions tab's private state — the cursor and selection,
@@ -146,9 +155,8 @@ type sessionsView struct {
 	cursor       int
 	selectedID   string // session under the cursor, tracked across reorders
 	detail       bool
-	detailOffset int   // scroll offset of the detail view (#378)
-	rowOffset    int   // sticky top of the sessions viewport, in body-line space (#378)
-	history      []int // recent working-count samples, for the activity sparkline
+	detailOffset int // scroll offset of the detail view (#378)
+	rowOffset    int // sticky top of the sessions viewport, in body-line space (#378)
 	filter       string
 	filtering    bool
 	sortKey      sortKey
@@ -345,8 +353,10 @@ func (m model) waitForConnCmd() tea.Cmd {
 
 // frame is the current animation state handed to the renderer (#389).
 func (m model) frame() frame {
-	return frame{blinkOn: m.sess.blinkOn, marker: m.prefs.callMarker, enabled: m.prefs.blink}
+	return frame{hidden: !m.sess.blinkOn, marker: m.prefs.callMarker}
 }
+
+type pulseMsg struct{}
 
 type blinkMsg struct{}
 
@@ -354,6 +364,22 @@ type blinkMsg struct{}
 // a call is on screen: the ambient poll is 5 s and must not be raised to animate.
 func blinkCmd() tea.Cmd {
 	return tea.Tick(blinkInterval, func(time.Time) tea.Msg { return blinkMsg{} })
+}
+
+// pulseCmd schedules the next half-cycle of the state pulse. Like the blink, it
+// exists exactly as long as something is animating (#495).
+func pulseCmd() tea.Cmd {
+	return tea.Tick(pulseInterval, func(time.Time) tea.Msg { return pulseMsg{} })
+}
+
+// withPulseTick starts the pulse if the pill is degraded and no tick is in
+// flight yet.
+func (m model) withPulseTick() (tea.Model, tea.Cmd) {
+	if m.pulseTicking || !m.pulsing() {
+		return m, nil
+	}
+	m.pulseTicking = true
+	return m, pulseCmd()
 }
 
 // withBlinkTick starts the animation when a call appears and nothing is animating
@@ -396,6 +422,14 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tickMsg:
 		sc := m.refreshSessions()
 		return m, tea.Batch(sc, m.fetchUsageCmd(), m.watcherCmd(), m.statsCmd(), m.fetchPlatformCmd(), tickCmd())
+	case pulseMsg:
+		// The pill recovered: stop the tick and leave the glyph on its full tone.
+		if !m.pulsing() {
+			m.pulseTicking, m.pulseOn = false, false
+			return m, nil
+		}
+		m.pulseOn = !m.pulseOn
+		return m, pulseCmd()
 	case blinkMsg:
 		// Stop as soon as nothing is calling: the animation must not outlive its
 		// reason, and the marker is left visible so no row keeps a blank dot.
@@ -406,9 +440,24 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.sess.blinkOn = !m.sess.blinkOn
 		return m, blinkCmd()
 	default:
-		return m.applyDataMsg(msg).withBlinkTick()
+		return m.applyDataMsg(msg).withAnimationTicks()
 	}
 	return m, nil
+}
+
+// withAnimationTicks starts whichever of the two animations now has a reason to
+// run. They are independent: a call blinking in the table must not decide whether
+// a degraded pill breathes, and neither must the other way round (#495).
+func (m model) withAnimationTicks() (tea.Model, tea.Cmd) {
+	blinked, blinkCmd := m.withBlinkTick()
+	pulsed, pulseCmd := blinked.(model).withPulseTick()
+	if blinkCmd == nil {
+		return pulsed, pulseCmd
+	}
+	if pulseCmd == nil {
+		return pulsed, blinkCmd
+	}
+	return pulsed, tea.Batch(blinkCmd, pulseCmd)
 }
 
 // applySessions folds a sessions fetch into the model, dropping stale
@@ -418,17 +467,17 @@ func (m model) applySessions(msg sessionsMsg) model {
 		return m // stale out-of-order response; keep the newer state
 	}
 	m.appliedSeq = msg.gen
+	m.markRefresh(srcSessions, msg.err)
 	if msg.err != nil {
 		m.err = msg.err
 		return m
 	}
-	m = m.withNotifiedTransitions(msg.sessions) // desktop notify on working→attention (#260)
-	m.sessions = msg.sessions
+	// Cleaned before anything reads them, including the notification path below:
+	// a desktop notification is another program's input (#529).
+	clean := sanitizeSessions(msg.sessions)
+	m = m.withNotifiedTransitions(clean) // desktop notify on working→attention (#260)
+	m.sessions = clean
 	m.err = nil
-	m.sess.history = append(m.sess.history, countByStatus(m.sessions, "working"))
-	if len(m.sess.history) > sparkWindow {
-		m.sess.history = m.sess.history[len(m.sess.history)-sparkWindow:]
-	}
 	m.sess.cursor = m.sess.cursorForSelection(m.visibleSessions()) // keep the cursor on the same session
 	return m
 }
@@ -439,18 +488,22 @@ func (m model) applyDataMsg(msg tea.Msg) model {
 	case sessionsMsg:
 		return m.applySessions(msg)
 	case usageMsg:
+		m.markRefresh(srcUsage, msg.err)
 		if msg.err == nil {
 			m.usage = msg.usage
 		}
 	case platformMsg:
+		m.markRefresh(srcPlatform, msg.err)
 		if msg.err == nil {
 			m.platform = msg.ps
 		}
 	case versionMsg:
+		m.markRefresh(srcVersion, msg.err)
 		if msg.err == nil {
 			m.daemonVersion = msg.v
 		}
 	case watcherMsg:
+		m.markRefresh(srcWatcher, msg.err)
 		if msg.err == nil {
 			m.watcherSeen = msg.seen
 			m.watcherMachines = msg.machines
@@ -458,10 +511,12 @@ func (m model) applyDataMsg(msg tea.Msg) model {
 			m.gotWatcher = true
 		}
 	case statsMsg:
+		m.markRefresh(srcStats, msg.err)
 		if msg.err == nil {
 			m.stats = msg.stats
 		}
 	case settingsMsg:
+		m.markRefresh(srcSettings, msg.err)
 		if msg.err == nil {
 			m.serverRetention = 0
 			if d, err := time.ParseDuration(msg.retention); err == nil {
@@ -476,11 +531,33 @@ func (m model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	if m.sess.filtering {
 		return m.handleFilterKey(msg), nil
 	}
+	// The shortcuts modal swallows everything but its own two closing keys and
+	// the way out of the program: a key pressed at a list of keys must not also
+	// act on the table behind it (#493).
+	if m.showHelp || m.showState {
+		switch msg.String() {
+		case "esc":
+			m.showHelp, m.showState = false, false
+		case helpKey:
+			m.showHelp, m.showState = false, false
+		case stateKey:
+			m.showHelp, m.showState = false, false
+		case "q", "ctrl+c":
+			return m, tea.Quit
+		}
+		return m, nil
+	}
 	switch msg.String() {
 	case "q", "ctrl+c":
 		return m, tea.Quit
 	case "r":
 		return m, m.refreshSessions()
+	case helpKey:
+		m.showHelp = true
+		return m, nil
+	case stateKey:
+		m.showState = true
+		return m, nil
 	}
 	return m.handleViewKey(msg)
 }
@@ -524,11 +601,6 @@ func (m model) handleSessionsKey(msg tea.KeyMsg) model {
 	case "g":
 		m.sess.groupBy = (m.sess.groupBy + 1) % groupByCount
 		return m.saveViewPrefs().scrollToCursor()
-	case "a": // toggle the persistent hide-ended setting (#320); best-effort save,
-		// like the sort/group prefs (#237) — shaping one's view, allowed by ADR-0007
-		m.prefs.hideEnded = !m.prefs.hideEnded
-		savePrefs(m.prefs)
-		m.sess.cursor = 0
 	case "n": // jump to the oldest session waiting on the operator (#261) — pure
 		// navigation: looking is done in the session, not acknowledged in vigie (ADR-0007)
 		if id := nextAttention(m.sessions); id != "" {
@@ -573,11 +645,11 @@ func (m model) handleSettingsKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			return m.toggleColumnRow(), nil
 		}
 		return m.editSetting(1)
-	case "right", "l":
+	case "right":
 		if !onColumn {
 			return m.editSetting(1)
 		}
-	case "left", "h":
+	case "left":
 		if !onColumn {
 			return m.editSetting(-1)
 		}
@@ -680,10 +752,19 @@ func (m model) View() string {
 	var b strings.Builder
 
 	// No title/clock line: open straight on the tab bar.
-	b.WriteString(renderTabBar(m.tab, m.width))
+	b.WriteString(renderTabBar(m.tab, m.width, m.statePill()))
 	b.WriteString("\n")
 	if m.gotWatcher && m.watcherStale() {
 		b.WriteString(m.watcherWarn() + "\n")
+	}
+
+	switch {
+	case m.showHelp:
+		b.WriteString(renderHelp(m.tab, m.width))
+		return b.String()
+	case m.showState:
+		b.WriteString(renderState(m.stateRows(), m.width))
+		return b.String()
 	}
 
 	switch m.tab {
@@ -692,12 +773,15 @@ func (m model) View() string {
 	case tabStats:
 		b.WriteString(m.renderStats())
 	case tabMachines:
+		b.WriteString(m.staleNote(srcWatcher))
 		b.WriteString(renderMachines(m.sessions, m.watcherMachines, m.watcherVersions, m.width))
 	case tabSettings:
 		b.WriteString(m.renderSettings())
 	}
 
-	b.WriteString("\n" + rule(m.width) + "\n" + m.footerBlock())
+	if m.tab != tabSessions {
+		b.WriteString("\n" + m.footerBlock())
+	}
 	return b.String()
 }
 
@@ -706,9 +790,10 @@ func (m model) watcherWarn() string {
 	return warnStyle.Render("⚠ no watcher reporting — statuses may be stale")
 }
 
-// footerBlock is the key-hint footer, wrapped to width so it never overflows (#328).
+// footerBlock is the single-hint row for the tabs that have no bottom bar to
+// carry it. Sessions folds the hint into its bar instead (#493).
 func (m model) footerBlock() string {
-	foot := footer(m.tab)
+	foot := helpHint()
 	if m.width > 0 {
 		foot = lipgloss.NewStyle().Width(m.width).Render(foot)
 	}
@@ -724,11 +809,13 @@ func (m model) bodyHeight() int {
 	if m.height <= 0 {
 		return 0
 	}
-	chrome := lineCount(renderTabBar(m.tab, m.width))
+	chrome := lineCount(renderTabBar(m.tab, m.width, m.statePill()))
 	if m.gotWatcher && m.watcherStale() {
 		chrome += lineCount(m.watcherWarn())
 	}
-	chrome += 1 + lineCount(m.footerBlock()) // rule + footer
+	if m.tab != tabSessions {
+		chrome += lineCount(m.footerBlock())
+	}
 	return m.height - chrome
 }
 
@@ -771,6 +858,14 @@ func (m model) renderBuild() string {
 
 func (m model) renderSettings() string {
 	var b strings.Builder
+	b.WriteString(m.staleNote(srcSettings, srcVersion))
+	// A preferences file that could not be read is kept, not overwritten — and the
+	// operator has to be told, or the TUI silently runs on defaults while their
+	// settings sit on disk unused (#480).
+	if m.prefs.loadFailed != "" {
+		b.WriteString(warnStyle.Render("⚠ "+m.prefs.loadFailed+
+			" — running on defaults, and leaving the file untouched") + "\n\n")
+	}
 
 	// Connection is read-only here: it is set per machine by `vigie init`
 	// and shared with the watcher/reporter. Editing it from the TUI would only
@@ -900,7 +995,10 @@ func overflowBanner(active []column, width int) string {
 }
 
 func (m model) viewSessions() string {
-	if m.err != nil {
+	// A failed poll must not cost sight of the fleet: the sessions are still in
+	// the model, so keep showing them and say they are not current. Only when
+	// there is nothing to fall back on does the error stand alone (#456).
+	if m.err != nil && len(m.sessions) == 0 {
 		return errStyle.Render("error: " + m.err.Error())
 	}
 	if len(m.sessions) == 0 {
@@ -915,10 +1013,7 @@ func (m model) viewSessions() string {
 	}
 
 	var b strings.Builder
-	// The tab-bar separator frames the summary strip above; a rule below
-	// separates it from the table.
-	b.WriteString(joinLR(renderSummaryFit(m.sessions, m.sess.history, m.width), m.summaryRight(), m.width) + "\n")
-	b.WriteString(rule(m.width) + "\n")
+	b.WriteString(m.staleReason())
 	if m.sess.filtering || m.sess.filter != "" {
 		b.WriteString(m.sess.filterLine() + "\n")
 	}
@@ -931,7 +1026,7 @@ func (m model) viewSessions() string {
 	} else {
 		b.WriteString(m.renderTableBand(m.sessionsBand(bodyHeight)))
 	}
-	b.WriteString("\n" + rule(m.width) + "\n" + usageStrip(m.usage, m.platform, m.width))
+	b.WriteString("\n" + rule(m.width) + "\n" + m.bottomBar())
 	return b.String()
 }
 
@@ -979,10 +1074,9 @@ func (m model) sessionsBand(bodyHeight int) (tableRows, int) {
 		return tr, 0
 	}
 	// Fixed chrome inside the sessions body, measured (never hard-coded): the
-	// summary strip, its rule, the optional filter and overflow-banner lines, the
-	// pinned table header, and the trailing rule + usage strip.
-	fixed := lineCount(joinLR(renderSummaryFit(m.sessions, m.sess.history, m.width), m.summaryRight(), m.width))
-	fixed += lineCount(rule(m.width))
+	// optional filter and overflow-banner lines, the pinned table header, and the
+	// trailing rule + bottom bar.
+	fixed := 0
 	if m.sess.filtering || m.sess.filter != "" {
 		fixed += lineCount(m.sess.filterLine())
 	}
@@ -990,7 +1084,7 @@ func (m model) sessionsBand(bodyHeight int) (tableRows, int) {
 		fixed += lineCount(banner)
 	}
 	fixed += len(tr.header)
-	fixed += lineCount(rule(m.width)) + lineCount(usageStrip(m.usage, m.platform, m.width))
+	fixed += lineCount(rule(m.width)) + lineCount(m.bottomBar())
 
 	base := bodyHeight - fixed
 	if len(tr.body) <= base {
@@ -1040,9 +1134,15 @@ func scrollIndicator(start, end, total, width int) string {
 	return lipgloss.NewStyle().Width(width).Align(lipgloss.Right).Render(label)
 }
 
-// summaryRight is the right-aligned side of the summary strip: the active sort
-// (and group), plus the relative last-update age.
-func (m model) summaryRight() string {
+// viewState is what the table cannot say about itself: the active sort and
+// grouping, and how many sessions the current filter is hiding.
+//
+// `hidden N` is the one element of the deleted summary row that exists nowhere
+// else on screen — `a` and `idle_hide_after` filter silently, so without it the
+// screen claims three sessions while the fleet has thirty. It is omitted when
+// nothing is hidden: a permanent zero is a row that trains the eye to skip the
+// place where the exception appears (docs/design/sessions-chrome.md § 2).
+func (m model) viewState() string {
 	parts := []string{labelStyle.Render("sort ") + sortNames[m.sess.sortKey] + sortArrow(m.sess.sortReversed)}
 	if m.sess.groupBy != groupNone {
 		parts = append(parts, labelStyle.Render("group ")+groupNames[m.sess.groupBy])
@@ -1050,7 +1150,6 @@ func (m model) summaryRight() string {
 	if h := m.hiddenCount(); h > 0 {
 		parts = append(parts, labelStyle.Render("hidden ")+strconv.Itoa(h))
 	}
-	parts = append(parts, m.connGlyph())
 	return strings.Join(parts, dimStyle.Render(" · "))
 }
 
@@ -1060,13 +1159,38 @@ func (m model) summaryRight() string {
 // failed, ◍ reconnecting otherwise (the poll is still reaching the server).
 func (m model) connGlyph() string {
 	switch {
-	case m.sseLive:
+	// `sseLive` is an observation, and one made before a suspend is not evidence
+	// of anything now. A failing poll is present-tense proof the server is out of
+	// reach, so it outranks a stale "connected": the indicator must not assert the
+	// one thing it cannot currently know (#457).
+	case m.sseLive && m.err == nil:
 		return lipgloss.NewStyle().Foreground(cGreen).Render("●")
 	case m.err != nil:
 		return lipgloss.NewStyle().Foreground(cRed).Render("○")
 	default:
 		return lipgloss.NewStyle().Foreground(cAmber).Render("◍")
 	}
+}
+
+// bottomBar is the fixed bottom row: the subscription gauges on the left, the
+// view state on the right, under one width budget (#486). It replaces the
+// separate summary row, whose left half restated the STATUS column and whose
+// right half is what survives here (#492).
+func (m model) bottomBar() string {
+	right, mark := m.viewState()+dimStyle.Render(" · ")+helpHint(), m.staleMark(srcUsage)
+	if m.width <= 0 {
+		// No width yet (before the first WindowSizeMsg): nothing to budget.
+		return joinLR(usageStrip(m.usage, 0)+mark, right, 0)
+	}
+	// The 3 columns are joinLR's minimum gap between the two halves.
+	avail := m.width - lipgloss.Width(right) - 3 - lipgloss.Width(mark)
+	if avail <= 0 {
+		// Narrower than the view state itself. Keep it: `hidden N` is the only
+		// thing on screen saying the list is filtered, and the gauges are figures
+		// the Stats tab carries in full.
+		return clampWidth(right, m.width)
+	}
+	return joinLR(usageStrip(m.usage, avail)+mark, right, m.width)
 }
 
 // joinLR places left and right on one line, right-aligned to width when known.
@@ -1113,8 +1237,9 @@ func lessBy(a, b api.SessionView, key sortKey) bool {
 	case sortTokens:
 		return totalTokens(a) > totalTokens(b)
 	case sortStatus:
+		// status.Rank is an index: lower is higher in the table.
 		if ra, rb := statusRank(a.Status), statusRank(b.Status); ra != rb {
-			return ra > rb
+			return ra < rb
 		}
 		return a.LastSeenAt > b.LastSeenAt // tie-break: most recent first
 	case sortName:
@@ -1129,24 +1254,14 @@ func lessBy(a, b api.SessionView, key sortKey) bool {
 	}
 }
 
-// statusRank orders statuses for the status sort: a stalled turn (a hung tool
-// needing a look) ranks above everything, then working > waiting > idle > ended.
-func statusRank(status string) int {
-	switch status {
-	case "stalled":
-		return 5
-	case "working":
-		return 4
-	case "waiting":
-		return 3
-	case "idle":
-		return 2
-	case "ended":
-		return 1
-	default:
-		return 0
-	}
-}
+// statusRank orders statuses for the status sort, lower first, from the one list
+// that also decides which statuses exist (docs/design/session-list.md § 2.1).
+//
+// It used to name five of the nine and send the rest to a default of 0, which —
+// because this comparison was "higher wins" — sorted `compacting`, `thinking`,
+// `error` and `stale` *below* `ended`. A session hitting an API error ranked under
+// one that was over (#464).
+func statusRank(s string) int { return status.Rank(s) }
 
 // fuzzyMatch reports whether the runes of pattern appear in order in text
 // (case-insensitive subsequence match).

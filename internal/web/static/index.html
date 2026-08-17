@@ -41,6 +41,19 @@
 
     <nav class="tabbar" id="tabbar"></nav>
 
+    <!-- Outside #tab-sessions on purpose: that element is repainted whole
+         whenever the fleet changes (#538), which would drop the caret and the
+         text mid-keystroke. -->
+    <div class="filterbar" id="filterbar" hidden>
+      <input id="filter-input" type="search" autocomplete="off" spellcheck="false"
+             placeholder="Filter — a name, machine, project, branch, status, or rc"
+             aria-label="Filter sessions"/>
+      <span class="filter-count" id="filter-count"></span>
+      <label class="grouper"><span>group</span>
+        <select id="group-select" aria-label="Group sessions"></select>
+      </label>
+    </div>
+
     <main id="tab-sessions"></main>
     <main id="tab-stats" hidden></main>
     <main id="tab-machines" hidden></main>
@@ -69,6 +82,6 @@
     </form>
   </div>
 
-  <script src="/static/app.js"></script>
+  <script type="module" src="/static/app.js"></script>
 </body>
 </html>

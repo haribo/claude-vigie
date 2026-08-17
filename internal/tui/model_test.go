@@ -31,7 +31,7 @@ func TestOverflowBannerWrapsToWidth(t *testing.T) {
 }
 
 func TestRenderTabBar(t *testing.T) {
-	out := renderTabBar(tabMachines, 80)
+	out := renderTabBar(tabMachines, 80, "")
 	for _, want := range []string{"Sessions", "Machines", "Settings"} {
 		if !strings.Contains(out, want) {
 			t.Errorf("tab bar missing %q: %s", want, out)
@@ -123,20 +123,6 @@ func TestSparkline(t *testing.T) {
 	for _, g := range r {
 		if g < 0x2800 || g > 0x28FF {
 			t.Errorf("glyph %q outside the braille range", string(g))
-		}
-	}
-}
-
-func TestRenderSummary(t *testing.T) {
-	sessions := []api.SessionView{
-		{Status: "working", Usage: api.Usage{OutputTokens: 1000}},
-		{Status: "working", Usage: api.Usage{OutputTokens: 500}},
-		{Status: "idle", Usage: api.Usage{OutputTokens: 200}},
-	}
-	out := renderSummary(sessions, []int{1, 2, 2})
-	for _, want := range []string{"working 2", "idle 1", "waiting 0", "out ", "activity "} {
-		if !strings.Contains(out, want) {
-			t.Errorf("summary missing %q:\n%s", want, out)
 		}
 	}
 }
@@ -254,11 +240,13 @@ func TestActivitySpark(t *testing.T) {
 	}
 }
 
-func TestFooterHasHints(t *testing.T) {
-	out := footer(tabSessions)
-	for _, want := range []string{"switch", "select", "filter", "sort", "group", "quit"} {
+// The hints moved behind `h` (#493): the list is the modal's now, and the same
+// shortcuts must still be findable there.
+func TestTheShortcutsModalHasTheHints(t *testing.T) {
+	out := renderHelp(tabSessions, 120)
+	for _, want := range []string{"next tab", "select", "filter", "sort", "group", "quit"} {
 		if !strings.Contains(out, want) {
-			t.Errorf("footer missing %q: %s", want, out)
+			t.Errorf("the shortcuts modal is missing %q:\n%s", want, out)
 		}
 	}
 }
@@ -278,8 +266,11 @@ func TestGroupToggleCycles(t *testing.T) {
 }
 
 func TestStatusRankAndSort(t *testing.T) {
-	if statusRank("working") <= statusRank("waiting") || statusRank("idle") <= statusRank("ended") {
-		t.Fatal("status rank must be working > waiting > idle > ended")
+	// #464 inverted the convention: statusRank is now an index into the shared
+	// order (lower sorts higher), so this asserts the *visible* order instead of
+	// the direction of the integer — which is what the test was standing in for.
+	if statusRank("working") >= statusRank("waiting") || statusRank("idle") >= statusRank("ended") {
+		t.Fatal("status order must place working before waiting, and idle before ended")
 	}
 	s := []api.SessionView{
 		{Status: "idle", LastSeenAt: "2026-07-27T10:00:00Z"},
@@ -328,31 +319,6 @@ func TestSettingsEdit(t *testing.T) {
 	m4, _ := m3.Update(right)
 	if m4.(model).prefs.idleHideAfter != 15*time.Minute {
 		t.Errorf("idle after cycle = %s, want 15m", m4.(model).prefs.idleHideAfter)
-	}
-}
-
-// TestAKeyTogglesHideEnded is the #320 regression: the `a` key is a direct
-// toggle of the persistent hide_ended setting (no transient showAll override),
-// and the flip is persisted so it survives a restart.
-func TestAKeyTogglesHideEnded(t *testing.T) {
-	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
-	a := tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("a")}
-	var m tea.Model = model{prefs: defaultPrefs()} // hideEnded starts true
-
-	m, _ = m.Update(a)
-	if m.(model).prefs.hideEnded {
-		t.Fatal("a did not toggle hide_ended off")
-	}
-	if loadPrefs().hideEnded {
-		t.Error("toggled hide_ended off was not persisted")
-	}
-
-	m, _ = m.Update(a)
-	if !m.(model).prefs.hideEnded {
-		t.Error("a did not toggle hide_ended back on")
-	}
-	if !loadPrefs().hideEnded {
-		t.Error("toggled hide_ended on was not persisted")
 	}
 }
 

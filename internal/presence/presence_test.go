@@ -1,9 +1,12 @@
 package presence
 
 import (
+	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strconv"
+	"strings"
 	"testing"
 	"time"
 )
@@ -122,8 +125,12 @@ func TestWatcherRunning(t *testing.T) {
 	if err != nil {
 		t.Skipf("no sh: %v", err)
 	}
-	// A copy of sh named "vigieprobe" so its /proc comm matches the name we scan for.
-	const name = "vigieprobe"
+	// A copy of sh named for this run so its /proc comm matches the name we scan
+	// for. The name is unique per process because the assertion below claims that
+	// *nothing else on the machine* carries it — true on a developer's laptop,
+	// not something a test can promise on a shared runner, which is where it
+	// failed (#476). comm is truncated at 15 bytes, so the suffix fits in five.
+	name := fmt.Sprintf("vigiepr%05d", os.Getpid()%100000)
 	bin := filepath.Join(t.TempDir(), name)
 	data, err := os.ReadFile(sh) //nolint:gosec // test-only copy of the system shell
 	if err != nil {
@@ -132,13 +139,26 @@ func TestWatcherRunning(t *testing.T) {
 	if err := os.WriteFile(bin, data, 0o700); err != nil { //nolint:gosec // test binary must be executable
 		t.Fatal(err)
 	}
-	// The trailing ":" keeps sh from exec-ing the single command and losing its
-	// comm; the bare "watch" ($0) lands in the child's argv for the scan to find.
-	cmd := exec.Command(bin, "-c", "sleep 300; :", "watch") //nolint:gosec // fixed test args
+	// `read` is a POSIX builtin, so the shell blocks in itself and forks nothing
+	// as long as its stdin stays open. That matters more than it looks: the
+	// previous probe was `sh -c "sleep 300; :"`, which forks — and between that
+	// fork and its execve the child carries the parent's comm *and* the parent's
+	// cmdline, because the kernel copies both and only execve replaces them. For
+	// a few microseconds there was therefore a process that was not the probe's
+	// pid, was named like the probe, and had "watch" in its cmdline: exactly
+	// WatcherRunning's predicate, which is what the assertion below caught at
+	// random on CI (#476).
+	//
+	// The bare "watch" ($0) lands in the shell's own argv for the scan to find.
+	cmd := exec.Command(bin, "-c", "read line", "watch") //nolint:gosec // fixed test args
+	stdin, err := cmd.StdinPipe()
+	if err != nil {
+		t.Fatal(err)
+	}
 	if err := cmd.Start(); err != nil {
 		t.Fatalf("starting probe: %v", err)
 	}
-	t.Cleanup(func() { _ = cmd.Process.Kill(); _, _ = cmd.Process.Wait() })
+	t.Cleanup(func() { _ = stdin.Close(); _ = cmd.Process.Kill(); _, _ = cmd.Process.Wait() })
 
 	// Poll briefly: the child needs a moment to appear in /proc under its comm.
 	found := false
@@ -154,7 +174,13 @@ func TestWatcherRunning(t *testing.T) {
 	if !found {
 		t.Error("WatcherRunning did not detect the running probe")
 	}
-	// Excluding the probe's own pid hides it (nothing else is named vigieprobe).
+	// The guard for the guard, checked once the probe is established: a probe that
+	// forks re-opens the window this test was failing in, and nothing else here
+	// would notice.
+	if kids := childrenOf(cmd.Process.Pid); len(kids) > 0 {
+		t.Errorf("the probe forked %v — a child carries its comm and cmdline until it execs, and impersonates a watcher", kids)
+	}
+	// Excluding the probe's own pid hides it: nothing else carries this run's name.
 	if ok, err := WatcherRunning(name, cmd.Process.Pid); err != nil || ok {
 		t.Errorf("WatcherRunning(selfPID=probe) = %v, %v; want false, nil", ok, err)
 	}
@@ -162,4 +188,33 @@ func TestWatcherRunning(t *testing.T) {
 	if ok, err := WatcherRunning("no-such-binxyz", os.Getpid()); err != nil || ok {
 		t.Errorf("WatcherRunning(unknown) = %v, %v; want false, nil", ok, err)
 	}
+}
+
+// childrenOf lists the pids whose parent is pid, read from /proc.
+func childrenOf(pid int) []int {
+	entries, err := os.ReadDir("/proc")
+	if err != nil {
+		return nil
+	}
+	var out []int
+	for _, e := range entries {
+		child, err := strconv.Atoi(e.Name())
+		if err != nil {
+			continue
+		}
+		data, err := os.ReadFile(filepath.Join("/proc", e.Name(), "stat")) //nolint:gosec // a /proc path we built
+		if err != nil {
+			continue
+		}
+		// comm may contain spaces and parentheses, so the numeric fields start
+		// after the final ')': ppid is the second of them.
+		rest := string(data)
+		if i := strings.LastIndex(rest, ")"); i >= 0 {
+			fields := strings.Fields(rest[i+1:])
+			if len(fields) >= 2 && fields[1] == strconv.Itoa(pid) {
+				out = append(out, child)
+			}
+		}
+	}
+	return out
 }

@@ -27,8 +27,8 @@
 
 - **Every session, every machine, one board** — nine live statuses, grouped and filtered as you like.
 - **A session can call you** when its work is done.
-- **Desktop notifications** when a session starts waiting on you (libnotify), and `n` to jump straight to it.
-- **Terminal and browser** — a TUI, and a read-only web mirror served by the daemon itself.
+- **Desktop notifications** when a session starts calling for you — waiting on input, stalled on a tool, in error, or raising a call (libnotify) — and `n` to jump straight to it.
+- **Terminal and browser** — a TUI, and a read-only web dashboard served by the daemon itself. Same board and same answers; each suits its own medium.
 - **Per-session insight** — tokens, context fill, reasoning effort, permission mode, `/rc` link.
 - **Usage and history** — subscription usage, plus daily rollups of tokens and of where your time went.
 - **Observe-only** — vigie never writes into a session, and stores nothing about how *you* handled one.
@@ -73,7 +73,8 @@ full design.
 ```
 vigied serve     # server: HTTP + SSE API, SQLite — runs on the host
 vigied token     # server: print/generate the shared auth token
-vigie  init      # client: install hooks + write the config
+vigied stats-repair  # server: correct one day's output-token figure
+vigie  init      # client: write the config (the watcher installs the hooks)
 vigie  hooks     # client: add/remove reporting hooks (one leg per VIGIE_CONFIG)
 vigie  report    # client: reporter invoked by Claude Code hooks
 vigie  call      # client: raise a call for the operator, from inside a session
@@ -85,9 +86,11 @@ vigie  tui       # client: terminal dashboard
 you install on every machine running Claude Code sessions. See
 [ADR-0003](docs/adr/0003-split-client-and-daemon-binaries.md).
 
-The daemon also serves a **read-only web dashboard** at its root URL — a browser
-mirror of the TUI. Open it, paste the server token, and watch every machine
-from a phone or laptop. No extra process: it is embedded in `vigied`.
+The daemon also serves a **read-only web dashboard** at its root URL. Open it,
+paste the server token, and watch every machine from a phone or laptop. No extra
+process: it is embedded in `vigied`. It shows the same board as the TUI — same
+statuses, same hierarchy — with the gestures a browser calls for rather than a
+terminal's ([architecture](docs/architecture.md)).
 
 ## Design choices
 
@@ -132,12 +135,15 @@ The client reads `~/.config/vigie/config.toml` (override the path with
 
 ## Development
 
-Requires Go 1.26+ and [`just`](https://github.com/casey/just).
+Requires Go 1.26+, [`just`](https://github.com/casey/just), and Node 22+ (the
+dashboard and the GNOME indicator are tested with node's built-in runner — no
+package.json, no dependencies).
 
 ```bash
-just dev-setup      # configure git hooks
-just tool-install   # install golangci-lint + goimports into ./bin
-just code-check     # fmt + lint + build + test (run before every PR)
+just dev-setup       # configure git hooks
+just tool-install    # install golangci-lint + goimports + govulncheck into ./bin
+just code-check      # fmt + lint + build + test (go & js) + vulnerability scan (run before every PR)
+just docs-animation  # regenerate the README animation after editing its template
 ```
 
 Run the current source against a throwaway local server, fully isolated from any

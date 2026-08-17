@@ -46,18 +46,16 @@ func TestReplaceLeadingDot(t *testing.T) {
 }
 
 func TestCallDot(t *testing.T) {
-	on := frame{enabled: true, blinkOn: true, marker: "●"}
-	off := frame{enabled: true, blinkOn: false, marker: "●"}
-	disabled := frame{enabled: false, blinkOn: false, marker: "●"}
+	on := frame{marker: "●"}
+	off := frame{hidden: true, marker: "●"}
 
 	if on.callDot() != "●" || off.callDot() != " " {
 		t.Errorf("blink cycle = %q/%q, want ●/space", on.callDot(), off.callDot())
 	}
-	if disabled.callDot() != "●" {
-		t.Errorf("with blinking off the marker must stay lit, got %q", disabled.callDot())
-	}
-	if (frame{enabled: true, blinkOn: true}).callDot() != defaultCallMarker {
-		t.Error("an unset marker must fall back to the default glyph")
+	// A zero frame is the static render path (the string wrappers, every test
+	// that builds a table without animating): it must stay lit, not blank (#490).
+	if got := (frame{}).callDot(); got != defaultCallMarker {
+		t.Errorf("a zero frame rendered %q — it must stay lit, and fall back to the default glyph", got)
 	}
 }
 
@@ -69,8 +67,8 @@ func TestBlinkKeepsRowWidth(t *testing.T) {
 		CallAt: "2026-08-12T10:00:00Z", CallMessage: "backfill done",
 	}
 	cols := visibleColumns(columns, 200)
-	on := renderRow(cols, s, false, 200, frame{enabled: true, blinkOn: true, marker: "●"})
-	off := renderRow(cols, s, false, 200, frame{enabled: true, blinkOn: false, marker: "●"})
+	on := renderRow(cols, s, false, 200, frame{marker: "●"})
+	off := renderRow(cols, s, false, 200, frame{hidden: true, marker: "●"})
 
 	if lipgloss.Width(on) != lipgloss.Width(off) {
 		t.Errorf("row width changes with the blink: on=%d off=%d", lipgloss.Width(on), lipgloss.Width(off))
@@ -99,23 +97,6 @@ func TestCallTakesTheDoingCell(t *testing.T) {
 	noCall := api.SessionView{Detail: "Edit render.go"}
 	if got := detailCell(noCall); got != "Edit render.go" {
 		t.Errorf("without a call the activity stays, got %q", got)
-	}
-}
-
-func TestSummaryShowsCallCountOnlyWhenNonZero(t *testing.T) {
-	none := []api.SessionView{{Status: "idle"}}
-	counts, _ := summaryParts(none, nil)
-	if strings.Contains(strings.Join(counts, " "), "call") {
-		t.Error("no call must show no call counter")
-	}
-	some := []api.SessionView{{Status: "idle", CallAt: "t"}, {Status: "idle"}}
-	counts, _ = summaryParts(some, nil)
-	joined := strings.Join(counts, " ")
-	if !strings.Contains(joined, "call 1") {
-		t.Errorf("summary missing the call counter: %q", joined)
-	}
-	if !strings.HasPrefix(joined, counts[0]) || !strings.Contains(counts[0], "call") {
-		t.Errorf("the call counter should lead the summary, got %q", counts[0])
 	}
 }
 
@@ -168,7 +149,7 @@ func TestCallNotifies(t *testing.T) {
 // TestBlinkTickRunsOnlyWhileCalling: the animation must not outlive its reason,
 // and must never raise the ambient 5 s poll into a permanent 500 ms one.
 func TestBlinkTickRunsOnlyWhileCalling(t *testing.T) {
-	m := model{prefs: prefs{blink: true, callMarker: "●"}}
+	m := model{prefs: prefs{callMarker: "●"}}
 	if _, cmd := m.withBlinkTick(); cmd != nil {
 		t.Error("no call: no tick should be scheduled")
 	}
@@ -197,9 +178,10 @@ func TestBlinkTickRunsOnlyWhileCalling(t *testing.T) {
 		t.Errorf("animation state not reset: ticking=%v on=%v", m.sess.blinkTicking, m.sess.blinkOn)
 	}
 
-	// Blinking disabled by preference: never any tick.
-	off := model{prefs: prefs{blink: false}, sessions: []api.SessionView{{ID: "a", CallAt: "t"}}}
-	if _, cmd := off.withBlinkTick(); cmd != nil {
-		t.Error("blink = false must schedule no tick at all")
+	// There is no preference left to disable it: a call on screen always
+	// animates, whatever the stored file says (#490).
+	always := model{sessions: []api.SessionView{{ID: "a", CallAt: "t"}}}
+	if _, cmd := always.withBlinkTick(); cmd == nil {
+		t.Error("a call must always schedule the tick")
 	}
 }

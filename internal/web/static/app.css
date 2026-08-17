@@ -65,19 +65,6 @@ code { color: var(--muted); }
 .tab .badge { margin-left: 7px; font-size: 10px; font-weight: 700; padding: 0 6px; border-radius: 999px; background: color-mix(in srgb, var(--waiting) 16%, transparent); color: var(--waiting); vertical-align: 1px; }
 
 /* ---------- summary bar ---------- */
-.summary { display: flex; align-items: center; gap: 18px 20px; flex-wrap: wrap; padding: 11px 16px; margin-bottom: 14px; background: var(--surface); border: 1px solid var(--border); border-radius: 12px; box-shadow: var(--shadow); font-variant-numeric: tabular-nums; }
-.summary .grp { display: inline-flex; align-items: center; gap: 14px; flex-wrap: wrap; }
-.cnt { display: inline-flex; align-items: center; gap: 6px; color: var(--st); }
-.cnt .dot { width: 8px; height: 8px; border-radius: 50%; background: currentColor; }
-.cnt b { font-weight: 700; } .cnt small { color: var(--muted); font-weight: 400; }
-.summary .div { width: 1px; height: 16px; background: var(--border); }
-.metric { display: inline-flex; align-items: center; gap: 7px; color: var(--text); }
-.metric .lbl { color: var(--muted); text-transform: uppercase; letter-spacing: 0.8px; font-size: 10px; }
-.metric.rc b { color: var(--working); }
-.summary .push { flex: 1; }
-.metric.hiddenm { color: var(--faint); background: none; border: none; padding: 0; cursor: pointer; }
-.metric.hiddenm:hover { color: var(--accent); }
-.metric.hiddenm.on { color: var(--accent); }
 
 /* ---------- table ---------- */
 .table-wrap { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; box-shadow: var(--shadow); overflow: hidden; }
@@ -242,3 +229,40 @@ td.dim { color: var(--muted); } td.faint { color: var(--faint); }
 .gate-err { color: var(--error); font-size: 11.5px; }
 .gate-card button { width: 100%; padding: 10px 12px; border-radius: 9px; font-weight: 600; background: var(--accent); color: #fff; border: none; transition: filter 0.12s ease; }
 .gate-card button:hover { filter: brightness(1.05); }
+
+/* The filter bar sits outside the repainted table region (#545): the refresh
+   tick redraws #tab-sessions every 5 s, and an input inside it would lose the
+   caret and the typed text. */
+.filterbar { display: flex; align-items: center; gap: 10px; margin-bottom: 12px; }
+.filterbar input { flex: 1; min-width: 0; padding: 7px 12px; border-radius: 999px; border: 1px solid var(--border); background: var(--surface); color: var(--text); font-size: 13px; }
+.filterbar input:focus { outline: none; border-color: color-mix(in srgb, var(--accent) 45%, var(--border)); }
+.filterbar input::placeholder { color: var(--faint); }
+.filter-count { color: var(--muted); font-size: 11.5px; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.grouper { display: inline-flex; align-items: center; gap: 6px; color: var(--muted); font-size: 11.5px; white-space: nowrap; }
+.grouper select { padding: 5px 8px; border-radius: 8px; border: 1px solid var(--border); background: var(--surface); color: var(--text); font-size: 12px; }
+.grouper select:focus { outline: none; border-color: color-mix(in srgb, var(--accent) 45%, var(--border)); }
+
+/* A group header row. It spans the table and is not selectable — it is a label,
+   not a session (#546). */
+tr.grouphead td { background: var(--surface-2); color: var(--muted); font-size: 11.5px; font-weight: 600; letter-spacing: 0.3px; padding: 6px 12px; border-top: 1px solid var(--border); }
+tr.grouphead .gk { color: var(--text); }
+tr.grouphead .gm { font-weight: 400; font-variant-numeric: tabular-nums; }
+.set-row select { padding: 5px 8px; border-radius: 8px; border: 1px solid var(--border); background: var(--surface); color: var(--text); font-size: 12px; }
+.set-row select:focus { outline: none; border-color: color-mix(in srgb, var(--accent) 45%, var(--border)); }
+
+/* `hidden N`, the one survivor of the summary strip, in the bottom bar (#548). */
+.hiddenn { color: var(--faint); display: inline-flex; align-items: center; gap: 6px; font-variant-numeric: tabular-nums; }
+.hiddenn .lbl { text-transform: uppercase; letter-spacing: 0.8px; font-size: 10px; }
+
+/* CTX fill, the TUI's thresholds: green below 60, amber to 85, red past it
+   (#279). Not "% before auto-compact" — Claude Code's threshold is undocumented. */
+.ctx-warn { color: var(--waiting); }
+.ctx-hot { color: var(--error); }
+
+/* Permission mode, the #303 taxonomy. Vigilance rises manual → accept → plan →
+   auto → bypass; an unrecognised mode gets no class and stays neutral (#304). */
+.mode-manual { color: var(--muted); }
+.mode-accept { color: var(--accent2, var(--accent)); }
+.mode-plan { color: var(--accent); }
+.mode-auto { color: var(--waiting); }
+.mode-bypass { color: var(--error); }

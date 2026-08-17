@@ -127,7 +127,7 @@ func TestDualLegs(t *testing.T) {
 	if countLeg(hooks["Notification"], "/tmp/dev.toml") != 1 {
 		t.Error("dev leg missing")
 	}
-	if !strings.Contains(string(out), "VIGIE_CONFIG=/tmp/dev.toml") {
+	if !strings.Contains(string(out), "VIGIE_CONFIG="+shellQuote("/tmp/dev.toml")) { // quoted since #513
 		t.Errorf("dev leg command missing VIGIE_CONFIG:\n%s", out)
 	}
 
@@ -162,7 +162,7 @@ func TestInstallUninstallRoundtrip(t *testing.T) {
 	if err != nil {
 		t.Fatalf("read: %v", err)
 	}
-	if !strings.Contains(string(data), "/bin/claude-fleet report --event=Stop") {
+	if !strings.Contains(string(data), shellQuote("/bin/claude-fleet")+" report --event=Stop") { // quoted since #513
 		t.Errorf("settings missing our hook:\n%s", data)
 	}
 
@@ -205,7 +205,7 @@ func TestLegacyFleetConfigLeg(t *testing.T) {
 	if strings.Contains(string(out), "FLEET_CONFIG=") {
 		t.Errorf("legacy leg not migrated to VIGIE_CONFIG:\n%s", out)
 	}
-	if !strings.Contains(string(out), "VIGIE_CONFIG=/tmp/dev.toml") {
+	if !strings.Contains(string(out), "VIGIE_CONFIG="+shellQuote("/tmp/dev.toml")) { // quoted since #513
 		t.Errorf("reinstalled leg missing VIGIE_CONFIG:\n%s", out)
 	}
 }

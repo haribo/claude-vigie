@@ -28,6 +28,7 @@ jobs:
       - uses: actions/setup-go@v7
         with:
           go-version: "1.26"
+          check-latest: true
           cache: true
 
       - name: Install goimports
@@ -72,6 +73,7 @@ jobs:
       - uses: actions/setup-go@v7
         with:
           go-version: "1.26"
+          check-latest: true
           cache: true
 
       # Validate .goreleaser.yaml and cross-compile the release binaries without
@@ -96,7 +98,17 @@ jobs:
       - uses: actions/setup-go@v7
         with:
           go-version: "1.26"
+          check-latest: true
           cache: true
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: "22"
+
+      # A glob, not a hand-kept list: a new test file that nobody remembers to add
+      # to both this job and `just code-test-js` is a test that never runs (#538).
+      - name: JavaScript tests
+        run: node --test test/js/*.test.mjs
 
       - name: Build
         run: go build ./...
@@ -107,7 +119,12 @@ jobs:
       - name: Coverage gate
         run: |
           total=$(go tool cover -func=coverage.out | tail -1 | awk '{print $3}' | tr -d '%')
-          floor=55.0
+          # Set just under the tree's actual coverage, so a real regression trips it
+          # rather than sliding under a floor left behind years ago. It was 55 while
+          # the tree sat at 72.7 — seventeen points of coverage could vanish in
+          # silence (#438). Raise it deliberately when coverage rises; the margin is
+          # for ordinary fluctuation, not for erosion.
+          floor=70.0
           echo "total coverage: ${total}% (floor ${floor}%)"
           awk -v t="$total" -v f="$floor" 'BEGIN { if (t+0 < f+0) { print "::error::coverage " t "% is below the " f "% floor — add tests or lower the floor deliberately"; exit 1 } }'
 
@@ -120,6 +137,7 @@ jobs:
       - uses: actions/setup-go@v7
         with:
           go-version: "1.26"
+          check-latest: true
           cache: true
 
       - name: Install govulncheck

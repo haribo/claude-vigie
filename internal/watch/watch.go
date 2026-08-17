@@ -21,6 +21,7 @@ import (
 	"github.com/haribo/claude-vigie/internal/clock"
 	"github.com/haribo/claude-vigie/internal/compaction"
 	"github.com/haribo/claude-vigie/internal/config"
+	"github.com/haribo/claude-vigie/internal/localwatch"
 	"github.com/haribo/claude-vigie/internal/presence"
 	"github.com/haribo/claude-vigie/internal/transcript"
 	"github.com/haribo/claude-vigie/internal/usage"
@@ -83,7 +84,7 @@ func Run(ctx context.Context, cfg *config.Config, opts Options) error {
 
 	sc := newScanner()
 	lastGC := clock.Now()
-	var drifted, beatFailing bool
+	var drifted, beatFailing, markFailing bool
 	var lastBeat time.Time
 	for {
 		// Liveness is claimed on its own, never as a side effect of session data: a
@@ -104,6 +105,12 @@ func Run(ctx context.Context, cfg *config.Config, opts Options) error {
 			if err != nil {
 				fmt.Fprintf(os.Stderr, "watch: %v\n", err)
 			}
+			// Claim the local mark only here, after a real scan. It tells the
+			// reporting hooks that transcripts on this machine are already being
+			// read incrementally, so they can skip their own full re-read (#420).
+			// A drifted watcher beats but never reaches this line: it stops
+			// scanning, so hooks must keep reading for themselves.
+			markFailing = markLocal(markFailing)
 			drifted = postReports(cfg, reports, drifted)
 		}
 		if time.Since(lastGC) > gcInterval {
@@ -116,6 +123,26 @@ func Run(ctx context.Context, cfg *config.Config, opts Options) error {
 		case <-ticker.C:
 		}
 	}
+}
+
+// markLocal refreshes the on-disk mark the reporting hooks read. Like beat, it
+// announces transitions only, so a persistent failure never fills the journal.
+//
+// A scan interval longer than localwatch.StaleAfter leaves the mark permanently
+// stale; that is safe by construction — hooks simply keep reading transcripts
+// themselves, which is exactly what they did before #420.
+func markLocal(failing bool) bool {
+	err := localwatch.Mark()
+	switch {
+	case err == nil:
+		if failing {
+			fmt.Fprintln(os.Stderr, "watch: local watcher mark is writable again")
+		}
+		return false
+	case !failing:
+		fmt.Fprintf(os.Stderr, "watch: cannot write the local watcher mark, hooks will read transcripts themselves: %v\n", err)
+	}
+	return true
 }
 
 // heartbeatInterval is how often the watcher claims liveness. It sits well inside
@@ -266,6 +293,17 @@ func (s *scanner) scan(root, machine string, maxAge time.Duration, now time.Time
 			continue
 		}
 
+		// A transcript with no exchange in it is a metadata sidecar, not a session
+		// — unless Claude Code still has it registered, which is what a session
+		// you have started and not typed into looks like. That one is live and
+		// must be shown; an abandoned sidecar, left behind by a renamed or moved
+		// project, must not (#448).
+		if !info.HasTurns {
+			if _, live := reg[info.SessionID]; !live {
+				continue
+			}
+		}
+
 		// Prefer the last dated transcript line over the file mtime for "when did
 		// this session last really do something". A live Claude appends
 		// untimestamped metadata (last-prompt, bridge-session) roughly hourly,
@@ -322,7 +360,7 @@ func (s *scanner) scan(root, machine string, maxAge time.Duration, now time.Time
 	}
 	s.cache = fresh // drop entries for files no longer scanned
 	s.pruneLineage(regByProc)
-	return reports, nil
+	return dedupeBySession(reports), nil
 }
 
 // indexByProc maps each live process identity to the session id it currently
@@ -511,6 +549,47 @@ func (s *scanner) parse(p string, fi os.FileInfo, fresh map[string]cacheEntry) (
 	}
 	fresh[p] = cacheEntry{modTime: fi.ModTime(), size: fi.Size(), parser: parser}
 	return parser.Info(), nil
+}
+
+// dedupeBySession keeps one report per session id, the one carrying the largest
+// output-token total.
+//
+// A transcript lives under ~/.claude/projects/<encoded-cwd>/, so a session whose
+// working directory changes — a renamed or moved project, a resume from another
+// path — is written under two directories under the *same* id. The glob then
+// yielded one report per file, and the server saw the session's total alternate
+// between the live figure and the abandoned file's, every scan. Downstream that
+// read as the whole total being produced afresh each time (#432,
+// docs/design/token-rollup.md).
+//
+// The largest total is the live file: an abandoned transcript stops growing.
+// Reports without a session id are left alone rather than collapsed together.
+func dedupeBySession(reports []api.ReportRequest) []api.ReportRequest {
+	best := make(map[string]int, len(reports))
+	out := make([]api.ReportRequest, 0, len(reports))
+	for _, r := range reports {
+		if r.SessionID == "" {
+			out = append(out, r)
+			continue
+		}
+		i, seen := best[r.SessionID]
+		if !seen {
+			best[r.SessionID] = len(out)
+			out = append(out, r)
+			continue
+		}
+		if outputTokens(r) > outputTokens(out[i]) {
+			out[i] = r
+		}
+	}
+	return out
+}
+
+func outputTokens(r api.ReportRequest) int64 {
+	if r.Usage == nil {
+		return 0
+	}
+	return r.Usage.OutputTokens
 }
 
 // sessionStatus layers a transient "error" status on top of the base
@@ -761,6 +840,7 @@ func usageCycle(ctx context.Context, cfg *config.Config, fetcher *usage.Fetcher)
 	if !ok {
 		return // backing off
 	}
+	rep.Holder = cfg.Machine // the lease this machine just acquired (#515)
 	if err := postJSON(cfg, "/api/usage", rep, nil); err != nil {
 		fmt.Fprintf(os.Stderr, "watch: post usage: %v\n", err)
 	}

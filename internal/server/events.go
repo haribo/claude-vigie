@@ -3,6 +3,7 @@ package server
 import (
 	"net/http"
 	"sync"
+	"time"
 )
 
 // hub fans out "sessions changed" notifications to SSE subscribers. Each
@@ -74,6 +75,13 @@ func (s *Server) handleEvents(w http.ResponseWriter, r *http.Request) {
 	if !send() { // initial nudge so the client fetches immediately
 		return
 	}
+	// A silent stream is indistinguishable from a dead one, and a client has no
+	// way to tell them apart without hearing something. A comment line every
+	// heartbeatEvery gives it that: bytes to time out on, ignored by every SSE
+	// parser, and cheap enough to send to an idle fleet (#457).
+	beat := time.NewTicker(heartbeatEvery)
+	defer beat.Stop()
+
 	for {
 		select {
 		case <-r.Context().Done():
@@ -82,6 +90,16 @@ func (s *Server) handleEvents(w http.ResponseWriter, r *http.Request) {
 			if !send() {
 				return
 			}
+		case <-beat.C:
+			if _, err := w.Write([]byte(": keep-alive\n\n")); err != nil {
+				return
+			}
+			flusher.Flush()
 		}
 	}
 }
+
+// heartbeatEvery is how often an idle stream says it is still there. It has to
+// be well inside the client's patience (internal/tui/sse.go) so an ordinary quiet
+// spell is never mistaken for a death.
+const heartbeatEvery = 10 * time.Second

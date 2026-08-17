@@ -34,11 +34,16 @@ func TestJoinLR(t *testing.T) {
 	}
 }
 
-func TestSummaryRightAndFilterLine(t *testing.T) {
+func TestViewStateAndFilterLine(t *testing.T) {
 	m := model{sess: sessionsView{sortKey: sortTokens, groupBy: groupMachine}, sseLive: true, clock: fixedClock}
-	right := m.summaryRight()
+	right := m.viewState()
 	if !strings.Contains(right, "sort") || !strings.Contains(right, sortNames[sortTokens]) || !strings.Contains(right, "group") {
-		t.Errorf("summaryRight = %q", right)
+		t.Errorf("viewState = %q", right)
+	}
+	// The connection glyph left for the tab line (#492): it must not be here too,
+	// or the operator has two indicators of one fact.
+	if strings.ContainsAny(right, "●○◍") {
+		t.Errorf("viewState still carries the connection glyph: %q", right)
 	}
 	fl := sessionsView{filter: "auth", filtering: true}.filterLine()
 	if !strings.Contains(fl, "auth") || !strings.Contains(fl, "▌") {

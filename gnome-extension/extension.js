@@ -1,7 +1,8 @@
 // Claude Vigie — GNOME Shell top-bar indicator.
 //
 // A read-only client of a vigied server: it polls GET /api/sessions and
-// surfaces how many sessions are waiting for input. It never writes into or
+// surfaces how many sessions are calling for the operator — waiting on input,
+// stalled on a tool, in error, or raising a call. It never writes into or
 // drives a session (observe-only, see docs/adr/0005-observe-only.md).
 
 import GObject from 'gi://GObject';
@@ -16,24 +17,28 @@ import * as Main from 'resource:///org/gnome/shell/ui/main.js';
 import * as PanelMenu from 'resource:///org/gnome/shell/ui/panelMenu.js';
 import * as PopupMenu from 'resource:///org/gnome/shell/ui/popupMenu.js';
 
-// Statuses, most-active first, with a display label.
-const STATUS_ORDER = ['working', 'waiting', 'idle', 'ended'];
+import {groupOrder, basename, needsAttention, attentionReason, attentionIds} from './lib.js';
+
+// Statuses, most-active first, with a display label. Kept identical to
+// docs/design/session-status.md § 1 and internal/status — a Go test reads this
+// literal and fails on any drift. This list used to hold four of the nine, and
+// the menu silently dropped every session in one of the other five, `stalled`
+// among them — the state most worth a look (#422, #423).
+const STATUS_ORDER = ['working', 'thinking', 'compacting', 'waiting', 'stalled', 'idle', 'error', 'stale', 'ended'];
 const STATUS_LABEL = {
     working: 'Working',
+    thinking: 'Thinking',
+    compacting: 'Compacting context',
     waiting: 'Waiting for input',
+    stalled: 'Stalled on a tool',
     idle: 'Idle',
+    error: 'API error',
+    stale: 'Unknown (no watcher)',
     ended: 'Ended',
 };
 
-function basename(path) {
-    if (!path)
-        return '';
-    const parts = path.replace(/\/+$/, '').split('/');
-    return parts[parts.length - 1] || path;
-}
-
-const FleetIndicator = GObject.registerClass(
-class FleetIndicator extends PanelMenu.Button {
+const VigieIndicator = GObject.registerClass(
+class VigieIndicator extends PanelMenu.Button {
     _init(extension) {
         super._init(0.0, 'Claude Vigie');
 
@@ -42,7 +47,7 @@ class FleetIndicator extends PanelMenu.Button {
         this._session = new Soup.Session();
         this._timeoutId = 0;
         this._settingsChangedId = 0;
-        this._waitingIds = new Set(); // session ids currently waiting, for edge-triggered notifications
+        this._callingIds = new Set(); // sessions currently calling for the operator, for edge-triggered notifications
         this._primed = false;         // first poll seeds the set without notifying (no launch storm)
 
         const box = new St.BoxLayout({style_class: 'panel-status-menu-box'});
@@ -51,7 +56,7 @@ class FleetIndicator extends PanelMenu.Button {
             style_class: 'system-status-icon',
         });
         this._badge = new St.Label({
-            style_class: 'cf-badge',
+            style_class: 'vigie-badge',
             y_align: Clutter.ActorAlign.CENTER,
             visible: false,
         });
@@ -114,48 +119,55 @@ class FleetIndicator extends PanelMenu.Button {
     _update(sessions) {
         if (!Array.isArray(sessions))
             sessions = [];
-        const waiting = sessions.filter(s => s.status === 'waiting').length;
+        // Everything that calls for the operator, not just `waiting`: a stalled
+        // turn and a session's own call are the other two, and they are why this
+        // indicator exists (#466).
+        const calling = sessions.filter(needsAttention).length;
 
-        this._notifyNewlyWaiting(sessions);
+        this._notifyNewlyCalling(sessions);
 
-        if (waiting > 0) {
-            this._icon.add_style_class_name('cf-attention');
-            this._badge.text = String(waiting);
+        if (calling > 0) {
+            this._icon.add_style_class_name('vigie-attention');
+            this._badge.text = String(calling);
             this._badge.visible = true;
         } else {
-            this._icon.remove_style_class_name('cf-attention');
+            this._icon.remove_style_class_name('vigie-attention');
             this._badge.visible = false;
         }
-        this._icon.remove_style_class_name('cf-error');
+        this._icon.remove_style_class_name('vigie-error');
         this._rebuildMenu(sessions);
     }
 
-    // _notifyNewlyWaiting fires a notification for each session that transitioned
-    // into `waiting` since the last poll (edge-triggered, one per transition). The
-    // first poll only seeds the set, so launching the extension never notifies for
-    // sessions that were already waiting. Observe-only: it reads and reports.
-    _notifyNewlyWaiting(sessions) {
-        const nowWaiting = new Set(sessions.filter(s => s.status === 'waiting').map(s => s.id));
+    // _notifyNewlyCalling fires a notification for each session that entered the
+    // attention set since the last poll — waiting, stalled, error, or a call it
+    // raised itself (edge-triggered, one per transition). The first poll only
+    // seeds the set, so launching the extension never notifies for sessions that
+    // were already calling. Observe-only: it reads and reports.
+    _notifyNewlyCalling(sessions) {
+        const now = attentionIds(sessions);
         if (this._primed && this._settings.get_boolean('notify')) {
             for (const s of sessions) {
-                if (s.status === 'waiting' && !this._waitingIds.has(s.id))
-                    this._notifyWaiting(s);
+                if (needsAttention(s) && !this._callingIds.has(s.id))
+                    this._notifyCalling(s);
             }
         }
-        this._waitingIds = nowWaiting;
+        this._callingIds = now;
         this._primed = true;
     }
 
-    _notifyWaiting(s) {
+    // The body says *why*: a stalled turn, an API error and a raised call all want
+    // different things from the operator, and a notification that says only
+    // "waiting for input" for all three is misleading.
+    _notifyCalling(s) {
         const name = s.title || basename(s.project_dir) || s.id;
         const context = [s.machine, s.git_branch].filter(Boolean).join(' · ');
-        Main.notify('Claude Vigie',
-            context ? `${name} (${context}) is waiting for input` : `${name} is waiting for input`);
+        const who = context ? `${name} (${context})` : name;
+        Main.notify('Claude Vigie', `${who} ${attentionReason(s)}`);
     }
 
     _showError(message) {
-        this._icon.remove_style_class_name('cf-attention');
-        this._icon.add_style_class_name('cf-error');
+        this._icon.remove_style_class_name('vigie-attention');
+        this._icon.add_style_class_name('vigie-error');
         this._badge.visible = false;
         this.menu.removeAll();
         this.menu.addMenuItem(new PopupMenu.PopupMenuItem(`⚠ ${message}`, {reactive: false}));
@@ -168,7 +180,7 @@ class FleetIndicator extends PanelMenu.Button {
         if (sessions.length === 0) {
             this.menu.addMenuItem(new PopupMenu.PopupMenuItem('No sessions', {reactive: false}));
         } else {
-            for (const status of STATUS_ORDER) {
+            for (const status of groupOrder(sessions, STATUS_ORDER)) {
                 const group = sessions.filter(s => s.status === status);
                 if (group.length === 0)
                     continue;
@@ -188,7 +200,7 @@ class FleetIndicator extends PanelMenu.Button {
         const context = [s.machine, s.git_branch].filter(Boolean).join(' · ');
         const item = new PopupMenu.PopupMenuItem(name, {reactive: false});
         if (context) {
-            const label = new St.Label({text: context, style_class: 'cf-context'});
+            const label = new St.Label({text: context, style_class: 'vigie-context'});
             item.add_child(label);
         }
         return item;
@@ -217,7 +229,7 @@ class FleetIndicator extends PanelMenu.Button {
 
 export default class VigieExtension extends Extension {
     enable() {
-        this._indicator = new FleetIndicator(this);
+        this._indicator = new VigieIndicator(this);
         Main.panel.addToStatusArea(this.uuid, this._indicator);
     }
 

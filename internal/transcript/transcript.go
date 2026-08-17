@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/haribo/claude-vigie/internal/api"
 )
@@ -73,6 +74,11 @@ type Info struct {
 	// turn (Ctrl-C/Esc). The base status is still idle; the watcher only sets the
 	// DETAIL marker to "interrupted", cleared by the next real message (#351).
 	Interrupted bool
+	// HasTurns reports whether the transcript holds any exchange at all. Claude
+	// Code writes a metadata-only sidecar (title, mode, agent name…) next to the
+	// conversation, and a renamed or moved project leaves one behind with no turn
+	// in it — not a session, though it looks like one from the outside (#448).
+	HasTurns bool
 }
 
 type usage struct {
@@ -103,6 +109,7 @@ type line struct {
 	PermissionMode string  `json:"permissionMode"` // permission mode, on user / permission-mode lines (#304)
 	IsAPIError     bool    `json:"isApiErrorMessage"`
 	IsSidechain    bool    `json:"isSidechain"` // a sub-agent line — excluded from context sizing (#279)
+	IsMeta         bool    `json:"isMeta"`      // a user line Claude Code injected, not one the operator typed (#483)
 	APIErrorStatus int     `json:"apiErrorStatus"`
 	Message        message `json:"message"`
 }
@@ -158,8 +165,8 @@ func (info *Info) applyAssistant(l line, seen map[string]bool) {
 	}
 	info.Thinking = lastBlockIsThinking(m.Content)
 	info.Activity = lastToolActivity(m.Content)
-	if m.Model != "" {
-		info.Model = m.Model
+	if isRealModel(m.Model) {
+		info.Model = m.Model // a marker never becomes the session's model (#433)
 	}
 	if l.Effort != "" {
 		info.Effort = l.Effort // keep the last reported effort; a line without it does not clear it
@@ -182,6 +189,20 @@ func (info *Info) applyAssistant(l line, seen map[string]bool) {
 	info.Usage.OutputTokens += m.Usage.OutputTokens
 	info.Usage.CacheCreationTokens += m.Usage.CacheCreationInputTokens
 	info.Usage.CacheReadTokens += m.Usage.CacheReadInputTokens
+}
+
+// isRealModel reports whether an assistant line's `model` field names an actual
+// model. Claude Code writes bracketed markers there for lines it generated itself
+// rather than received from the API — `<synthetic>` is the one observed, on both
+// API-error lines and ordinary ones ("No response requested."). Letting a marker
+// through made it the session's model until the next real turn, and the daily
+// rollups key on that, so real output was attributed to a bucket that is not a
+// model (#433).
+//
+// The check is the bracket, not the error flag: of nine synthetic lines found
+// across one machine's transcripts, only five were flagged as API errors.
+func isRealModel(m string) bool {
+	return m != "" && !strings.HasPrefix(m, "<")
 }
 
 // lastBlockIsThinking reports whether an assistant message's content ends with a

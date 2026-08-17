@@ -6,9 +6,11 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"net/url"
 	"time"
 
 	"github.com/haribo/claude-vigie/internal/api"
+	"github.com/haribo/claude-vigie/internal/status"
 	"github.com/haribo/claude-vigie/internal/store"
 )
 
@@ -47,18 +49,24 @@ func (s *Server) handleReport(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	existing, err := s.store.GetSession(ctx, req.SessionID)
-	isNew := errors.Is(err, store.ErrNotFound)
-	if err != nil && !isNew {
-		s.log.Error("loading session", "error", err)
-		s.writeError(w, http.StatusInternalServerError, "internal error")
+	if reason, msg := rejectReport(req); reason != "" {
+		metricReportsRejected.WithLabelValues(reason).Inc()
+		s.writeError(w, http.StatusBadRequest, msg)
 		return
 	}
 
-	sess := applyReport(existing, isNew, req)
-	sess.ReportedAt = s.now().UTC().Format(time.RFC3339) // server-side heartbeat
-	if err := s.store.UpsertSession(ctx, sess); err != nil {
-		s.log.Error("upserting session", "error", err)
+	// Read, merge and write as one step: nothing may land between them, or the
+	// merge decides from a state another report has already replaced (#512).
+	var existing store.Session
+	var isNew bool
+	sess, err := s.store.ApplySession(ctx, req.SessionID, func(current store.Session, fresh bool) store.Session {
+		existing, isNew = current, fresh
+		merged := applyReport(current, fresh, req)
+		merged.ReportedAt = s.now().UTC().Format(time.RFC3339) // server-side heartbeat
+		return merged
+	})
+	if err != nil {
+		s.log.Error("applying report", "error", err)
 		s.writeError(w, http.StatusInternalServerError, "internal error")
 		return
 	}
@@ -99,12 +107,23 @@ func (s *Server) handleReport(w http.ResponseWriter, r *http.Request) {
 
 // rollupTokens adds the session's output-token growth since the last report to
 // today's daily rollup, bucketed by model. Best-effort.
-func (s *Server) rollupTokens(ctx context.Context, old, sess store.Session, req api.ReportRequest) {
-	delta := sess.Usage.OutputTokens - old.Usage.OutputTokens
+func (s *Server) rollupTokens(ctx context.Context, _, sess store.Session, req api.ReportRequest) {
+	// Count against a mark of our own rather than the growth of the session row.
+	// That row is a counter the rollup does not own: it regresses when one session
+	// is written to two transcript files, when a transcript is truncated, or when
+	// retention deletes the row while the transcript lives on — and each
+	// regression made the next report look like a whole lifetime of fresh output,
+	// permanently, since stats_daily is never recomputed (#432,
+	// docs/design/token-rollup.md).
+	delta, err := s.store.RaiseTokenMark(ctx, sess.ID, sess.Usage.OutputTokens)
+	if err != nil {
+		s.log.Error("raising token mark", "error", err)
+		return
+	}
 	if delta <= 0 {
 		return
 	}
-	metricOutputTokens.WithLabelValues(sess.Model).Add(float64(delta))
+	metricOutputTokens.WithLabelValues(modelLabel(sess.Model)).Add(float64(delta)) // bounded: see modelFamilies (#528)
 	if err := s.store.AddDailyTokens(ctx, dayOf(req.Timestamp, s.now()), sess.Model, delta); err != nil {
 		s.log.Error("rolling up daily tokens", "error", err)
 	}
@@ -174,11 +193,17 @@ func (s *Server) maybeSample(ctx context.Context, sessionID, at string, output i
 // wasted (#258).
 func visibleSignature(s store.Session) string {
 	u := s.Usage
-	return fmt.Sprintf("%s|%s|%s|%s|%s|%s|%s|%s|%s|%s|%t|%s|%d|%s|%s|%d|%d|%d|%d",
+	return fmt.Sprintf("%s|%s|%s|%s|%s|%s|%s|%s|%s|%s|%t|%s|%d|%s|%s|%d|%d|%d|%d|%s|%d|%t|%s",
 		s.Status, s.StatusChangedAt, s.Detail, s.Title, s.User, s.Machine, s.Model,
 		s.GitBranch, s.ProjectDir, s.LastTool, s.RemoteControl, s.RemoteURL, s.APIErrorStatus,
 		s.CallAt, s.CallMessage, // raising or clearing a call must reach the dashboards (#388)
-		u.InputTokens, u.OutputTokens, u.CacheCreationTokens, u.CacheReadTokens)
+		u.InputTokens, u.OutputTokens, u.CacheCreationTokens, u.CacheReadTokens,
+		// The dashboard renders these too, and stops polling once the stream is
+		// live — so a session switching to plan mode, changing effort or filling
+		// its context never redrew while they were missing (#514). ContextKnown
+		// travels separately from the figure: "unknown" and "known to be zero"
+		// are different states on screen (#367).
+		s.Effort, s.ContextTokens, s.ContextKnown, s.PermissionMode)
 }
 
 // applyReport merges a report into the session state (read-modify-write).
@@ -228,8 +253,8 @@ func applyReport(sess store.Session, isNew bool, req api.ReportRequest) store.Se
 		sess.EndedAt = req.Timestamp
 	}
 	if req.RemoteControl != nil {
-		sess.RemoteControl = *req.RemoteControl // detected /rc state (read-only)
-		sess.RemoteURL = req.RemoteURL          // resume URL travels with the /rc flag; "" clears it
+		sess.RemoteControl = *req.RemoteControl       // detected /rc state (read-only)
+		sess.RemoteURL = safeRemoteURL(req.RemoteURL) // resume URL travels with the /rc flag; "" clears it (#515)
 	}
 	if req.LastTool != "" {
 		sess.LastTool = req.LastTool
@@ -314,18 +339,32 @@ func applyStatus(sess store.Session, req api.ReportRequest) store.Session {
 	return sess
 }
 
+// watcherObserves are the statuses the watcher establishes positively rather
+// than infers from a quiet transcript: the transcript carries an API error, or
+// the process is gone. They clear a hook-set `waiting` even while the transcript
+// is frozen (session-status.md § 3).
+//
+// Everything else the watcher can report about a frozen transcript is inferred
+// from silence — and a frozen transcript is what a permission prompt looks like.
+// The set is a *deny* list on purpose: it was an allow list of
+// working/thinking/compacting, so `stalled` (#256) fell straight through it when
+// it was added, and a permission prompt read as a hung tool for the rest of the
+// session (#508). A status added tomorrow is held by default, which is the safe
+// direction — the cost of holding one too long is a late release, the cost of
+// letting one through is telling the operator the wrong thing.
+var watcherObserves = map[string]bool{"error": true, "ended": true}
+
 // holdsWaiting reports whether a hook-set `waiting` must survive a watcher
 // report (#235). The watcher can't tell "a tool is running" from "a permission
 // prompt is blocking": both are a turn stopped on tool_use with a frozen
-// transcript. So its inferred working/thinking may only clear waiting once the
-// transcript has actually moved past when waiting was posted — i.e. the report's
-// timestamp (the transcript mtime) is newer than StatusChangedAt. error/ended
-// are positive observations and still win.
+// transcript. So an inferred status may only clear waiting once the transcript
+// has actually moved past when waiting was posted — i.e. the report's timestamp
+// (the transcript mtime) is newer than StatusChangedAt.
 func holdsWaiting(sess store.Session, req api.ReportRequest) bool {
 	if sess.Status != "waiting" || sess.StatusSource != "hook" || sess.StatusChangedAt == "" {
 		return false
 	}
-	if req.Status != "working" && req.Status != "thinking" && req.Status != "compacting" {
+	if watcherObserves[req.Status] {
 		return false
 	}
 	return !timeAfter(req.Timestamp, sess.StatusChangedAt)
@@ -364,6 +403,69 @@ func reconcileWatch(current, currentSource, incoming string) (status, source str
 		return current, currentSource // a confirmation doesn't transfer ownership
 	}
 	return incoming, "watch" // a positive change is the watcher's
+}
+
+// rejectReport validates a report's own fields, returning a metric reason and an
+// operator-facing message when it must be refused, or "" when it may proceed.
+//
+// It runs after the version gate on purpose: a drifted watcher is a *who*
+// question with a deliberate side effect (its heartbeat is still recorded so the
+// fleet can see which machine to upgrade), while this is a *what* question about
+// the payload.
+func rejectReport(req api.ReportRequest) (reason, message string) {
+	// An unknown event used to fall through deriveStatus's default arm to
+	// `working`, *and* be stamped hook-owned — which the watcher could then no
+	// longer retract, the #201 failure mode. Both fields are checked against the
+	// vocabularies that exist, rather than trusted because the caller holds the
+	// token (#515).
+	switch {
+	case !knownEvents[req.Event]:
+		return "unknown_event", "unknown event"
+	case req.Status != "" && !status.Known(req.Status):
+		return "unknown_status", "unknown status"
+	// The server tells its two informants apart by whether a report carries a
+	// status: one that does not is taken for a hook and believed on its word — its
+	// state is stamped `hook`, which the watcher may then never retract.
+	//
+	// A watch report's whole contribution *is* the status it inferred, so an empty
+	// one says nothing at all; believed anyway, it invents `working` on a new
+	// session and locks it there for the rest of its life (#201, #527). The real
+	// watcher always carries one — statusFor cannot return an empty string — so
+	// only a malformed report is refused here.
+	case req.Event == "watch" && req.Status == "":
+		return "watch_without_status", "a watch report must carry a status"
+	}
+	return "", ""
+}
+
+// knownEvents are the events vigie emits: the Claude Code hooks it installs
+// (internal/client.defaultEvents), plus the watcher's scan and a session-raised
+// call. Anything else is a malformed or hostile report, not a future feature — a
+// new hook is added here at the same time as it is installed (#515).
+var knownEvents = map[string]bool{
+	"SessionStart": true, "UserPromptSubmit": true, "PostToolUse": true,
+	"Notification": true, "Stop": true, "PreCompact": true, "SessionEnd": true,
+	"watch": true, "call": true,
+}
+
+// safeRemoteURL returns the /rc resume URL if it is one a browser may safely be
+// pointed at, else "". It is validated here rather than at render: the dashboard
+// puts it in an href, and `javascript:` or `data:` survives HTML escaping
+// untouched — escaping stops an attribute being broken out of, not a scheme from
+// being followed. Validating at ingestion means a bad value never reaches the
+// store, so no client has to remember to check (#515).
+//
+// Only https is allowed. The URL is Claude's own resume link (ADR-0005: detected,
+// never set), so anything else is not a URL vigie has any business relaying.
+func safeRemoteURL(raw string) string {
+	if raw == "" {
+		return ""
+	}
+	u, err := url.Parse(raw)
+	if err != nil || u.Scheme != "https" || u.Host == "" {
+		return ""
+	}
+	return raw
 }
 
 // deriveStatus maps a hook event to a session status, keeping the current

@@ -14,12 +14,12 @@ import (
 // indicator — kept within width: the TUI never scrolls sideways, so when the two
 // do not fit, the secondary platform side is dropped and the usage side is
 // clamped as a last resort (#332).
-func usageStrip(u api.UsageReport, ps api.PlatformStatus, width int) string {
-	usage, plat := renderUsageStrip(u), platformStrip(ps)
-	if width <= 0 || lipgloss.Width(usage+plat) <= width {
-		return usage + plat
-	}
-	return clampWidth(usage, width)
+// The Claude platform indicator and the ⟳ sync glyph left this bar for the state
+// modal: they are reliability indicators, not figures, and `platform ●
+// operational` reads 99 % of the time — a row that trains the eye to skip the
+// place where the exception appears (docs/design/sessions-chrome.md § 2, #494).
+func usageStrip(u api.UsageReport, width int) string {
+	return clampWidth(renderUsageStrip(u), width)
 }
 
 // renderUsageStrip renders subscription usage as one compact, dim line for the
@@ -31,27 +31,7 @@ func renderUsageStrip(u api.UsageReport) string {
 	return labelStyle.Render("usage  ") +
 		compactGauge("5h", u.FiveHourPct, u.FiveHourReset) +
 		dimStyle.Render("    ") +
-		compactGauge("7d", u.SevenDayPct, u.SevenDayReset) +
-		dimStyle.Render("    ") + syncGlyph(u.FetchedAt)
-}
-
-// syncGlyph renders the usage snapshot's freshness as one colored ⟳: green when
-// fresh, amber when aging, red when stale. The snapshot is a periodic cache
-// (~5 min, longer under fetch backoff), never pushed over SSE — so its age is
-// what matters, not an exact "synced Xm ago".
-func syncGlyph(rfc string) string {
-	t, err := parseTime(rfc)
-	if err != nil {
-		return dimStyle.Render("⟳")
-	}
-	color := cGreen
-	switch d := time.Since(t); {
-	case d >= 30*time.Minute:
-		color = cRed
-	case d >= 10*time.Minute:
-		color = cAmber
-	}
-	return lipgloss.NewStyle().Foreground(color).Render("⟳")
+		compactGauge("7d", u.SevenDayPct, u.SevenDayReset)
 }
 
 func compactGauge(label string, pct float64, reset string) string {
@@ -72,9 +52,13 @@ func compactGauge(label string, pct float64, reset string) string {
 	}
 	bar := lipgloss.NewStyle().Foreground(color).Render(strings.Repeat("▓", filled)) +
 		dimStyle.Render(strings.Repeat("░", width-filled))
-	s := labelStyle.Render(label+" ") + bar + fmt.Sprintf(" %3.0f%%", pct)
+	// Tight against the bar and against the reset: the gauges give up the space
+	// the chrome no longer has to spare (#492). The `%3.0f` padding that kept the
+	// 5h and 7d blocks aligned whatever the figure goes with it — a deliberate
+	// reading trade, not an oversight (docs/design/sessions-chrome.md § 2).
+	s := labelStyle.Render(label+" ") + bar + fmt.Sprintf("%.0f%%", pct)
 	if r := resetIn(reset); r != "" {
-		s += dimStyle.Render(" (" + r + ")")
+		s += dimStyle.Render("(" + r + ")")
 	}
 	return s
 }

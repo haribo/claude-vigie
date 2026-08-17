@@ -22,7 +22,11 @@ func TestConcurrentWritesDoNotBusyError(t *testing.T) {
 	}
 	t.Cleanup(func() { _ = st.Close() })
 
-	const writers, each = 16, 40
+	// 8×20 rather than 16×40: the guarantee holds while contention stays inside
+	// busy_timeout, and on a loaded runner 640 concurrent writes could exceed
+	// 5 s — turning a property of the code into a property of the machine (#476).
+	// The deterministic half of this guard is TestBusyTimeoutOnEveryConnection.
+	const writers, each = 8, 20
 	var wg sync.WaitGroup
 	errs := make(chan error, writers*each)
 	for w := 0; w < writers; w++ {
@@ -95,6 +99,47 @@ func TestPragmasApplyToEveryConnection(t *testing.T) {
 		}
 		if mode != "wal" {
 			t.Errorf("conn %d: journal_mode = %q, want wal", i, mode)
+		}
+	}
+}
+
+// TestBusyTimeoutOnEveryConnection is the deterministic guard for #372: the
+// pragma has to travel in the DSN, or only the first pooled connection carries it
+// and every other one fails immediately with SQLITE_BUSY.
+//
+// The concurrency test above shows the symptom; this shows the cause, without
+// depending on how fast the machine is.
+func TestBusyTimeoutOnEveryConnection(t *testing.T) {
+	st, err := Open(filepath.Join(t.TempDir(), "pragma.db"))
+	if err != nil {
+		t.Fatalf("open: %v", err)
+	}
+	defer func() { _ = st.Close() }()
+	ctx := context.Background()
+
+	// Held open together, so the pool has to hand out distinct connections.
+	const conns = 8
+	held := make([]*sql.Conn, 0, conns)
+	for i := 0; i < conns; i++ {
+		c, err := st.db.Conn(ctx)
+		if err != nil {
+			t.Fatalf("connection %d: %v", i, err)
+		}
+		held = append(held, c)
+	}
+	defer func() {
+		for _, c := range held {
+			_ = c.Close()
+		}
+	}()
+
+	for i, c := range held {
+		var ms int
+		if err := c.QueryRowContext(ctx, "PRAGMA busy_timeout").Scan(&ms); err != nil {
+			t.Fatalf("connection %d: %v", i, err)
+		}
+		if ms == 0 {
+			t.Errorf("connection %d has busy_timeout=0 — it would fail instantly under contention", i)
 		}
 	}
 }

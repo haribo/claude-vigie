@@ -46,24 +46,51 @@ func (p *pendingTools) addToolUses(raw json.RawMessage) {
 }
 
 // clearToolResults drops the tool_use ids answered by a tool_result block (Claude
-// Code writes them in user messages). Non-array content (a plain user string) is
-// ignored, so a normal message never disturbs the pairing.
-func (p *pendingTools) clearToolResults(raw json.RawMessage) {
+// Code writes them in user messages) and reports whether it saw any. Non-array
+// content (a plain user string) is ignored, so a normal message never disturbs
+// the pairing — and answers false, which is what marks it a prompt (see
+// closeTurn).
+func (p *pendingTools) clearToolResults(raw json.RawMessage) (answered bool) {
 	if len(raw) == 0 {
-		return
+		return false
 	}
 	var blocks []struct {
 		Type      string `json:"type"`
 		ToolUseID string `json:"tool_use_id"`
 	}
 	if err := json.Unmarshal(raw, &blocks); err != nil {
-		return
+		return false
 	}
 	for _, b := range blocks {
 		if b.Type == "tool_result" && b.ToolUseID != "" {
 			delete(p.meta, b.ToolUseID)
+			answered = true
 		}
 	}
+	return answered
+}
+
+// closeTurn drops every still-unresolved tool_use, called when a prompt the
+// operator typed opens a new turn (#483).
+//
+// A tool_result that never arrives — Claude Code killed while the tool was in
+// flight — otherwise leaves its tool_use in the map for the rest of the
+// transcript, and the session reads `stalled` at every pause between turns for
+// the rest of its life. Nothing can clear it: vigie is observe-only towards the
+// session (ADR-0005), so a permanent false "the operator is needed here" is worse
+// than a missed one. A prompt proves the session moved on, so a call from before
+// it cannot be what the current turn is parked on.
+//
+// The direction of the residual error is the safe one. If a queued prompt were
+// ever written before the result of a tool still genuinely running, this would
+// miss a stall rather than invent one — and across 313 local transcripts it never
+// happened: the rule fired exactly once, on the one dead tool call.
+func (p *pendingTools) closeTurn() {
+	if len(p.meta) == 0 {
+		return
+	}
+	p.meta = map[string]toolMeta{}
+	p.order = p.order[:0]
 }
 
 // resolve returns the most recent unresolved foreground tool's name (for the

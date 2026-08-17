@@ -6,7 +6,9 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"testing"
 
@@ -72,24 +74,42 @@ func TestProtectedRoutesRequireAuth(t *testing.T) {
 
 // TestEveryAPIRouteRejectsUnauthenticated is the security invariant: every
 // /api/* route must reject a request that carries no token and one that carries
-// a wrong token. It guards against a future route registered without s.auth.
-// The list is maintained by hand (Go's ServeMux is not introspectable), so a
-// newly added protected route must be added here — and an unprotected one will
-// fail this test.
+// a wrong token. It guards against a future route registered without s.auth, and
+// `deployment.md` cites it by name as the evidence that the API is closed.
+//
+// The list used to be maintained by hand, on the grounds that Go's ServeMux is
+// not introspectable. True — but the source is, and the routes were read from it
+// elsewhere in this repository long before this test was short. It held nine of
+// eleven: `GET /api/status` and `GET /api/version` were missing, both behind
+// s.auth already, so nothing was open — the invariant simply was not enforced for
+// them while a document promised it was (#556).
+//
+// The routes now come out of `server.go` the way `test/docs/routes_test.go`
+// already takes them, so the list cannot be short again.
+func registeredAPIRoutes(t *testing.T) []struct{ method, path string } {
+	t.Helper()
+	body, err := os.ReadFile("server.go")
+	if err != nil {
+		t.Fatalf("reading server.go: %v", err)
+	}
+	pat := regexp.MustCompile(`mux\.Handle\("(GET|POST) (/api/[a-z/]+)"`)
+	matches := pat.FindAllStringSubmatch(string(body), -1)
+	out := make([]struct{ method, path string }, 0, len(matches))
+	for _, m := range matches {
+		out = append(out, struct{ method, path string }{m[1], m[2]})
+	}
+	if len(out) == 0 {
+		t.Fatal("no /api route found in server.go — the extraction is broken, not the server")
+	}
+	return out
+}
+
 func TestEveryAPIRouteRejectsUnauthenticated(t *testing.T) {
 	srv := newTestServer(t)
-	routes := []struct{ method, path string }{
-		{http.MethodPost, "/api/report"},
-		{http.MethodGet, "/api/sessions"},
-		{http.MethodGet, "/api/events"},
-		{http.MethodGet, "/api/usage"},
-		{http.MethodPost, "/api/usage"},
-		{http.MethodPost, "/api/usage/lease"},
-		{http.MethodGet, "/api/watcher"},
-		{http.MethodPost, "/api/watcher/heartbeat"},
-		{http.MethodGet, "/api/settings"},
-		{http.MethodPost, "/api/settings"},
-		{http.MethodGet, "/api/stats"},
+	routes := registeredAPIRoutes(t)
+	// A floor, so a broken extraction that returns one route cannot pass quietly.
+	if len(routes) < 11 {
+		t.Fatalf("only %d routes extracted — the API has not shrunk, the regex has", len(routes))
 	}
 	for _, r := range routes {
 		// No token at all.
@@ -300,8 +320,11 @@ func TestWatcherStatusPerMachine(t *testing.T) {
 	srv := newTestServer(t)
 
 	// alpha reports through the watcher; beta has a session but reports on hooks alone.
+	// Status is what a real watch report always carries (statusFor never returns
+	// an empty string); omitting it here was a test convenience, and it is now
+	// refused (#527).
 	watch, _ := json.Marshal(api.ReportRequest{
-		Event: "watch", WatcherVersion: version.Version, WatcherCommit: version.Commit, SessionID: "a1", Machine: "alpha", ProjectDir: "/p",
+		Event: "watch", Status: "idle", WatcherVersion: version.Version, WatcherCommit: version.Commit, SessionID: "a1", Machine: "alpha", ProjectDir: "/p",
 	})
 	if rec := do(t, srv, http.MethodPost, "/api/report", watch, true); rec.Code != http.StatusNoContent {
 		t.Fatalf("alpha watch report = %d", rec.Code)

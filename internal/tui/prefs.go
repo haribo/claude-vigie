@@ -1,6 +1,7 @@
 package tui
 
 import (
+	"bytes"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -22,8 +23,14 @@ type prefs struct {
 	notify        bool          // desktop notifications on working→attention (#260)
 	columnOrder   []string      // display order of ALL table columns; empty = built-in default (#308)
 	columnHidden  []string      // hidden table columns (#315)
-	blink         bool          // animate the marker of a calling session (#389)
-	callMarker    string        // glyph for a calling session's dot; "" = defaultCallMarker
+	// loadFailed says the preferences file exists but could not be used — it was
+	// unreadable, empty, or not valid TOML. It is not a preference: it is a latch
+	// that stops savePrefs stamping defaults over a file whose contents are still
+	// there, which is how a corrupt file used to become an unrecoverable one
+	// (#480). Empty means the file loaded, or genuinely did not exist yet.
+	loadFailed string
+
+	callMarker string // glyph for a calling session's dot; "" = defaultCallMarker
 }
 
 // defaultPrefs are used when no preferences file exists: hide only ended
@@ -31,7 +38,7 @@ type prefs struct {
 func defaultPrefs() prefs {
 	return prefs{
 		hideEnded: true, idleHideAfter: 0, sortKey: sortLastSeen, groupBy: groupNone,
-		notify: true, blink: true, callMarker: defaultCallMarker,
+		notify: true, callMarker: defaultCallMarker,
 	}
 }
 
@@ -58,7 +65,6 @@ type prefsFile struct {
 	Notify        *bool    `toml:"notify"`        // pointer: absent = default (on)
 	ColumnOrder   []string `toml:"column_order"`  // display order of all columns; empty = default (#308)
 	ColumnHidden  []string `toml:"column_hidden"` // hidden columns (#315)
-	Blink         *bool    `toml:"blink"`         // pointer: absent = default (on) (#389)
 	CallMarker    string   `toml:"call_marker"`   // glyph for a calling session's dot (#389)
 }
 
@@ -114,27 +120,55 @@ group_by = %q
 column_order = %s
 column_hidden = %s
 
-# Blink the status dot of a session that has called you (vigie call). Off leaves
-# the call readable only in the DETAIL column.
-blink = %t
-
 # Glyph for a calling session's dot. Must be exactly one terminal cell wide: a
 # two-cell glyph (an emoji, an ideograph) would shift every column to its right,
 # so anything wider is ignored and the default is kept.
 call_marker = %q
-`, p.notify, p.hideEnded, idle, sortNames[p.sortKey], p.sortReversed, groupNames[p.groupBy], list(p.columnOrder), list(p.columnHidden), p.blink, p.callMarker)
+`, p.notify, p.hideEnded, idle, sortNames[p.sortKey], p.sortReversed, groupNames[p.groupBy], list(p.columnOrder), list(p.columnHidden), p.callMarker)
 }
 
 // savePrefs writes the preferences file (best-effort; the UI must not block).
+//
+// Two rules, both learned from losing a layout (#480):
+//
+// It refuses to write when the file could not be read. Otherwise the first
+// preference keystroke after a corrupt read would replace the operator's settings
+// with the defaults the TUI fell back to — turning a recoverable file into a lost
+// one, silently.
+//
+// And it writes through a temp file in the same directory, renamed over the
+// target, so a TUI killed mid-write leaves the previous file intact rather than a
+// truncated one. `internal/install` already did this for settings.json; the
+// preferences were the asymmetry.
 func savePrefs(p prefs) {
+	if p.loadFailed != "" {
+		return
+	}
 	path, err := prefsPath()
 	if err != nil {
 		return
 	}
-	if err := os.MkdirAll(filepath.Dir(path), 0o750); err != nil {
+	dir := filepath.Dir(path)
+	if err := os.MkdirAll(dir, 0o750); err != nil {
 		return
 	}
-	_ = os.WriteFile(path, []byte(renderPrefsTOML(p)), 0o600)
+	tmp, err := os.CreateTemp(dir, ".tui-*.toml")
+	if err != nil {
+		return
+	}
+	defer func() { _ = os.Remove(tmp.Name()) }() // no-op once renamed
+	if _, err := tmp.WriteString(renderPrefsTOML(p)); err != nil {
+		_ = tmp.Close()
+		return
+	}
+	if err := tmp.Chmod(0o600); err != nil {
+		_ = tmp.Close()
+		return
+	}
+	if err := tmp.Close(); err != nil {
+		return
+	}
+	_ = os.Rename(tmp.Name(), path)
 }
 
 // idlePresets are the selectable values for idle_hide_after (0 = never hide).
@@ -190,10 +224,21 @@ func loadPrefs() prefs {
 			return p
 		}
 	} else if err != nil {
+		// Keep the file and say so. Returning defaults silently was half the
+		// defect: the next keystroke wrote them over whatever was still there.
+		p.loadFailed = fmt.Sprintf("cannot read %s: %v", path, err)
+		return p
+	}
+	// An empty file parses cleanly into zero values, which is worse than a parse
+	// error: hide_ended flips to false and the column layout is lost, with nothing
+	// to distinguish it from a deliberate configuration (#480).
+	if len(bytes.TrimSpace(data)) == 0 {
+		p.loadFailed = fmt.Sprintf("%s is empty", path)
 		return p
 	}
 	var f prefsFile
 	if err := toml.Unmarshal(data, &f); err != nil {
+		p.loadFailed = fmt.Sprintf("cannot parse %s: %v", path, err)
 		return p
 	}
 	p.hideEnded = f.HideEnded
@@ -209,9 +254,6 @@ func loadPrefs() prefs {
 	// A layout saved before a column rename keeps its old key (#393).
 	p.columnOrder = migrateColumnKeys(f.ColumnOrder)
 	p.columnHidden = migrateColumnKeys(f.ColumnHidden)
-	if f.Blink != nil { // absent keeps the default (on)
-		p.blink = *f.Blink
-	}
 	// A marker wider than one cell would shift every column to its right, since
 	// the table pads by rune count and vigie carries no display-width dependency.
 	// An invalid value is ignored rather than obeyed (#389).

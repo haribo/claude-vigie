@@ -25,12 +25,12 @@ const blinkInterval = 500 * time.Millisecond
 // configurable only because a font may not carry a given code point.
 const defaultCallMarker = "●"
 
-// frame is the per-render animation state. A zero frame renders a steady table,
-// which is what the string wrappers and every static test want.
+// frame is the per-render animation state. The field says when the marker is
+// *hidden* rather than shown, so a zero frame renders a steady, fully-lit table
+// — which is what the string wrappers and every static test want.
 type frame struct {
-	blinkOn bool   // is the marker on its visible half-cycle
-	marker  string // glyph for a calling session's dot
-	enabled bool   // blinking allowed at all (prefs.blink)
+	hidden bool   // the calling marker is on its blank half-cycle
+	marker string // glyph for a calling session's dot
 }
 
 // hasCall reports whether the session is calling the operator. CallAt is what
@@ -51,7 +51,7 @@ func callCount(sessions []api.SessionView) int {
 // blinking reports whether anything on screen is animating — the only condition
 // under which the blink tick is scheduled at all.
 func (f frame) blinking(sessions []api.SessionView) bool {
-	return f.enabled && callCount(sessions) > 0
+	return callCount(sessions) > 0
 }
 
 // callDot returns the leading glyph for a calling session's status cell: the
@@ -60,14 +60,13 @@ func (f frame) blinking(sessions []api.SessionView) bool {
 // the table at animation speed. The blank keeps the cell's width, so no column
 // ever shifts.
 func (f frame) callDot() string {
-	if !f.enabled || f.blinkOn {
-		marker := f.marker
-		if marker == "" {
-			marker = defaultCallMarker
-		}
-		return marker
+	if f.hidden {
+		return " "
 	}
-	return " "
+	if f.marker == "" {
+		return defaultCallMarker
+	}
+	return f.marker
 }
 
 // statusDots are the leading glyphs a status cell can start with: the live dot

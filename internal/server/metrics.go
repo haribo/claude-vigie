@@ -14,6 +14,7 @@ import (
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 
 	"github.com/haribo/claude-vigie/internal/clock"
+	"github.com/haribo/claude-vigie/internal/status"
 )
 
 // This file is the daemon's only Prometheus dependency; the client packages
@@ -21,6 +22,34 @@ import (
 // bounded — never session_id / machine / project — so cardinality stays finite.
 
 const metricsNamespace = "vigie"
+
+// modelFamilies are the label values vigie_output_tokens_total may take, besides
+// "other". A family, not a model id: a version is what changes often, and every
+// distinct label value is a counter Prometheus holds in memory for the process's
+// lifetime and never frees.
+//
+// The model name arrives in the report body, so without this a client sending a
+// different one each time grows the daemon without limit — no malice needed, a
+// name carrying a date or an id does it by accident (#528).
+//
+// The per-version breakdown is not lost: stats_daily keeps the exact model, and
+// the Stats tab reads it. That is what lets this be coarse.
+var modelFamilies = []string{"opus", "sonnet", "haiku", "fable"}
+
+// modelLabel folds a model id onto its family, or "other".
+//
+// "other" rather than dropping the sample: a counter that silently under-counts
+// is worse than one with a bucket whose name says it is a catch-all, because the
+// total still looks complete.
+func modelLabel(model string) string {
+	m := strings.ToLower(model)
+	for _, f := range modelFamilies {
+		if strings.Contains(m, f) {
+			return f
+		}
+	}
+	return "other"
+}
 
 var (
 	// reg is the daemon's registry: Go/process collectors, the vigie_* metrics
@@ -188,8 +217,11 @@ var (
 )
 
 // statusOrder is every status the gauge reports, so each series exists (=0) even
-// when no session currently holds it.
-var statusOrder = []string{"working", "thinking", "waiting", "idle", "stalled", "error", "stale", "ended"}
+// when no session currently holds it. It comes from the shared vocabulary rather
+// than a local copy: this list silently omitted `compacting` from the day it was
+// added (#342), so those sessions were counted and then dropped, and the gauge's
+// total did not match the number of sessions (#421, #423).
+var statusOrder = status.All
 
 func (c *stateCollector) Describe(ch chan<- *prometheus.Desc) {
 	ch <- descSessions

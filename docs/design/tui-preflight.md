@@ -1,4 +1,6 @@
-# TUI startup preflight
+# TUI startup preflight — Design Specification
+
+**Status:** Accepted (#357).
 
 `vigie tui` runs a **preflight** before it enters the terminal's alt-screen. A
 down or mismatched daemon must fail loudly on the normal screen — never degrade

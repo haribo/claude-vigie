@@ -1,6 +1,6 @@
 # TUI vertical viewport — Design Specification
 
-**Status:** Proposed (#378).
+**Status:** Accepted (#378).
 
 Source of truth for how the sessions table fits the terminal **height**. The TUI
 already refuses to scroll sideways — every layout guard fits the **width**
@@ -21,29 +21,41 @@ band**:
 ```
 tab bar                     ┐
 [⚠ watcher-stale]           │ fixed (top)
-summary strip               │
 rule                        │
 [filter line]               │
 [overflow banner]           ┘
 column header               ← pinned
  …session rows…             ← the only scrollable band
 [position indicator]        ← pinned (only when the band overflows)
-rule                        ┐
-usage / platform strip      │ fixed (bottom)
-rule                        │
-footer                      ┘
+rule                        ┐ fixed (bottom)
+bottom bar                  ┘ usage · view state · h help
 ```
 
 Only the row band scrolls. Everything else stays put, so the operator never
-loses the header, the counts, or the key hints to scrolling.
+loses the header, the column titles, or the way to the shortcuts.
+
+Which elements earn a permanent row at all is specified separately, in
+[sessions-chrome.md](sessions-chrome.md): this document budgets the rows, that
+one decides who gets them.
+
+**Chrome costs one row, whatever the width.** The Sessions tab carries a single
+key hint — `h help` — at the end of its bottom bar, so there is nothing to drop
+and nothing to wrap at any width. The eleven hints it replaced needed 134
+columns; below that they wrapped, and the row was genuinely spent — measured
+correctly by the row budget below, so nothing was drawn out of place, simply one
+fewer session on every frame. Rows belong to the table, and a standing reminder
+of `q quit` is not worth one of them (#487, #493).
+
+The tabs without a bottom bar keep a one-line footer carrying the same hint, so
+the way to the shortcuts is reachable from all of them.
 
 ## 2. Row budget
 
 `View` learns the terminal height from `WindowSizeMsg.Height` (new `model.height`,
 the vertical dual of `model.width`). The row budget is computed by **measuring the
 rendered chrome**, not by hard-coding line counts — the chrome is variable
-(the watcher-stale line, the filter line, the multi-line overflow banner, a
-wrapped usage strip or footer all come and go):
+(the watcher-stale line, the filter line, the multi-line overflow banner and a
+wrapped usage strip all come and go):
 
 ```
 rowBudget = height − lines(everything rendered except the row band)
@@ -102,7 +114,12 @@ effect — a list that fits carries no indicator and loses no row to it.
 Extend the width-sweep harness ([scaling_test.go](../../internal/tui/scaling_test.go))
 with a **height sweep**: for a populated fleet, render across a range of terminal
 heights and assert (a) the output never exceeds `height` lines, (b) the selected
-row is always visible, (c) the pinned header and summary are always present, and
+row is always visible, (c) the pinned column header is always present, and
 (d) the position indicator appears exactly when the band overflows. A pure
 `window(lines, selected, budget, offset)` helper carries its own unit tests
 (top edge, bottom edge, scroll-off, resize re-clamp, list-shorter-than-budget).
+
+> **Amended by #556.** This asked for the "summary" to be present too. That
+> summary was deleted by #492, and the assertion written for it went on passing
+> against a STATUS cell — it would have passed with no header at all. What is
+> checked, and what this now asks for, is the pinned column header.

@@ -200,6 +200,7 @@ func clip(s string, w int) string {
 
 func (m model) renderStats() string {
 	var b strings.Builder
+	b.WriteString(m.staleNote(srcStats))
 
 	// Period switcher.
 	parts := make([]string, periodCount)

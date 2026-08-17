@@ -10,12 +10,19 @@ import (
 
 	"github.com/haribo/claude-vigie/internal/api"
 	"github.com/haribo/claude-vigie/internal/clock"
+	"github.com/haribo/claude-vigie/internal/status"
 )
 
 // machineStat aggregates one machine's sessions for the Machines tab.
 type machineStat struct {
 	name     string
 	sessions int
+	// byStatus counts every status seen, keyed by its name — including one this
+	// build has never heard of, since the server owns the vocabulary and a client
+	// may be older than it. The four columns below read from it; anything else
+	// non-zero is spelled out at the end of the row rather than folded into a
+	// total that reads as zero (#509).
+	byStatus map[string]int
 	working  int
 	waiting  int
 	idle     int
@@ -31,20 +38,11 @@ func aggregateMachines(sessions []api.SessionView) []machineStat {
 	for _, s := range sessions {
 		a := byName[s.Machine]
 		if a == nil {
-			a = &machineStat{name: s.Machine}
+			a = &machineStat{name: s.Machine, byStatus: map[string]int{}}
 			byName[s.Machine] = a
 		}
 		a.sessions++
-		switch s.Status {
-		case "working":
-			a.working++
-		case "waiting":
-			a.waiting++
-		case "idle":
-			a.idle++
-		case "ended":
-			a.ended++
-		}
+		a.byStatus[s.Status]++
 		a.out += s.Usage.OutputTokens
 		if s.User != "" {
 			a.user = s.User
@@ -55,6 +53,8 @@ func aggregateMachines(sessions []api.SessionView) []machineStat {
 	}
 	out := make([]machineStat, 0, len(byName))
 	for _, a := range byName {
+		a.working, a.waiting = a.byStatus["working"], a.byStatus["waiting"]
+		a.idle, a.ended = a.byStatus["idle"], a.byStatus["ended"]
 		out = append(out, *a)
 	}
 	sort.Slice(out, func(i, j int) bool {
@@ -109,7 +109,8 @@ func renderMachines(sessions []api.SessionView, watcherSeen map[string]string, v
 			userStyle.Render(pad(orDash(a.user), 12))+
 			dimStyle.Render(padLeft(relativeAge(a.lastSeen, now), 6))+"   "+
 			watchCell(fresh)+"   "+
-			dimStyle.Render(pad(versionCell(versions[a.name]), 12)), width) + "\n")
+			dimStyle.Render(pad(versionCell(versions[a.name]), 12))+
+			otherStatuses(a.byStatus), width) + "\n")
 	}
 	// Only surface the banner when something is actually wrong — no watcher on at
 	// least one machine — so a healthy fleet stays quiet. Prose wraps to width.
@@ -123,6 +124,40 @@ func renderMachines(sessions []api.SessionView, watcherSeen map[string]string, v
 		b.WriteString("\n" + warn + "\n" + help + "\n")
 	}
 	return b.String()
+}
+
+// columnStatuses are the four that have a column of their own. Everything else a
+// machine is running is spelled out by otherStatuses, so no session is counted in
+// SESS and shown nowhere (#509).
+var columnStatuses = map[string]bool{"working": true, "waiting": true, "idle": true, "ended": true}
+
+// otherStatuses renders the statuses without a column, in the vocabulary's own
+// order, and empty when there are none — so a fleet that fits the columns looks
+// exactly as it did.
+//
+// A status the server knows and this build does not is included too: it sorts
+// last (status.Rank), and showing an unfamiliar word beats dropping a session.
+func otherStatuses(byStatus map[string]int) string {
+	keys := make([]string, 0, len(byStatus))
+	for st, n := range byStatus {
+		if n > 0 && !columnStatuses[st] {
+			keys = append(keys, st)
+		}
+	}
+	if len(keys) == 0 {
+		return ""
+	}
+	sort.Slice(keys, func(i, j int) bool {
+		if ri, rj := status.Rank(keys[i]), status.Rank(keys[j]); ri != rj {
+			return ri < rj
+		}
+		return keys[i] < keys[j]
+	})
+	parts := make([]string, 0, len(keys))
+	for _, st := range keys {
+		parts = append(parts, statusStyle(st).Render("● "+st+" "+strconv.Itoa(byStatus[st])))
+	}
+	return "   " + strings.Join(parts, "  ")
 }
 
 // watcherFresh reports whether a machine's last watch report is recent enough to

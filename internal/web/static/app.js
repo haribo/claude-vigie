@@ -1,4 +1,3 @@
-"use strict";
 // claude-vigie — read-only web dashboard, a browser mirror of the terminal UI.
 // It only reads the API (observe-only). The operator's token lives in localStorage
 // and is sent as a bearer token; all data is HTML-escaped before it reaches the
@@ -6,68 +5,77 @@
 // token makes DOM-based XSS a real risk (issue #161). Dynamic sizes are applied
 // via CSSOM (element.style), never inline attributes, to keep the strict CSP.
 
-const TOKEN_KEY = "cf_token";
-const STATUSES = ["working", "thinking", "compacting", "waiting", "idle", "stalled", "error", "stale", "ended"];
-const RANK = { stalled: 0, working: 1, thinking: 2, waiting: 3, idle: 4, error: 5, stale: 6, ended: 7 };
+import {
+  esc, dash, trim, hasCall, detailText, humanTokens, ageSec, relAge, relResetHint,
+  shortModel, projectName, totalTokens, sparkSVG, migrateKeys, fullColOrder, colHidden, rank,
+  adoptLegacyKey, needsAttention, attentionCount, streamIsSilent, REFRESH_MS,
+  sessionName, matchesFilter, GROUP_MODES, groupSessions, contextKnown, contextPct, contextCell, modeLabel, migrateV1Columns,
+  IDLE_PRESETS_MS, idleLabel, hiddenByIdle,
+} from "./lib.js";
 
-let token = localStorage.getItem(TOKEN_KEY) || "";
+// Both keys were named for the old brand. They hold live state — a signed-in
+// token and a column layout — so the old name is read once and carried over
+// rather than dropped (adoptLegacyKey, #478).
+const TOKEN_KEY = "vigie_token";
+// Kept identical to docs/design/session-status.md § 1 and internal/status — a Go
+// test reads this literal and fails on any drift (#423).
+const STATUSES = ["working", "thinking", "compacting", "waiting", "stalled", "idle", "error", "stale", "ended"];
+
+let token = adoptLegacyKey(localStorage, "cf_token", TOKEN_KEY) || "";
 let sessions = [], byId = new Map();
 let usage = null, platform = null, stats = null, settings = null, ver = null, watcher = null;
-let activeTab = "sessions", detailId = null, showEnded = false;
+let activeTab = "sessions", detailId = null;
+// Whether ended sessions are listed. A Settings preference rather than a control
+// on the table, as in the TUI: `hidden N` is shown only when something is hidden
+// (sessions-chrome.md § 2), so a button living there would vanish the moment it
+// had been used and leave no way back (#548).
+const ENDED_KEY = "vigie_show_ended";
+let showEnded = localStorage.getItem(ENDED_KEY) === "1";
+// The active filter. Held here rather than read from the DOM so a repaint of the
+// table can never change it (#545).
+let filter = "";
+// How the table is grouped. Browser-local like the column layout and the sort:
+// it is a view preference, and vigie stores nothing about how an operator works
+// (ADR-0007). Read once here; an unknown stored value degrades to "off" (#546).
+const GROUP_KEY = "vigie_group";
+// How long a session may go unheard before it leaves the table. Browser-local
+// like the rest of the view preferences (#547).
+const IDLE_KEY = "vigie_idle_hide";
+let idleHideAfter = IDLE_PRESETS_MS.includes(Number(localStorage.getItem(IDLE_KEY))) ? Number(localStorage.getItem(IDLE_KEY)) : 0;
+let groupBy = GROUP_MODES.includes(localStorage.getItem(GROUP_KEY) || "") ? localStorage.getItem(GROUP_KEY) : "off";
 let sortKey = "seen", sortDir = 1;           // 1 = descending
 let statsPeriod = "Week", statsLoaded = false, settingsLoaded = false;
-let liveCtrl = null, liveRetry = null, pollTimer = null, metaTimer = null;
+let liveCtrl = null, liveRetry = null, tickTimer = null, metaTimer = null;
+// When the stream last delivered any bytes, keep-alive comments included. It is
+// what the silence watchdog measures; 0 means nothing has been heard yet.
+let lastHeardAt = 0;
 
 const $ = (id) => document.getElementById(id);
-function esc(s) {
-  return String(s == null ? "" : s).replaceAll("&", "&amp;").replaceAll("<", "&lt;")
-    .replaceAll(">", "&gt;").replaceAll('"', "&quot;").replaceAll("'", "&#39;");
-}
-const dash = (v) => (v === "" || v == null) ? "-" : v;
-const trim = (x) => x.toFixed(1).replace(/\.0$/, "");
-// A session-raised call (ADR-0010). call_at is what marks it: the message is
-// optional, and a call with none is still a call.
-function hasCall(s) { return Boolean(s && s.call_at); }
 
-// detailText is the Detail cell's content: a raised call takes it, because it is
-// the reason the row is pulsing and it outranks the tool that ran last.
-function detailText(s) {
-  if (hasCall(s)) return s.call_message ? esc(s.call_message) : "called you";
-  return s.detail ? esc(s.detail) : "-";
+// paint writes html into an element only when it differs from what is already
+// there, and keeps the scroll position when it does write.
+//
+// The refresh tick redraws every 5 s whether or not anything changed (#538).
+// Rewriting innerHTML unconditionally throws away everything the DOM was holding:
+// the operator's text selection, keyboard focus on a row, and — because
+// #tab-sessions contains the scroll container — the scroll position, which would
+// send a long fleet list back to the top twelve times a minute. Identical HTML
+// means nothing on screen would differ, so the cheapest correct redraw is none.
+const painted = new Map();
+function paint(id, html) {
+  if (painted.get(id) === html) return false;
+  painted.set(id, html);
+  const el = $(id);
+  // Read before the write: replacing innerHTML destroys the old scroll container.
+  const scroller = el.querySelector(".table-scroll");
+  const top = scroller ? scroller.scrollTop : 0;
+  el.innerHTML = html;
+  if (top) {
+    const fresh = el.querySelector(".table-scroll");
+    if (fresh) fresh.scrollTop = top;
+  }
+  return true;
 }
-
-function humanTokens(n) { n = Number(n) || 0; if (n >= 1e6) return trim(n / 1e6) + "M"; if (n >= 1e3) return trim(n / 1e3) + "k"; return String(n); }
-function ageSec(rfc) { const t = Date.parse(rfc); return Number.isNaN(t) ? Infinity : Math.max(0, (Date.now() - t) / 1000); }
-function relAge(rfc) {
-  const s = ageSec(rfc); if (!Number.isFinite(s)) return "-";
-  if (s < 60) return Math.floor(s) + "s";
-  const m = Math.floor(s / 60); if (m < 60) return m + "m";
-  const h = Math.floor(m / 60); if (h < 24) return h + "h";
-  return Math.floor(h / 24) + "d";
-}
-function relResetHint(rfc) {
-  const t = Date.parse(rfc); if (Number.isNaN(t)) return "";
-  let s = Math.floor((t - Date.now()) / 1000); if (s <= 0) return "resets soon";
-  const d = Math.floor(s / 86400); s -= d * 86400; const h = Math.floor(s / 3600); s -= h * 3600; const m = Math.floor(s / 60);
-  if (d) return `resets in ${d}d ${h}h`; if (h) return `resets in ${h}h ${m}m`; return `resets in ${m}m`;
-}
-const shortModel = (m) => (m || "").replace(/^claude-/, "");
-function projectName(dir) { if (!dir) return "-"; const p = dir.replace(/\/+$/, "").split("/"); return p[p.length - 1] || dir; }
-const totalTokens = (u) => (u.input_tokens || 0) + (u.output_tokens || 0) + (u.cache_creation_tokens || 0) + (u.cache_read_tokens || 0);
-
-function sparkSVG(data, w = 72, h = 18) {
-  if (!data || !data.length || Math.max(...data) === 0) return '<span class="faint">—</span>';
-  const max = Math.max(...data, 1), n = data.length, step = n > 1 ? w / (n - 1) : 0;
-  const pts = data.map((d, i) => [i * step, h - (d / max) * (h - 3) - 1.5]);
-  const line = pts.map((p) => `${p[0].toFixed(1)},${p[1].toFixed(1)}`).join(" ");
-  const area = `0,${h} ${line} ${w},${h}`;
-  const [ex, ey] = pts[pts.length - 1];
-  return `<svg class="spark" width="${w}" height="${h}" viewBox="0 0 ${w} ${h}" aria-hidden="true">
-    <polygon points="${area}" fill="var(--st)" opacity="0.12"/>
-    <polyline points="${line}" fill="none" stroke="var(--st)" stroke-width="1.5" stroke-linejoin="round" stroke-linecap="round"/>
-    <circle cx="${ex.toFixed(1)}" cy="${ey.toFixed(1)}" r="2" fill="var(--st)"/></svg>`;
-}
-
 // ---------- API ----------
 function authHeaders() { return { "Authorization": "Bearer " + token }; }
 async function api(path) {
@@ -80,104 +88,147 @@ async function api(path) {
 // ---------- tabs ----------
 const TABS = [{ id: "sessions", label: "Sessions" }, { id: "stats", label: "Stats" }, { id: "machines", label: "Machines" }, { id: "settings", label: "Settings" }];
 function renderTabs() {
-  const waiting = sessions.filter((s) => s.status === "waiting").length;
-  $("tabbar").innerHTML = TABS.map((t) => {
-    const badge = (t.id === "sessions" && waiting) ? `<span class="badge">${waiting}</span>` : "";
+  // Every reason to interrupt, not just `waiting`: the badge is the one number an
+  // operator on another tab sees, and it counted a third of them (#538).
+  const attention = attentionCount(sessions);
+  const html = TABS.map((t) => {
+    const badge = (t.id === "sessions" && attention) ? `<span class="badge">${attention}</span>` : "";
     return `<button class="tab ${t.id === activeTab ? "active" : ""}" data-tab="${t.id}">${t.label}${badge}</button>`;
   }).join("");
+  if (!paint("tabbar", html)) return; // the tick calls this every 5 s; listeners survive
   $("tabbar").querySelectorAll(".tab").forEach((b) => b.addEventListener("click", () => switchTab(b.dataset.tab)));
 }
+// syncFilterBar keeps the bar on the Sessions tab only, and its count in step
+// with the table. The bar lives outside the painted region, so nothing else
+// updates it.
+function renderGroupSelect() {
+  const el = $("group-select");
+  el.innerHTML = GROUP_MODES.map((m) => `<option value="${m}"${m === groupBy ? " selected" : ""}>${m}</option>`).join("");
+}
+
+function syncFilterBar() {
+  const show = activeTab === "sessions" && !detailId && $("gate").hidden;
+  $("filterbar").hidden = !show;
+  if (!show) return;
+  $("filter-count").textContent = filter ? `${visibleSessions().length} of ${preferenceVisible().length}` : "";
+}
+
 function switchTab(id) {
   activeTab = id; detailId = null; $("view-detail").hidden = true;
   ["sessions", "stats", "machines", "settings"].forEach((t) => $("tab-" + t).hidden = (t !== id));
   if (id === "machines") renderMachines();
   if (id === "stats") { if (!statsLoaded) loadStats(); else renderStats(); }
   if (id === "settings") { if (!settingsLoaded) loadSettings(); else renderSettings(); }
-  renderTabs(); window.scrollTo(0, 0);
+  renderTabs(); syncFilterBar(); if (usage || platform) renderBottom(); window.scrollTo(0, 0);
 }
 
 // ---------- Sessions ----------
 // Each column carries how to render its cell, so the header and the rows are both
 // driven by the (operator-ordered, filtered) column list — see activeCols (#309).
 const COLS = [
-  { key: "name", label: "Session", cmp: (a, b) => (a.title || a.id).localeCompare(b.title || b.id),
-    cell: (s) => { const n = esc(s.title || s.id); return `<td class="name" title="${n}"><span class="nm">${n}</span></td>`; } },
+  // The TUI's set, in its built-in order (internal/tui/render.go `columns`), plus
+  // one affordance a pointer needs and a keyboard does not. A Go test compares the
+  // two key sets and fails on drift (#550, #544).
+  //
+  // sessionName, not `title || id`: an untitled session is named by the first
+  // eight characters of its id in the TUI, and the filter searches that name — a
+  // column showing 36 characters of a key the filter cannot reach is a trap (#545).
+  { key: "name", label: "Session", cmp: (a, b) => sessionName(a).localeCompare(sessionName(b)),
+    cell: (s) => { const n = esc(sessionName(s)); return `<td class="name" title="${esc(s.title || s.id)}"><span class="nm">${n}</span></td>`; } },
+  { key: "user", label: "User", cmp: (a, b) => (a.user || "").localeCompare(b.user || ""),
+    cell: (s) => `<td class="${s.user ? "dim" : "faint"}">${esc(dash(s.user))}</td>` },
   { key: "machine", label: "Machine", cmp: (a, b) => a.machine.localeCompare(b.machine),
     cell: (s) => `<td class="dim">${esc(s.machine)}</td>` },
-  { key: "project", label: "Project", cmp: (a, b) => projectName(a.project_dir).localeCompare(projectName(b.project_dir)),
-    cell: (s) => { const p = esc(projectName(s.project_dir)); return `<td class="proj" title="${p}">${p}</td>`; } },
+  { key: "dir", label: "Dir", cmp: (a, b) => projectName(a.project_dir).localeCompare(projectName(b.project_dir)),
+    cell: (s) => { const p = esc(projectName(s.project_dir)); return `<td class="proj" title="${esc(s.project_dir || "")}">${p}</td>`; } },
   { key: "branch", label: "Branch", cmp: (a, b) => (a.git_branch || "").localeCompare(b.git_branch || ""),
     cell: (s) => { const b = esc(dash(s.git_branch)); return `<td class="branch dim" title="${b}">${b}</td>`; } },
   { key: "model", label: "Model", cmp: (a, b) => (a.model || "").localeCompare(b.model || ""),
     cell: (s) => `<td class="${s.model ? "dim" : "faint"}">${esc(dash(shortModel(s.model)))}</td>` },
   { key: "effort", label: "Effort", cmp: (a, b) => (a.effort || "").localeCompare(b.effort || ""),
     cell: (s) => `<td class="${s.effort ? "dim" : "faint"}">${esc(dash(s.effort))}</td>` },
-  { key: "tokens", label: "Tokens", num: true, cmp: (a, b) => totalTokens(a.usage || {}) - totalTokens(b.usage || {}),
+  // Unknown and known-to-be-zero are different states on screen, and the daemon
+  // keeps them apart precisely so this cell can say so (#367).
+  { key: "ctx", label: "Ctx", num: true, cmp: (a, b) => contextPct(a) - contextPct(b),
+    cell: (s) => { const k = contextKnown(s); const p = contextPct(s); const cls = !k ? "faint" : p >= 85 ? "ctx-hot" : p >= 60 ? "ctx-warn" : ""; return `<td class="num ${cls}">${contextCell(s)}</td>`; } },
+  { key: "out", label: "Out", num: true, cmp: (a, b) => ((a.usage || {}).output_tokens || 0) - ((b.usage || {}).output_tokens || 0),
+    cell: (s) => `<td class="num">${humanTokens((s.usage || {}).output_tokens)}</td>` },
+  { key: "total", label: "Total", num: true, cmp: (a, b) => totalTokens(a.usage || {}) - totalTokens(b.usage || {}),
     cell: (s) => `<td class="num">${humanTokens(totalTokens(s.usage || {}))}</td>` },
   { key: "seen", label: "Seen", num: true, cmp: (a, b) => ageSec(b.last_seen_at) - ageSec(a.last_seen_at),
     cell: (s) => `<td class="num dim">${relAge(s.last_seen_at)}</td>` },
-  { key: "activity", label: "Activity", nosort: true,
+  { key: "act", label: "Act", nosort: true,
     cell: (s) => `<td>${sparkSVG(s.samples)}</td>` },
   { key: "rc", label: "RC", cmp: (a, b) => (a.remote_control === b.remote_control ? 0 : a.remote_control ? -1 : 1),
     cell: (s) => `<td>${s.remote_control ? '<span class="rc-on" title="Remote control on">◉</span>' : '<span class="rc-off" title="Remote control off">○</span>'}</td>` },
-  { key: "status", label: "Status", cmp: (a, b) => RANK[a.status] - RANK[b.status],
+  { key: "status", label: "Status", cmp: (a, b) => rank(a.status) - rank(b.status),
     cell: (s) => { const st = STATUSES.includes(s.status) ? s.status : "idle"; const code = (s.status === "error" && s.api_error_status) ? ` <span class="code">${s.api_error_status}</span>` : ""; return `<td><span class="pill st-${st}${hasCall(s) ? " call" : ""}"><span class="dot"></span>${st}${code}</span></td>`; } },
+  // An unrecognised mode is surfaced raw, never relabelled "manual": a new mode
+  // must not read as the safe default (#304).
+  { key: "mode", label: "Mode", cmp: (a, b) => modeLabel(a.permission_mode).localeCompare(modeLabel(b.permission_mode)),
+    cell: (s) => `<td class="${s.permission_mode ? "mode-" + esc(modeLabel(s.permission_mode)) : "faint"}">${esc(modeLabel(s.permission_mode))}</td>` },
   { key: "detail", label: "Detail", nosort: true,
     cell: (s) => { const d = detailText(s); const cls = hasCall(s) ? "detail call" : (s.status === "waiting" ? "detail wait" : "detail"); return `<td class="${cls}" title="${d}">${d}</td>`; } },
-  { key: "act", label: "", nosort: true,
+  // A gesture, not content: a keyboard opens the detail with Enter on the row, a
+  // pointer needs something to click. Declared as such in the Go guard (#544).
+  { key: "open", label: "", nosort: true,
     cell: () => `<td><button class="det-btn" aria-label="Open detail" title="Open detail"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg></button></td>` },
 ];
+
 
 // COLS_KEY holds the operator's column layout for this browser, {order, hidden}:
 // the display order of ALL columns plus the hidden set. Client-local like the
 // token. Hiding a column keeps its position — only its visibility changes (#315).
-const COLS_KEY = "cf_columns";
+// v2 because #550 renamed four keys at once. A layout is live state — renaming
+// in place would drop a column out of the operator's order, and if it had been
+// hidden it would silently reappear (#393, #478). The carry-over runs exactly
+// once: v1 is read, remapped, written under v2, and removed. It cannot run twice,
+// which matters because the remap is not idempotent — `activity` becomes `act`
+// and `act` becomes `open`, so a second pass would turn the sparkline into the
+// detail button.
+const COLS_KEY = "vigie_columns_v2";
+const COLS_KEY_V1 = "vigie_columns";
 const MANDATORY_COLS = new Set(["name", "status"]);
 const COL_KEYS = COLS.map((c) => c.key);
 
-// LEGACY_COLS maps a key saved under an older name to its current one. Without
-// it a stored layout silently loses the renamed column — it falls out of the
-// custom order, and if it had been hidden it reappears. `doing` became `detail`
-// in #393.
-const LEGACY_COLS = { doing: "detail" };
-function migrateKeys(keys) {
-  const seen = new Set();
-  return keys.map((k) => LEGACY_COLS[k] || k).filter((k) => !seen.has(k) && seen.add(k));
-}
 
 function loadLayout() {
   try {
-    const v = JSON.parse(localStorage.getItem(COLS_KEY) || "null");
-    // Migrate the old visible-only array form to {order, hidden}.
-    if (Array.isArray(v)) return { order: v.slice(), hidden: COL_KEYS.filter((k) => !v.includes(k) && !MANDATORY_COLS.has(k)) };
-    if (v && Array.isArray(v.order)) return { order: migrateKeys(v.order), hidden: migrateKeys(Array.isArray(v.hidden) ? v.hidden : []) };
+    const v2 = localStorage.getItem(COLS_KEY);
+    if (v2 !== null) {
+      const v = JSON.parse(v2);
+      if (v && Array.isArray(v.order)) return { order: migrateKeys(v.order), hidden: migrateKeys(Array.isArray(v.hidden) ? v.hidden : []) };
+    }
+    // One-time carry-over: the pre-#550 key set, and before it the old brand's.
+    const raw = adoptLegacyKey(localStorage, "cf_columns", COLS_KEY_V1);
+    if (raw !== null) {
+      const v = JSON.parse(raw || "null");
+      let l = { order: [], hidden: [] };
+      if (Array.isArray(v)) l = { order: v.slice(), hidden: [] }; // the oldest, visible-only form
+      else if (v && Array.isArray(v.order)) l = { order: v.order, hidden: Array.isArray(v.hidden) ? v.hidden : [] };
+      l = { order: migrateV1Columns(l.order), hidden: migrateV1Columns(l.hidden) };
+      saveLayout(l);
+      localStorage.removeItem(COLS_KEY_V1);
+      return l;
+    }
   } catch (e) { /* fall through to default */ }
   return { order: [], hidden: [] };
 }
 function saveLayout(l) { localStorage.setItem(COLS_KEY, JSON.stringify(l)); }
 
-// fullColOrder is every column key in display order: the saved order (unknown
-// dropped), with any column missing from it appended in the built-in order.
-function fullColOrder(order) {
-  const known = new Set(COL_KEYS), seen = new Set(), out = [];
-  (order || []).forEach((k) => { if (known.has(k) && !seen.has(k)) { out.push(k); seen.add(k); } });
-  COL_KEYS.forEach((k) => { if (!seen.has(k)) { out.push(k); seen.add(k); } });
-  return out;
-}
-function colHidden(hidden, key) { return !MANDATORY_COLS.has(key) && hidden.includes(key); }
 
 // activeCols is the visible columns in display order — the base for the table.
 function activeCols() {
   const l = loadLayout(), byKey = new Map(COLS.map((c) => [c.key, c]));
-  return fullColOrder(l.order).filter((k) => !colHidden(l.hidden, k)).map((k) => byKey.get(k));
+  return fullColOrder(l.order, COL_KEYS).filter((k) => !colHidden(l.hidden, k, MANDATORY_COLS)).map((k) => byKey.get(k));
 }
 
 // pickerCols is every column in display order (stable — hiding never moves one).
 function pickerCols() {
   const l = loadLayout(), byKey = new Map(COLS.map((c) => [c.key, c]));
-  return fullColOrder(l.order).map((k) => byKey.get(k));
+  return fullColOrder(l.order, COL_KEYS).map((k) => byKey.get(k));
 }
-function colVisible(key) { return !colHidden(loadLayout().hidden, key); }
+function colVisible(key) { return !colHidden(loadLayout().hidden, key, MANDATORY_COLS); }
 
 function toggleCol(key) {
   if (MANDATORY_COLS.has(key)) return;
@@ -186,40 +237,31 @@ function toggleCol(key) {
   saveLayout(l);
 }
 function moveCol(key, dir) {
-  const l = loadLayout(); l.order = fullColOrder(l.order);
+  const l = loadLayout(); l.order = fullColOrder(l.order, COL_KEYS);
   const i = l.order.indexOf(key), j = i + dir;
   if (i < 0 || j < 0 || j >= l.order.length) return;
   [l.order[i], l.order[j]] = [l.order[j], l.order[i]];
   saveLayout(l);
 }
+// notHidden applies the two visibility *preferences* — the twin of
+// `prefs.visible` in internal/tui/prefs.go. The text filter is separate: it has
+// its own count, and the TUI reports it on its own line too.
+//
+// One predicate, used by the table and by the hidden count both, so the screen
+// can never claim a smaller fleet than it is filtering (sessions-chrome.md § 2,
+// test 3).
+function notHidden(s) {
+  if (!showEnded && s.status === "ended") return false;
+  return !hiddenByIdle(s, idleHideAfter, Date.now());
+}
+function preferenceVisible() { return sessions.filter(notHidden); }
+
 function visibleSessions() {
-  const list = showEnded ? sessions : sessions.filter((s) => s.status !== "ended");
+  // Same order as the TUI (internal/tui/sessionsview.go): the visibility
+  // preferences first, then the filter, then the sort.
+  const list = preferenceVisible().filter((s) => matchesFilter(s, filter));
   const col = COLS.find((c) => c.key === sortKey);
   return col && col.cmp ? [...list].sort((a, b) => col.cmp(a, b) * sortDir) : list;
-}
-
-function renderSummary() {
-  const counts = {}; sessions.forEach((s) => counts[s.status] = (counts[s.status] || 0) + 1);
-  const totalOut = sessions.reduce((n, s) => n + (s.usage ? s.usage.output_tokens || 0 : 0), 0);
-  const rc = sessions.filter((s) => s.remote_control).length;
-  const shown = showEnded ? sessions : sessions.filter((s) => s.status !== "ended");
-  const hidden = sessions.length - shown.length;
-  let agg = []; shown.forEach((s) => (s.samples || []).forEach((v, i) => { agg[i] = (agg[i] || 0) + v; }));
-  const calling = sessions.filter(hasCall).length;
-  // Shown only when non-zero, and first: a call is explicit where every other
-  // count is a status vigie inferred. It borrows the `waiting` colour rather
-  // than introducing a new one.
-  const callCnt = calling ? `<span class="cnt st-waiting"><span class="dot"></span><b>${calling}</b><small>call</small></span>` : "";
-  const cnts = callCnt + STATUSES.map((k) => `<span class="cnt st-${k}"><span class="dot"></span><b>${counts[k] || 0}</b><small>${k}</small></span>`).join("");
-  return `<div class="summary">
-    <div class="grp">${cnts}</div>
-    <div class="div"></div>
-    <span class="metric"><span class="lbl">out</span><b>${humanTokens(totalOut)}</b></span>
-    <span class="metric rc"><span class="lbl">rc</span><b>◉ ${rc}</b></span>
-    <span class="metric"><span class="lbl">activity</span><span class="st-working">${sparkSVG(agg, 90, 16)}</span></span>
-    <span class="push"></span>
-    <button class="metric hiddenm ${showEnded ? "on" : ""}" id="hidden-toggle" title="Show or hide ended sessions"><span class="lbl">${showEnded ? "showing all" : "hidden"}</span> ${hidden}</button>
-  </div>`;
 }
 
 function renderSessions() {
@@ -230,22 +272,35 @@ function renderSessions() {
     const cls = [c.num ? "num" : "", c.nosort ? "nosort" : "", sorted ? "sorted" : ""].filter(Boolean).join(" ");
     return `<th class="${cls}" ${c.nosort ? "" : `data-sort="${c.key}"`}>${c.label}${arrow}</th>`;
   }).join("");
-  const rows = visibleSessions().map((s) => {
+  const row = (s) => {
     const st = STATUSES.includes(s.status) ? s.status : "idle";
     // A call reuses the attention mechanism — the left border in --st — and adds
     // a faint tint of the same colour. No new colour anywhere (ADR-0010).
-    const attn = (hasCall(s) || s.status === "waiting" || s.status === "stalled") ? " attn" : "";
+    // The set is consulted, never restated: it is shared with the TUI and the
+    // GNOME indicator, and restating it here is how `error` went unmarked (#538).
+    const attn = needsAttention(s) ? " attn" : "";
     const call = hasCall(s) ? " call" : "";
     const cells = cols.map((c) => c.cell(s)).join("");
     return `<tr class="st-${st}${attn}${call}" data-id="${esc(s.id)}" tabindex="0">${cells}</tr>`;
-  }).join("");
-  const empty = visibleSessions().length ? "" : '<div class="empty">No sessions in view.</div>';
-  $("tab-sessions").innerHTML = renderSummary() +
-    `<div class="table-wrap"><div class="table-scroll"><table><thead><tr>${heads}</tr></thead><tbody>${rows}</tbody></table></div>${empty}</div>`;
-  $("hidden-toggle").addEventListener("click", () => { showEnded = !showEnded; renderSessions(); });
+  };
+  // One table, group headers as full-width rows: a separate table per group would
+  // give each its own column widths and the eye could no longer read down a
+  // column. The header carries what the TUI's does — the key, how many sessions,
+  // and their combined tokens (all four buckets, not output alone) (#546).
+  const rows = groupSessions(visibleSessions(), groupBy).map((g) =>
+    (g.key === null ? "" : `<tr class="grouphead"><td colspan="${cols.length}">▸ <span class="gk">${esc(dash(g.key))}</span> <span class="gm">(${g.count} · ${humanTokens(g.tokens)})</span></td></tr>`)
+    + g.sessions.map(row).join("")).join("");
+  // The TUI says which of the two silences this is, and so must this: an empty
+  // fleet and a filter that matched nothing look identical otherwise.
+  const empty = visibleSessions().length ? ""
+    : `<div class="empty">${filter ? "No sessions match the filter." : "No sessions in view."}</div>`;
+  const html = `<div class="table-wrap"><div class="table-scroll"><table><thead><tr>${heads}</tr></thead><tbody>${rows}</tbody></table></div>${empty}</div>`;
+  if (!paint("tab-sessions", html)) return; // nothing on screen would change; listeners are still bound
   $("tab-sessions").querySelectorAll("th[data-sort]").forEach((th) => th.addEventListener("click", () => {
     const k = th.dataset.sort; if (k === sortKey) sortDir = -sortDir; else { sortKey = k; sortDir = 1; } renderSessions();
   }));
+  syncFilterBar();
+  if (usage || platform) renderBottom();
   $("tab-sessions").querySelectorAll("tbody tr").forEach((tr) => {
     const go = () => openDetail(tr.dataset.id);
     tr.addEventListener("click", go);
@@ -344,9 +399,22 @@ function renderSettings() {
       <div class="set-row"><span class="k">Session retention<small>how long closed sessions are kept</small></span><span class="v">${esc(retention)}</span></div>
       <div class="set-row"><span class="k">Platform status<small>polled from status.claude.com</small></span><span class="v ${pcls === "ok" ? "ok" : ""}">● ${esc(ptxt)}</span></div>
       <div class="set-row"><span class="k">Token<small>stored in this browser, sent as a bearer token</small></span><span class="v">connected <button class="signout2" id="signout2">sign out</button></span></div>
+      <div class="set-row"><span class="k">Show ended sessions<small>keep closed sessions in the table — saved in this browser</small></span><span class="v"><label class="col-tog"><input type="checkbox" id="ended-toggle"${showEnded ? " checked" : ""}> show</label></span></div>
+      <div class="set-row"><span class="k">Hide idle after<small>a session unheard from for longer leaves the table — saved in this browser</small></span><span class="v"><select id="idle-select" aria-label="Hide idle after">${IDLE_PRESETS_MS.map((ms) => `<option value="${ms}"${ms === idleHideAfter ? " selected" : ""}>${esc(idleLabel(ms))}</option>`).join("")}</select></span></div>
       <div class="set-row col-picker"><span class="k">Columns<small>which columns show, and their order — saved in this browser</small></span><span class="v col-list">${colRows}</span></div>
     </div>`;
   $("signout2").addEventListener("click", signOut);
+  $("ended-toggle").addEventListener("change", (e) => {
+    showEnded = Boolean(e.target.checked);
+    localStorage.setItem(ENDED_KEY, showEnded ? "1" : "0");
+    renderTabs(); renderSettings();
+  });
+  $("idle-select").addEventListener("change", (e) => {
+    const ms = Number(e.target.value);
+    idleHideAfter = IDLE_PRESETS_MS.includes(ms) ? ms : 0;
+    localStorage.setItem(IDLE_KEY, String(idleHideAfter));
+    renderTabs(); renderSettings();
+  });
   const refresh = () => { renderSettings(); renderSessions(); };
   $("tab-settings").querySelectorAll("input[data-col]").forEach((el) => el.addEventListener("change", () => { toggleCol(el.dataset.col); refresh(); }));
   $("tab-settings").querySelectorAll("[data-mv-up]").forEach((b) => b.addEventListener("click", () => { moveCol(b.dataset.mvUp, -1); refresh(); }));
@@ -363,7 +431,15 @@ function renderBottom() {
   const u = usage || {};
   const [pcls, ptxt] = platformClass(platform);
   const platHtml = (platform && platform.indicator) ? `<span class="plat ${pcls}"><span class="dot"></span>platform ${esc(ptxt)}</span>` : "";
-  $("botbar").innerHTML = `<div class="gauges">${g("5h", u.five_hour_pct, u.five_hour_reset)}${g("7d", u.seven_day_pct, u.seven_day_reset)}</div><span class="push"></span>${platHtml}`;
+  // `hidden N` is the one piece of the deleted summary strip that survives: the
+  // visibility preferences filter silently, and without it the screen claims a
+  // smaller fleet than it has (sessions-chrome.md § 2, test 3). Shown only when
+  // something is hidden — a permanent zero trains the eye to skip the place where
+  // the exception will appear — and only beside the table it describes (#548).
+  const n = (activeTab === "sessions" && !detailId) ? sessions.length - preferenceVisible().length : 0;
+  const hiddenHtml = n > 0 ? `<span class="hiddenn"><span class="lbl">hidden</span> ${n}</span>` : "";
+  const html = `<div class="gauges">${g("5h", u.five_hour_pct, u.five_hour_reset)}${g("7d", u.seven_day_pct, u.seven_day_reset)}</div><span class="push"></span>${hiddenHtml}${platHtml}`;
+  if (!paint("botbar", html)) return;
   $("botbar").querySelectorAll("i[data-w]").forEach((i) => { i.style.width = i.dataset.w + "%"; });
 }
 
@@ -410,10 +486,11 @@ function openDetail(id) {
     </div>`;
   $("tab-" + activeTab).hidden = true;
   $("view-detail").hidden = false;
+  syncFilterBar();
   $("back").addEventListener("click", closeDetail);
   window.scrollTo(0, 0);
 }
-function closeDetail() { detailId = null; $("view-detail").hidden = true; $("tab-" + activeTab).hidden = false; window.scrollTo(0, 0); }
+function closeDetail() { detailId = null; $("view-detail").hidden = true; $("tab-" + activeTab).hidden = false; syncFilterBar(); window.scrollTo(0, 0); }
 
 // ---------- loading ----------
 async function loadSessions() {
@@ -423,6 +500,7 @@ async function loadSessions() {
   renderTabs();
   if (activeTab === "sessions" && !detailId) renderSessions();
   if (activeTab === "machines") renderMachines();
+  if (usage || platform) renderBottom(); // the hidden count lives there now (#548)
 }
 async function loadMeta() {
   try { usage = await api("/api/usage"); } catch (e) { /* optional */ }
@@ -447,33 +525,59 @@ async function connectLive() {
   clearTimeout(liveRetry);
   if (liveCtrl) liveCtrl.abort();
   const ctrl = new AbortController(); liveCtrl = ctrl;
+  lastHeardAt = Date.now(); // the silence window starts at the attempt, not at the first byte
   try {
     const res = await fetch("/api/events", { headers: authHeaders(), signal: ctrl.signal });
     if (res.status === 401) { onUnauthorized(); return; }
     if (!res.ok || !res.body) throw new Error("events " + res.status);
-    setConn(true); stopPolling();
+    setConn(true);
     const reader = res.body.getReader(), dec = new TextDecoder(); let buf = "";
     for (;;) {
       const { value, done } = await reader.read(); if (done) break;
+      lastHeardAt = Date.now(); // any bytes, the keep-alive comment included, prove it is alive
       buf += dec.decode(value, { stream: true });
       let idx;
       while ((idx = buf.indexOf("\n\n")) >= 0) { const frame = buf.slice(0, idx); buf = buf.slice(idx + 2); if (frame.includes("event: sessions")) loadSessions().catch(() => {}); }
     }
     throw new Error("stream ended");
   } catch (e) {
-    if (ctrl.signal.aborted) return;
-    setConn(false); startPolling(); liveRetry = setTimeout(connectLive, 5000);
+    if (ctrl.signal.aborted) return; // superseded by a newer connect, which owns the state now
+    liveCtrl = null;                 // nothing left to watch; the retry below owns reconnection
+    setConn(false); liveRetry = setTimeout(connectLive, 5000);
   }
 }
-function startPolling() { if (!pollTimer) pollTimer = setInterval(() => loadSessions().catch(() => {}), 5000); }
-function stopPolling() { clearInterval(pollTimer); pollTimer = null; }
+
+// tick is the periodic refresh, and it runs whether or not the stream is live.
+//
+// It used to be a fallback that the stream switched off, which looked reasonable
+// and was not: `ended` and `stale` are never stored, the server derives them from
+// the clock each time the list is read (internal/server/sessions.go). That
+// transition changes no field, so the delta-gated fan-out has nothing to publish
+// (#258), so a client that only listens never learns of it. A machine whose
+// watcher had died stayed `working` on screen for as long as the tab was open,
+// under a green `live` chip — and the relative ages froze with it (#538).
+//
+// The TUI has always polled for exactly this reason, and says so
+// (internal/tui/model.go). One open tab now costs the server the same as one TUI.
+function tick() {
+  // A silent stream is indistinguishable from a dead one, and a suspended
+  // machine's socket never errors: `read()` above simply blocks for minutes, so
+  // the reconnect path is unreachable without a watchdog out here (#457).
+  if (liveCtrl && streamIsSilent(lastHeardAt, Date.now())) {
+    setConn(false);
+    connectLive(); // aborts the silent stream on its way in
+  }
+  loadSessions().catch(() => {});
+}
+function startTicker() { clearInterval(tickTimer); tickTimer = setInterval(tick, REFRESH_MS); }
+function stopTicker() { clearInterval(tickTimer); tickTimer = null; }
 function setConn(live) { const el = $("conn"); el.className = "chip conn " + (live ? "live" : "down"); el.querySelector(".txt").textContent = live ? "live" : "reconnecting…"; }
 
 // ---------- auth / gate ----------
 function onUnauthorized() { teardown(); localStorage.removeItem(TOKEN_KEY); token = ""; showGate(true); }
-function teardown() { if (liveCtrl) liveCtrl.abort(); liveCtrl = null; clearTimeout(liveRetry); stopPolling(); clearInterval(metaTimer); metaTimer = null; }
-function showGate(err) { $("gate").hidden = false; $("gate-err").hidden = !err; $("signout").hidden = true; $("botbar").hidden = true; $("ver").hidden = true; setConn(false); $("token-input").focus(); }
-function hideGate() { $("gate").hidden = true; $("signout").hidden = false; }
+function teardown() { if (liveCtrl) liveCtrl.abort(); liveCtrl = null; clearTimeout(liveRetry); stopTicker(); clearInterval(metaTimer); metaTimer = null; }
+function showGate(err) { $("gate").hidden = false; $("filterbar").hidden = true; $("gate-err").hidden = !err; $("signout").hidden = true; $("botbar").hidden = true; $("ver").hidden = true; setConn(false); $("token-input").focus(); }
+function hideGate() { $("gate").hidden = true; $("signout").hidden = false; syncFilterBar(); }
 function signOut() { teardown(); localStorage.removeItem(TOKEN_KEY); token = ""; showGate(false); }
 
 async function start() {
@@ -483,6 +587,7 @@ async function start() {
   await loadSessions();
   loadMeta();
   metaTimer = setInterval(loadMeta, 60000);
+  startTicker();
   connectLive();
 }
 
@@ -494,6 +599,16 @@ $("gate-form").addEventListener("submit", (e) => {
   token = v; localStorage.setItem(TOKEN_KEY, token); start().catch(() => {});
 });
 $("signout").addEventListener("click", signOut);
+$("group-select").addEventListener("change", (e) => {
+  groupBy = GROUP_MODES.includes(e.target.value) ? e.target.value : "off";
+  localStorage.setItem(GROUP_KEY, groupBy);
+  if (activeTab === "sessions" && !detailId) renderSessions();
+});
+$("filter-input").addEventListener("input", (e) => {
+  filter = e.target.value.trim();
+  if (activeTab === "sessions" && !detailId) renderSessions(); else syncFilterBar();
+});
 
 renderTabs();
+renderGroupSelect();
 if (token) start().catch(() => {}); else showGate(false);

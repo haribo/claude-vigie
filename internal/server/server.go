@@ -1,4 +1,4 @@
-// Package server implements the claude-fleetd HTTP API: it accepts session
+// Package server implements the vigied HTTP API: it accepts session
 // event reports, lists sessions, and streams updates over SSE. Only the daemon
 // imports this package.
 package server
@@ -21,16 +21,19 @@ import (
 type Store interface {
 	UpsertSession(ctx context.Context, s store.Session) error
 	GetSession(ctx context.Context, id string) (store.Session, error)
+	ApplySession(ctx context.Context, id string, merge func(store.Session, bool) store.Session) (store.Session, error)
 	ListSessions(ctx context.Context) ([]store.Session, error)
 	AppendEvent(ctx context.Context, e store.Event) error
 	LastEvent(ctx context.Context, sessionID string) (store.Event, bool, error)
 	AddSample(ctx context.Context, sessionID, at string, outputTokens int64) error
 	AddDailyTokens(ctx context.Context, day, model string, delta int64) error
+	RaiseTokenMark(ctx context.Context, sessionID string, total int64) (int64, error)
 	AddDailyStatusSeconds(ctx context.Context, day, model, status string, secs int64) error
 	ListDailyStats(ctx context.Context, sinceDay string) ([]store.DailyStat, error)
 	LastSampleAt(ctx context.Context, sessionID string) (string, error)
 	ListSamples(ctx context.Context, sessionID, since string, limit int) ([]int64, error)
 	AcquireLease(ctx context.Context, holder string, ttl time.Duration, now time.Time) (bool, string, error)
+	LeaseHolder(ctx context.Context, now time.Time) (string, bool, error)
 	GetMeta(ctx context.Context, key string) (string, bool, error)
 	ListMeta(ctx context.Context) (map[string]string, error)
 	SetMeta(ctx context.Context, key, value string) error

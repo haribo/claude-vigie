@@ -9,7 +9,7 @@ vigie, status is **detected**, never operator-set
 
 ---
 
-## 1. The eight statuses
+## 1. The nine statuses
 
 Every session shows exactly one status. What each tells the operator:
 
@@ -25,7 +25,7 @@ Every session shows exactly one status. What each tells the operator:
 | `stale`    | No recent report **and the machine has no watcher**, so the true state is unknown. Shown (grey, dotted `◌`) instead of a false `ended`: *no news* ≠ *dead*. Resolves once a watcher runs there (#284/#285). |
 | `ended`    | The session is over (closed, or its process is gone).                   |
 
-`waiting` and `stalled` are the two statuses that call the operator: `waiting`
+`waiting`, `stalled` and `error` are the three statuses that call the operator, and a session can raise a call of its own on top of any status ([ADR-0010](../adr/0010-session-raised-operator-call.md)). `waiting`
 means *the operator is the blocker*; `stalled` means *a tool hung and the turn is
 stuck*. Both are what the dashboard exists to surface — the sessions that need a
 human right now.
@@ -48,14 +48,30 @@ a status the moment it changes:
 | `Stop`             | `idle`                                  |
 | `SessionEnd`       | `ended`                                 |
 
-Only a hook can observe `waiting`: it is a *semantic* state (Claude asked a
-question) with no visible trace in the transcript, so nothing else can infer it.
+`waiting` is a *semantic* state — Claude asked a question — and it leaves no
+trace in the transcript, so **nothing can infer it from transcript activity**. A
+hook is told, and the registry below is told. Neither is a guess, which is what
+§ 3 turns on.
 
 **The watcher — coverage, poll-derived.** A background watcher scans local
 transcripts every few seconds and reports a status for every recent session,
 including ones the hooks never covered (already-open sessions, or a machine where
-hooks aren't installed). It derives status from two signals — is the session's
-**process alive**, and is its **transcript changing**:
+hooks aren't installed). It derives status from three signals — Claude Code's own
+**session registry**, whether the session's **process is alive**, and whether its
+**transcript is changing**.
+
+**The registry wins where it covers the session** (#254). Claude Code maintains
+it for its live sessions, so it states what the transcript can only be read for,
+and the heuristic below is not consulted at all:
+
+- `busy` → `working`; `idle` or `shell` → `idle`; `waiting` → `waiting`, carrying
+  its `waitingFor` reason into DETAIL. An unrecognised value degrades to `idle`: a
+  live session is never a false `ended`. The enum is closed
+  ([ADR-0008](../adr/0008-compacting-status.md));
+- the registry's `{PID, procStart}` says the backing process is gone → `ended`.
+
+**The transcript heuristic covers the rest** — a session the registry does not
+list, typically an older Claude Code:
 
 - process gone → `ended` (reliable even on a hard kill);
 - process alive but running a **newer** session id (same `{PID, procStart}`, a
@@ -77,11 +93,40 @@ hooks aren't installed). It derives status from two signals — is the session's
 - a foreground `tool_use` with no matching `tool_result` (paired by id) while the
   session is otherwise quiet and idle → `stalled` (the tool hung, the turn is
   parked). An unresolved *background* Bash (`run_in_background`) instead keeps the
-  session `working` — a real background task, not a hang. This exact pairing
-  replaces the old blind 5-minute "a tool may still be running" window.
+  session `working` — a real background task, not a hang.
 
-The watcher can see `working`, `thinking`, `idle`, `stalled`, `ended`, and
-`error`. It **cannot** see `waiting`.
+  **The pairing does not replace the 5-minute tool window, it completes it.** The
+  window is the grace period: a tool call may legitimately run that long, so the
+  session reads `working` throughout — without it a build, a test suite or a long
+  search would all be reported as a hung tool within 45 s, a false positive on one
+  of the statuses that call the operator. What the pairing adds is what happens
+  *after* the window: before it, a turn stopped on a tool simply fell to `idle`
+  once the window elapsed, so a hung tool looked exactly like a finished turn. Now
+  it reads `stalled`.
+
+  Measured on a transcript frozen on an unanswered `tool_use`: `working` at 5 s,
+  30 s, 1 min and 3 min; `stalled` at 6 min. An earlier version of this section
+  said the pairing *replaced* the window, which would have meant `stalled` at 45 s
+  for every slow tool (#530).
+
+  **The pairing is scoped to the turn: a real user prompt closes every older
+  unresolved `tool_use`.** A result that never arrives — Claude Code killed while
+  a tool was in flight — otherwise pins the session to `stalled` for the rest of
+  its life, at every pause between turns, and no operator action can clear it
+  (vigie is observe-only, [ADR-0005](../adr/0005-observe-only.md)). A prompt is
+  proof the session moved on, so a tool call from before it cannot be what the
+  current turn is parked on. Only a prompt the *operator* typed counts: Claude
+  Code injects `user` lines of its own for system reminders, skill preambles and
+  the "Continue from where you left off." resume, and marks them `isMeta` — those
+  land in the middle of a live tool call and must not close it (#483).
+
+The watcher can see `working`, `thinking`, `compacting`, `idle`, `stalled`,
+`ended`, `error` — and `waiting`, but only where the registry states it. What it
+**cannot** do is *infer* `waiting`: to the watcher a permission prompt and a
+running tool are the same frozen transcript, which is the whole subject of § 3.
+`compacting` is the one it does not derive alone: the `PreCompact` hook opens it
+and the watcher closes it from the transcript's `compact_boundary`
+([ADR-0008](../adr/0008-compacting-status.md)).
 
 **DETAIL refinements (no status change).** A few signals annotate the activity
 column without touching the base status — a lighter touch than a full status when
@@ -118,21 +163,37 @@ watcher only ever sees a quiet-but-alive session as `idle`, so its `idle` must
 
 **A `waiting` is only cleared once the transcript moves.** To the watcher, "a
 tool is running" and "a permission prompt is blocking" look identical — a turn
-stopped on a tool call with a frozen transcript. So its inferred `working` may
-not clear a hook `waiting` until the transcript has actually changed past when
-waiting was posted (the report's timestamp is the transcript mtime). `error` and
-`ended` are positive observations and still win.
+stopped on a tool call with a frozen transcript. So **any** status it infers from
+that silence — `working`, `thinking`, `compacting`, `stalled` — may not clear a
+hook `waiting` until the transcript has actually changed past when waiting was
+posted (the report's timestamp is the transcript mtime). `error` and `ended` are
+positive observations and still win.
+
+The rule is stated as a *deny* list, and the code implements it as one: it was
+once an allow list naming three statuses, so `stalled` fell through it when that
+status was added and a permission prompt read as a hung tool for the rest of the
+session. A status added later is held by default — a late release costs less than
+naming the wrong cause (#508).
 
 **The watcher must retract its own stale state.** The key consequence: a `working`
 that the *watcher itself* set (a hooks-free session) falls back to `idle` when the
 transcript goes quiet — because it is watch-owned, not hook-owned. Without the
 source, a blanket "keep working" latches a finished session on `working` forever.
 
-**A session that stops reporting becomes `ended`.** The watcher re-reports every
-scan, so a live session is refreshed constantly. If more than ~60 s pass with no
-report, the session is shown as `ended` — this catches the cases no explicit
-event covers: the watcher process died, the machine went offline, or a session
-dropped out of the scan window. A session already `ended` stays `ended`.
+**A session that stops reporting becomes `ended` or `stale`, depending on who
+else went quiet.** The watcher re-reports every scan, so a live session is
+refreshed constantly. If more than ~60 s pass with no report, the answer turns on
+whether that machine's watcher is still beating:
+
+- **its watcher is up** → `ended`. A running watcher would have kept a live
+  session fresh, so silence there means the session is genuinely gone. This
+  catches what no explicit event covers: the session dropped out of the scan
+  window, or its process died without a `SessionEnd`;
+- **no watcher heartbeat from that machine** → `stale`. Nothing is observing it,
+  so silence says *unobserved*, not *dead*, and an unknown beats a false `ended`
+  (§ 1, #284/#285). It resolves by itself once a watcher runs there.
+
+A session already `ended` stays `ended`.
 
 **`error` overrides `working`/`idle`, never `ended`.** A live session that just
 hit an API error shows `error`; a closed session stays `ended`, so a stale
@@ -161,12 +222,14 @@ trust it:
 | Status     | Source(s) | Reliability |
 | ---------- | --------- | ----------- |
 | `working`  | hook `UserPromptSubmit`; watcher (recent transcript writes / a live `tool_use` turn) | **Reliable.** A hook pins it instantly; the watcher covers hooks-free sessions. Held through a quiet turn by authority (§ 3). |
-| `waiting`  | hook `Notification` only | **Reliable when hooks are installed, else invisible.** Only a hook can see that the operator is the blocker; the watcher never infers it. |
+| `waiting`  | hook `Notification`; watcher (Claude Code's session registry) | **Reliable from either, and never inferred.** The hook is instant; the registry is read at the next scan and covers a machine with no hooks installed. What no source does is *derive* it from a quiet transcript — a permission prompt and a running tool look identical there (§ 3). |
 | `idle`     | hook `Stop`; watcher (alive + quiet) | **Reliable.** Distinguishing `idle` from `ended` rests on process presence (PID + `/proc`, [ADR-0006](../adr/0006-session-presence-via-proc.md)). |
-| `ended`    | hook `SessionEnd`; watcher (dead process, or no mapping + quiet); server (no report for ~60 s) | **Reliable** for a hooked end or a dead process; a **heuristic** for a hooks-free session that simply went quiet. |
+| `ended`    | hook `SessionEnd`; watcher (dead process, or no mapping + quiet); server (no report for ~60 s **on a machine whose watcher is still beating**) | **Reliable** for a hooked end or a dead process; a **heuristic** for a hooks-free session that simply went quiet. |
+| `stale`    | server (no report for ~60 s and no watcher heartbeat from that machine) | **Reliable as an admission, not as a diagnosis.** It says only that nothing is observing the machine — the session may be alive, finished, or gone. That is the point: an unknown beats a false `ended` (§ 1, #284/#285). |
 | `error`    | watcher (`isApiErrorMessage` in the transcript) | **Reliable signal, sampled.** The flag is unambiguous, but surfaced only at the next scan, not instantly (Claude Code has no error hook). |
 | `thinking` | watcher only (last content block is a `thinking` block) | **Best-effort heuristic.** No hook signals reasoning; it is inferred from the transcript, sampled every ~2 s, invisible in a hooks-only deployment, and can briefly mis-read when a `tool_use` block follows the thinking block. |
-| `stalled`  | watcher only (unresolved `tool_use`↔`tool_result` + quiet) | **Reliable signal, sampled.** The pairing is exact (an id match), not a timeout guess; surfaced at the next scan once the session has been quiet past a short threshold. Invisible in a hooks-only deployment. |
+| `compacting` | hook `PreCompact` opens it; watcher closes it on `compact_boundary` | **Reliable at both ends, sampled at the close.** The open is a hook, so it is instant; the close is read from the transcript at the next scan. Invisible in a hooks-only deployment, since nothing would close it. |
+| `stalled`  | watcher only (unresolved `tool_use`↔`tool_result` + quiet) | **Reliable signal, sampled.** The pairing is exact (an id match), not a timeout guess. It surfaces once the tool window has elapsed — a tool call is allowed to run that long before silence means anything (§ 2), so the signal is deliberately late rather than wrong. Self-healing: a tool whose result never arrives is closed by the next operator prompt rather than pinning the session (§ 2). Invisible in a hooks-only deployment. |
 
 **Decision on `thinking` (#207): kept, as an explicit best-effort refinement.**
 Dropping it would lose a genuine, if imperfect, signal; hardening it to real-time

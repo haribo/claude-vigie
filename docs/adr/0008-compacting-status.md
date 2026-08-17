@@ -28,7 +28,8 @@ What Claude Code exposes (verified against `claude` 2.1.220):
 So a live status requires a hook. This is the **seventh** hook we install on
 every machine (see the hook table in [`architecture.md`](../architecture.md)) — a
 deliberate widening of the install surface. It is judged worth it: installation
-is one entry in the client's default hook list (`vigie init` writes them all),
+is one entry in the client's default hook list (the watcher writes them all at
+startup, [ADR-0009](0009-watcher-managed-hooks.md)),
 the CPU cost is a single fast `exit 0` per compaction (rare), and the value is
 on-mission — the sibling of [#344](https://github.com/haribo/claude-vigie/issues/344)
 (subagents refine `idle`→`working`). It fills no critical gap; it makes an
@@ -63,6 +64,25 @@ opaque two minutes legible.
   `thinking`, it is a display refinement: the time-by-status rollups bucket only
   the base `working`/`waiting`/`idle`, so a refinement is not separately counted
   (consistent with the existing `thinking` behavior, not a regression).
+
+  > **Amended by #508.** The first sentence no longer holds: `compacting` does
+  > **not** clear a hook-posted `waiting`. The reason has nothing to do with
+  > compaction. To the watcher, "a tool is running" and "a permission prompt is
+  > blocking" are the same thing — a turn stopped on `tool_use` with a frozen
+  > transcript — so *any* status it infers from that silence may not retract a
+  > `waiting` a hook established, until the transcript actually moves past when
+  > that `waiting` was posted. The rule was an allow list naming
+  > `working`/`thinking`/`compacting`; `stalled` fell straight through it when
+  > #256 added that status, and a permission prompt read as a hung tool for the
+  > rest of the session. It is a **deny** list now — `error` and `ended`, the two
+  > the watcher observes positively — so a status added later is held by default,
+  > which is the safe direction: a late release costs less than naming the wrong
+  > cause. See [session-status.md](../design/session-status.md) § 3 and
+  > `watcherObserves` in `internal/server/report.go`.
+  >
+  > The rest of this decision stands: the `PreCompact` marker, the
+  > `compact_boundary` close, the timeout cap, the rollup behaviour, and that
+  > `compacting` is not an attention status.
 - **Not an attention status.** Excluded from `attentionStatuses`: no desktop
   notification, no slot in the jump-to-next-waiting queue. Compaction needs
   nobody.
@@ -70,7 +90,9 @@ opaque two minutes legible.
 ## Consequences
 
 - **A seventh hook.** New installs get it for free (one entry in the default hook
-  list); existing machines must re-run `vigie init` to pick it up. This is the
+  list); existing machines pick it up when their watcher next starts, or with
+  `vigie hooks install` on a machine that runs none — `vigie init` no longer
+  touches the hooks ([ADR-0009](0009-watcher-managed-hooks.md), #415). This is the
   price paid for a live start signal — there is no hook-free alternative.
 - **Graceful degradation.** A machine without the hook installed gets no live
   `compacting`, only the after-the-fact boundary — the same hooks-free posture as

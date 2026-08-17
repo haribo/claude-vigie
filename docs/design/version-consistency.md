@@ -1,6 +1,6 @@
 # Fleet version consistency — Design Specification
 
-**Status:** Proposed (#384).
+**Status:** Accepted (#384).
 
 Source of truth for the rule that **every vigie component talking to a daemon must
 share its build**, and for what happens when one does not. The TUI's startup

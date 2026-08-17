@@ -40,14 +40,6 @@ func TestThinkingRendering(t *testing.T) {
 	if got := statusCell(api.SessionView{Status: "thinking"}); got != "● thinking" {
 		t.Errorf("statusCell = %q, want ● thinking", got)
 	}
-	out := renderSummary([]api.SessionView{{Status: "thinking"}, {Status: "working"}}, nil)
-	if !strings.Contains(out, "● thinking 1") {
-		t.Errorf("summary missing thinking count:\n%s", out)
-	}
-	// A sub-state shown only when present.
-	if out := renderSummary([]api.SessionView{{Status: "idle"}}, nil); strings.Contains(out, "thinking") {
-		t.Errorf("summary should omit thinking when none:\n%s", out)
-	}
 }
 
 func TestActivityCell(t *testing.T) {
@@ -76,16 +68,3 @@ var errTest = fmtError("boom")
 type fmtError string
 
 func (e fmtError) Error() string { return string(e) }
-
-func TestRenderSummaryErrorCount(t *testing.T) {
-	out := renderSummary([]api.SessionView{
-		{Status: "working"}, {Status: "error", APIErrorStatus: 500}, {Status: "idle"},
-	}, nil)
-	if !strings.Contains(out, "● error 1") {
-		t.Errorf("summary missing error count:\n%s", out)
-	}
-	// No errored sessions → no error segment (it is an alert, shown only when present).
-	if out := renderSummary([]api.SessionView{{Status: "idle"}}, nil); strings.Contains(out, "error") {
-		t.Errorf("summary should omit error count when none:\n%s", out)
-	}
-}
