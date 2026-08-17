@@ -11,6 +11,17 @@ file is the single source of truth, not a second narrative.
 
 ### Added
 
+- The web dashboard can hide sessions it has not heard from in a while, on the
+  TUI's rule and with the TUI's steps. Three details of that rule are load-bearing
+  and are now shared rather than reinvented: the clock is `last_seen_at` and not
+  the status, so a `working` session whose reports stopped is hidden too — the
+  same "nothing is happening here" signal; a timestamp that will not parse keeps
+  its session **visible**, because losing a row over a bad date is worse than
+  showing one too many; and off is off, and is the default. The `hidden` count now
+  reports both reasons a row is missing rather than counting ended sessions alone,
+  which is the whole justification for that count existing — without it the screen
+  claims a fleet of one while three machines are reporting
+  ([sessions-chrome](docs/design/sessions-chrome.md) § 2, #547).
 - The web dashboard groups its table by machine or by project, as the TUI does.
   Groups come out in key order while the operator's sort survives inside each
   one — a stable re-sort on top of the active sort, not a single comparison that

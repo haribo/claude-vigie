@@ -178,6 +178,33 @@ export function matchesFilter(s, filter) {
   return fuzzyMatch(filter, sessionHaystack(s));
 }
 
+// IDLE_PRESETS_MS are the "hide idle after" steps the TUI offers, in its order
+// (`idlePresets` in internal/tui/prefs.go). 0 is off, and it is the default.
+export const IDLE_PRESETS_MS = [0, 15 * 60000, 30 * 60000, 60 * 60000, 3 * 60 * 60000, 6 * 60 * 60000];
+
+export function idleLabel(ms) {
+  if (!ms) return "off (never)";
+  const m = ms / 60000;
+  return m < 60 ? `${m}m` : `${m / 60}h`;
+}
+
+// hiddenByIdle is the twin of the idle arm of `prefs.visible` in
+// internal/tui/prefs.go. Three details that are easy to get wrong and all matter:
+//
+//   - the clock is `last_seen_at`, not the status. The preference is named for
+//     idleness but filters on *silence*, so a `working` session whose reports
+//     stopped is hidden too — deliberately: it is the same "nothing is happening
+//     here" signal;
+//   - an unreadable timestamp keeps the session visible. Losing a row over a date
+//     that would not parse is worse than showing one row too many;
+//   - 0 means never hide.
+export function hiddenByIdle(s, afterMs, nowMs) {
+  if (!afterMs || afterMs <= 0) return false;
+  const t = Date.parse(s && s.last_seen_at);
+  if (Number.isNaN(t)) return false;
+  return nowMs - t > afterMs;
+}
+
 // GROUP_MODES are how the sessions table can be grouped, in the TUI's enum order.
 // Kept identical to `groupNames` in internal/tui/model.go — a Go test reads this
 // literal and fails on drift, because a grouping an operator finds in one window

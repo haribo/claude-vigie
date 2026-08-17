@@ -12,7 +12,7 @@ import {
   shortModel, projectName, totalTokens, sparkSVG, migrateKeys, fullColOrder, colHidden, rank,
   adoptLegacyKey, ATTENTION, needsAttention, attentionCount, streamIsSilent, SILENCE_MS,
   fuzzyMatch, sessionHaystack, sessionName, shortId, matchesFilter,
-  GROUP_MODES, groupKeyOf, groupSessions,
+  GROUP_MODES, groupKeyOf, groupSessions, IDLE_PRESETS_MS, idleLabel, hiddenByIdle,
 } from "../../internal/web/static/lib.js";
 
 // esc is the dashboard's only defence against DOM-based XSS: session titles,
@@ -400,4 +400,42 @@ test("a session with no machine still groups, under the empty key", () => {
 
 test("GROUP_MODES is the vocabulary, off first", () => {
   assert.deepEqual(GROUP_MODES, ["off", "machine", "project"]);
+});
+
+// #547. Hiding a session that has gone quiet. Three details of the TUI's rule
+// (internal/tui/prefs.go) are easy to get wrong, and each is a separate test
+// because each fails differently.
+const NOW = Date.parse("2026-08-17T12:00:00Z");
+const seenAgo = (min) => ({ id: "s", status: "idle", last_seen_at: new Date(NOW - min * 60000).toISOString() });
+
+test("hiddenByIdle hides a session unheard from for longer than the window", () => {
+  assert.equal(hiddenByIdle(seenAgo(31), 30 * 60000, NOW), true);
+  assert.equal(hiddenByIdle(seenAgo(29), 30 * 60000, NOW), false);
+  assert.equal(hiddenByIdle(seenAgo(30), 30 * 60000, NOW), false,
+    "the boundary itself is still visible — the TUI compares with <=");
+});
+
+test("off means never, and it is the default", () => {
+  assert.equal(hiddenByIdle(seenAgo(10000), 0, NOW), false);
+  assert.equal(hiddenByIdle(seenAgo(10000), null, NOW), false);
+  assert.equal(IDLE_PRESETS_MS[0], 0);
+});
+
+test("the clock is last_seen_at, not the status", () => {
+  // A `working` session whose reports stopped is hidden too. Deliberate: it is
+  // the same "nothing is happening here" signal, and the TUI does the same.
+  const working = { ...seenAgo(90), status: "working" };
+  assert.equal(hiddenByIdle(working, 60 * 60000, NOW), true);
+});
+
+test("an unreadable timestamp keeps the session visible", () => {
+  // Losing a row over a date that would not parse is worse than one row too many.
+  assert.equal(hiddenByIdle({ id: "s", last_seen_at: "not a date" }, 60000, NOW), false);
+  assert.equal(hiddenByIdle({ id: "s" }, 60000, NOW), false);
+  assert.equal(hiddenByIdle({ id: "s", last_seen_at: "" }, 60000, NOW), false);
+});
+
+test("the presets and their labels match what the TUI offers", () => {
+  assert.deepEqual(IDLE_PRESETS_MS, [0, 900000, 1800000, 3600000, 10800000, 21600000]);
+  assert.deepEqual(IDLE_PRESETS_MS.map(idleLabel), ["off (never)", "15m", "30m", "1h", "3h", "6h"]);
 });

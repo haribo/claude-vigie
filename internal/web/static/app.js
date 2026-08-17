@@ -10,6 +10,7 @@ import {
   shortModel, projectName, totalTokens, sparkSVG, migrateKeys, fullColOrder, colHidden, rank,
   adoptLegacyKey, needsAttention, attentionCount, streamIsSilent, REFRESH_MS,
   sessionName, matchesFilter, GROUP_MODES, groupSessions,
+  IDLE_PRESETS_MS, idleLabel, hiddenByIdle,
 } from "./lib.js";
 
 // Both keys were named for the old brand. They hold live state — a signed-in
@@ -31,6 +32,10 @@ let filter = "";
 // it is a view preference, and vigie stores nothing about how an operator works
 // (ADR-0007). Read once here; an unknown stored value degrades to "off" (#546).
 const GROUP_KEY = "vigie_group";
+// How long a session may go unheard before it leaves the table. Browser-local
+// like the rest of the view preferences (#547).
+const IDLE_KEY = "vigie_idle_hide";
+let idleHideAfter = IDLE_PRESETS_MS.includes(Number(localStorage.getItem(IDLE_KEY))) ? Number(localStorage.getItem(IDLE_KEY)) : 0;
 let groupBy = GROUP_MODES.includes(localStorage.getItem(GROUP_KEY) || "") ? localStorage.getItem(GROUP_KEY) : "off";
 let sortKey = "seen", sortDir = 1;           // 1 = descending
 let statsPeriod = "Week", statsLoaded = false, settingsLoaded = false;
@@ -99,8 +104,7 @@ function syncFilterBar() {
   const show = activeTab === "sessions" && !detailId && $("gate").hidden;
   $("filterbar").hidden = !show;
   if (!show) return;
-  const shown = showEnded ? sessions : sessions.filter((s) => s.status !== "ended");
-  $("filter-count").textContent = filter ? `${visibleSessions().length} of ${shown.length}` : "";
+  $("filter-count").textContent = filter ? `${visibleSessions().length} of ${preferenceVisible().length}` : "";
 }
 
 function switchTab(id) {
@@ -193,11 +197,23 @@ function moveCol(key, dir) {
   [l.order[i], l.order[j]] = [l.order[j], l.order[i]];
   saveLayout(l);
 }
+// notHidden applies the two visibility *preferences* — the twin of
+// `prefs.visible` in internal/tui/prefs.go. The text filter is separate: it has
+// its own count, and the TUI reports it on its own line too.
+//
+// One predicate, used by the table and by the hidden count both, so the screen
+// can never claim a smaller fleet than it is filtering (sessions-chrome.md § 2,
+// test 3).
+function notHidden(s) {
+  if (!showEnded && s.status === "ended") return false;
+  return !hiddenByIdle(s, idleHideAfter, Date.now());
+}
+function preferenceVisible() { return sessions.filter(notHidden); }
+
 function visibleSessions() {
   // Same order as the TUI (internal/tui/sessionsview.go): the visibility
   // preferences first, then the filter, then the sort.
-  const shown = showEnded ? sessions : sessions.filter((s) => s.status !== "ended");
-  const list = shown.filter((s) => matchesFilter(s, filter));
+  const list = preferenceVisible().filter((s) => matchesFilter(s, filter));
   const col = COLS.find((c) => c.key === sortKey);
   return col && col.cmp ? [...list].sort((a, b) => col.cmp(a, b) * sortDir) : list;
 }
@@ -206,8 +222,8 @@ function renderSummary() {
   const counts = {}; sessions.forEach((s) => counts[s.status] = (counts[s.status] || 0) + 1);
   const totalOut = sessions.reduce((n, s) => n + (s.usage ? s.usage.output_tokens || 0 : 0), 0);
   const rc = sessions.filter((s) => s.remote_control).length;
-  const shown = showEnded ? sessions : sessions.filter((s) => s.status !== "ended");
-  const hidden = sessions.length - shown.length;
+  const shown = preferenceVisible();
+  const hidden = sessions.length - shown.length; // ended *and* idle-hidden (#547)
   let agg = []; shown.forEach((s) => (s.samples || []).forEach((v, i) => { agg[i] = (agg[i] || 0) + v; }));
   const calling = sessions.filter(hasCall).length;
   // Shown only when non-zero, and first: a call is explicit where every other
@@ -362,9 +378,16 @@ function renderSettings() {
       <div class="set-row"><span class="k">Session retention<small>how long closed sessions are kept</small></span><span class="v">${esc(retention)}</span></div>
       <div class="set-row"><span class="k">Platform status<small>polled from status.claude.com</small></span><span class="v ${pcls === "ok" ? "ok" : ""}">● ${esc(ptxt)}</span></div>
       <div class="set-row"><span class="k">Token<small>stored in this browser, sent as a bearer token</small></span><span class="v">connected <button class="signout2" id="signout2">sign out</button></span></div>
+      <div class="set-row"><span class="k">Hide idle after<small>a session unheard from for longer leaves the table — saved in this browser</small></span><span class="v"><select id="idle-select" aria-label="Hide idle after">${IDLE_PRESETS_MS.map((ms) => `<option value="${ms}"${ms === idleHideAfter ? " selected" : ""}>${esc(idleLabel(ms))}</option>`).join("")}</select></span></div>
       <div class="set-row col-picker"><span class="k">Columns<small>which columns show, and their order — saved in this browser</small></span><span class="v col-list">${colRows}</span></div>
     </div>`;
   $("signout2").addEventListener("click", signOut);
+  $("idle-select").addEventListener("change", (e) => {
+    const ms = Number(e.target.value);
+    idleHideAfter = IDLE_PRESETS_MS.includes(ms) ? ms : 0;
+    localStorage.setItem(IDLE_KEY, String(idleHideAfter));
+    renderTabs(); renderSettings();
+  });
   const refresh = () => { renderSettings(); renderSessions(); };
   $("tab-settings").querySelectorAll("input[data-col]").forEach((el) => el.addEventListener("change", () => { toggleCol(el.dataset.col); refresh(); }));
   $("tab-settings").querySelectorAll("[data-mv-up]").forEach((b) => b.addEventListener("click", () => { moveCol(b.dataset.mvUp, -1); refresh(); }));
