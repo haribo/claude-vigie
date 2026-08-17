@@ -55,7 +55,8 @@ gh pr checks
 
 `CHANGELOG.md` is the **single source of truth** for release notes
 ([Keep a Changelog](https://keepachangelog.com/)). Every user-facing PR adds a
-line under `## [Unreleased]`. On release, that section is rolled into a versioned
+line under `## [Unreleased]` — one or two sentences and the issue number, no
+more: see [changelog.md](changelog.md), which a test enforces. On release, that section is rolled into a versioned
 one, and the GitHub Release body is a **mirror** of it — never a second narrative,
 never goreleaser's commit dump (its `changelog:` is disabled for this reason).
 
