@@ -30,7 +30,7 @@ const flush = async (n = 8) => { for (let i = 0; i < n; i++) await new Promise((
 // harness replaces the browser surface app.js touches. Timers are recorded
 // rather than scheduled, so a test fires them when it means to and no test waits
 // on a real clock.
-function harness({ token = "t0k3n", sessions = [] } = {}) {
+function harness({ token = "t0k3n", sessions = [], group = null } = {}) {
   const h = {
     now: 1_000_000,
     fetches: [],          // every path app.js requested, in order
@@ -68,7 +68,10 @@ function harness({ token = "t0k3n", sessions = [] } = {}) {
     addEventListener: () => {}, documentElement: byId("<root>"), body: byId("<body>"),
   };
   globalThis.window = globalThis;
-  globalThis.localStorage = { getItem: (k) => (k === "vigie_token" ? token : null), setItem() {}, removeItem() {} };
+  globalThis.localStorage = {
+    getItem: (k) => (k === "vigie_token" ? token : k === "vigie_group" ? group : null),
+    setItem() {}, removeItem() {},
+  };
   globalThis.matchMedia = () => ({ matches: false, addEventListener() {} });
 
   globalThis.Date.now = () => h.now;
@@ -320,4 +323,57 @@ test("the refresh tick does not clear the filter", async () => {
   const html = h.lastTable();
   assert.match(html, /web-app/);
   assert.ok(!html.includes("api-gateway"), "the tick repainted the table and lost the filter");
+});
+
+// #546. The wiring: picking a mode must reach the table. The rule itself is
+// covered in dashboard.test.mjs and pinned against the Go enum in
+// internal/tui/group_shared_test.go.
+const FLEET_G = [
+  { id: "a", title: "api", machine: "minet-dev", project_dir: "/h/gateway", status: "working", usage: { output_tokens: 1000 } },
+  { id: "b", title: "web", machine: "minet-dev", project_dir: "/h/web", status: "idle", usage: { output_tokens: 500 } },
+  { id: "c", title: "pipe", machine: "beta", project_dir: "/h/web", status: "idle", usage: { output_tokens: 200 } },
+];
+
+test("choosing a group mode redraws the table with headers", async () => {
+  const h = harness({ sessions: FLEET_G });
+  await h.boot();
+  assert.ok(!h.lastTable().includes('class="grouphead"'), "off means no headers at all");
+
+  await h.fire("group-select", "change", { target: { value: "machine" } });
+  const html = h.lastTable();
+  assert.match(html, /class="grouphead"/, "a group header row must appear");
+  assert.match(html, /minet-dev/);
+  assert.match(html, /beta/);
+  assert.match(html, /\(2 · 1\.5k\)/, "the header carries the count and the combined tokens");
+});
+
+test("grouping by project puts two machines under one key", async () => {
+  const h = harness({ sessions: FLEET_G });
+  await h.boot();
+  await h.fire("group-select", "change", { target: { value: "project" } });
+  const html = h.lastTable();
+  // `web` holds b (minet-dev) and c (beta): one group of two across two machines.
+  assert.match(html, /<span class="gk">web<\/span> <span class="gm">\(2 ·/,
+    "the project key is the last path segment, so the two roots meet");
+});
+
+test("an unknown stored mode degrades to off rather than blanking the table", async () => {
+  const h = harness({ sessions: FLEET_G, group: "quantum" });
+  await h.boot();
+  const html = h.lastTable();
+  assert.ok(!html.includes('class="grouphead"'));
+  for (const t of ["api", "web", "pipe"]) assert.ok(html.includes(t), `${t} vanished`);
+});
+
+test("grouping composes with the filter — the counts follow what is shown", async () => {
+  const h = harness({ sessions: FLEET_G });
+  await h.boot();
+  await h.fire("group-select", "change", { target: { value: "machine" } });
+  // `api` reaches only session a. `web` would not do: it matches session c
+  // through its *project* name, which is in the haystack — the kind of thing a
+  // test written from memory of the fixture gets wrong.
+  await h.fire("filter-input", "input", { target: { value: "api" } });
+  const html = h.lastTable();
+  assert.ok(!html.includes("beta"), "a group with no matching session must not be drawn");
+  assert.match(html, /minet-dev<\/span> <span class="gm">\(1 ·/, "the count is of the filtered rows, not the fleet");
 });

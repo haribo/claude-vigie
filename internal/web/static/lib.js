@@ -178,6 +178,49 @@ export function matchesFilter(s, filter) {
   return fuzzyMatch(filter, sessionHaystack(s));
 }
 
+// GROUP_MODES are how the sessions table can be grouped, in the TUI's enum order.
+// Kept identical to `groupNames` in internal/tui/model.go — a Go test reads this
+// literal and fails on drift, because a grouping an operator finds in one window
+// and not the other is the divergence #544 forbids.
+export const GROUP_MODES = ["off", "machine", "project"];
+
+// groupKeyOf is the value a session groups under — the twin of `groupKey` in
+// internal/tui/render.go. Project groups by the last path segment, not the full
+// directory, so two machines checking out the same project land together.
+export function groupKeyOf(s, mode) {
+  if (!s) return "";
+  return mode === "project" ? projectName(s.project_dir) : (s.machine || "");
+}
+
+// groupSessions turns an ordered list into its groups, preserving the operator's
+// sort inside each one.
+//
+// The TUI sorts by the active key first, then *stably* re-sorts by group key
+// (internal/tui/sessionsview.go), so groups come out in key order while the rows
+// inside a group keep the chosen sort. JavaScript's sort has been stable since
+// ES2019, so the same two-step works here. Doing it in one comparison would lose
+// the inner order, which is the mistake this comment exists to prevent.
+//
+// Each group carries the two figures the TUI's header shows: how many sessions,
+// and the sum of their tokens — all four buckets (`totalTokens`), not output
+// alone. Both count what is actually on screen, so a filter changes them.
+export function groupSessions(list, mode) {
+  const rows = list || [];
+  if (!mode || mode === "off") return [{ key: null, sessions: rows, count: rows.length, tokens: 0 }];
+  const ordered = [...rows].sort((a, b) => {
+    const ka = groupKeyOf(a, mode), kb = groupKeyOf(b, mode);
+    return ka < kb ? -1 : ka > kb ? 1 : 0;
+  });
+  const out = [];
+  for (const s of ordered) {
+    const key = groupKeyOf(s, mode);
+    const last = out[out.length - 1];
+    if (!last || last.key !== key) out.push({ key, sessions: [s], count: 1, tokens: totalTokens(s.usage || {}) });
+    else { last.sessions.push(s); last.count++; last.tokens += totalTokens(s.usage || {}); }
+  }
+  return out;
+}
+
 // The statuses that call for the operator: the session is blocked and needs a
 // human. Kept identical to internal/status.Attention — a Go test reads this
 // literal and fails on drift, because a dashboard that disagrees with the TUI

@@ -9,7 +9,7 @@ import {
   esc, dash, trim, hasCall, detailText, humanTokens, ageSec, relAge, relResetHint,
   shortModel, projectName, totalTokens, sparkSVG, migrateKeys, fullColOrder, colHidden, rank,
   adoptLegacyKey, needsAttention, attentionCount, streamIsSilent, REFRESH_MS,
-  sessionName, matchesFilter,
+  sessionName, matchesFilter, GROUP_MODES, groupSessions,
 } from "./lib.js";
 
 // Both keys were named for the old brand. They hold live state — a signed-in
@@ -27,6 +27,11 @@ let activeTab = "sessions", detailId = null, showEnded = false;
 // The active filter. Held here rather than read from the DOM so a repaint of the
 // table can never change it (#545).
 let filter = "";
+// How the table is grouped. Browser-local like the column layout and the sort:
+// it is a view preference, and vigie stores nothing about how an operator works
+// (ADR-0007). Read once here; an unknown stored value degrades to "off" (#546).
+const GROUP_KEY = "vigie_group";
+let groupBy = GROUP_MODES.includes(localStorage.getItem(GROUP_KEY) || "") ? localStorage.getItem(GROUP_KEY) : "off";
 let sortKey = "seen", sortDir = 1;           // 1 = descending
 let statsPeriod = "Week", statsLoaded = false, settingsLoaded = false;
 let liveCtrl = null, liveRetry = null, tickTimer = null, metaTimer = null;
@@ -85,6 +90,11 @@ function renderTabs() {
 // syncFilterBar keeps the bar on the Sessions tab only, and its count in step
 // with the table. The bar lives outside the painted region, so nothing else
 // updates it.
+function renderGroupSelect() {
+  const el = $("group-select");
+  el.innerHTML = GROUP_MODES.map((m) => `<option value="${m}"${m === groupBy ? " selected" : ""}>${m}</option>`).join("");
+}
+
 function syncFilterBar() {
   const show = activeTab === "sessions" && !detailId && $("gate").hidden;
   $("filterbar").hidden = !show;
@@ -224,7 +234,7 @@ function renderSessions() {
     const cls = [c.num ? "num" : "", c.nosort ? "nosort" : "", sorted ? "sorted" : ""].filter(Boolean).join(" ");
     return `<th class="${cls}" ${c.nosort ? "" : `data-sort="${c.key}"`}>${c.label}${arrow}</th>`;
   }).join("");
-  const rows = visibleSessions().map((s) => {
+  const row = (s) => {
     const st = STATUSES.includes(s.status) ? s.status : "idle";
     // A call reuses the attention mechanism — the left border in --st — and adds
     // a faint tint of the same colour. No new colour anywhere (ADR-0010).
@@ -234,7 +244,14 @@ function renderSessions() {
     const call = hasCall(s) ? " call" : "";
     const cells = cols.map((c) => c.cell(s)).join("");
     return `<tr class="st-${st}${attn}${call}" data-id="${esc(s.id)}" tabindex="0">${cells}</tr>`;
-  }).join("");
+  };
+  // One table, group headers as full-width rows: a separate table per group would
+  // give each its own column widths and the eye could no longer read down a
+  // column. The header carries what the TUI's does — the key, how many sessions,
+  // and their combined tokens (all four buckets, not output alone) (#546).
+  const rows = groupSessions(visibleSessions(), groupBy).map((g) =>
+    (g.key === null ? "" : `<tr class="grouphead"><td colspan="${cols.length}">▸ <span class="gk">${esc(dash(g.key))}</span> <span class="gm">(${g.count} · ${humanTokens(g.tokens)})</span></td></tr>`)
+    + g.sessions.map(row).join("")).join("");
   // The TUI says which of the two silences this is, and so must this: an empty
   // fleet and a filter that matched nothing look identical otherwise.
   const empty = visibleSessions().length ? ""
@@ -523,10 +540,16 @@ $("gate-form").addEventListener("submit", (e) => {
   token = v; localStorage.setItem(TOKEN_KEY, token); start().catch(() => {});
 });
 $("signout").addEventListener("click", signOut);
+$("group-select").addEventListener("change", (e) => {
+  groupBy = GROUP_MODES.includes(e.target.value) ? e.target.value : "off";
+  localStorage.setItem(GROUP_KEY, groupBy);
+  if (activeTab === "sessions" && !detailId) renderSessions();
+});
 $("filter-input").addEventListener("input", (e) => {
   filter = e.target.value.trim();
   if (activeTab === "sessions" && !detailId) renderSessions(); else syncFilterBar();
 });
 
 renderTabs();
+renderGroupSelect();
 if (token) start().catch(() => {}); else showGate(false);
