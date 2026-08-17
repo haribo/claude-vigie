@@ -51,6 +51,20 @@ file is the single source of truth, not a second narrative.
 
 ### Changed
 
+- The web dashboard no longer draws the summary strip the TUI deleted in #492 —
+  the status counts, the output total, the `rc` count and the aggregate activity
+  sparkline. The tempting defence, that a browser has room a 24-row terminal does
+  not, is not the reason those went: sessions-chrome.md § 2 turns on *it is not
+  already on screen*, and `● working 3` is the exact aggregate of the STATUS
+  column whether the screen is 80 characters or 1920 pixels. `hidden N` survives
+  on its own merit, moves to the bottom bar where the terminal keeps it, and is
+  shown only when something is actually hidden — a permanent zero trains the eye
+  to skip the place where the exception appears. With that count no longer
+  permanent, the control that used to sit on it moves too: showing ended sessions
+  is a Settings preference now, beside the idle window, as it is in the TUI. The
+  per-session activity sparkline stays in its column, where it says something the
+  table cannot (#548).
+
 - **Breaking:** the daemon refuses a usage snapshot from a machine that does not
   hold the usage lease, and rejects percentages outside 0–100. The lease exists so
   exactly one machine fetches, and nothing checked it at the write, so any holder

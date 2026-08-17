@@ -30,7 +30,7 @@ const flush = async (n = 8) => { for (let i = 0; i < n; i++) await new Promise((
 // harness replaces the browser surface app.js touches. Timers are recorded
 // rather than scheduled, so a test fires them when it means to and no test waits
 // on a real clock.
-function harness({ token = "t0k3n", sessions = [], group = null, idle = null } = {}) {
+function harness({ token = "t0k3n", sessions = [], group = null, idle = null, showEnded = null } = {}) {
   const h = {
     now: 1_000_000,
     fetches: [],          // every path app.js requested, in order
@@ -69,7 +69,7 @@ function harness({ token = "t0k3n", sessions = [], group = null, idle = null } =
   };
   globalThis.window = globalThis;
   globalThis.localStorage = {
-    getItem: (k) => (k === "vigie_token" ? token : k === "vigie_group" ? group : k === "vigie_idle_hide" ? idle : null),
+    getItem: (k) => (k === "vigie_token" ? token : k === "vigie_group" ? group : k === "vigie_idle_hide" ? idle : k === "vigie_show_ended" ? showEnded : null),
     setItem() {}, removeItem() {},
   };
   globalThis.matchMedia = () => ({ matches: false, addEventListener() {} });
@@ -133,6 +133,10 @@ function harness({ token = "t0k3n", sessions = [], group = null, idle = null } =
   };
   h.lastTable = () => {
     const w = h.writes.filter((x) => x.id === "tab-sessions");
+    return w.length ? w[w.length - 1].html : "";
+  };
+  h.lastBot = () => {
+    const w = h.writes.filter((x) => x.id === "botbar");
     return w.length ? w[w.length - 1].html : "";
   };
   return h;
@@ -248,18 +252,32 @@ test("a fleet that changed is redrawn", async () => {
 // The guard must not swallow the very transition #538 is about: the row is
 // `working` in the payload until the server's read-time cutoff turns it `ended`,
 // and that answer arrives only because the tick asked again.
+// This test used to assert `/st-ended/` appeared in the table, and passed for the
+// wrong reason: it was matching `<span class="cnt st-ended">` in the summary
+// strip's status counters, never a row. Ended sessions are hidden by default, so
+// no row could ever have carried that class. Deleting the strip in #548 exposed
+// it. What the transition actually does, with the default preference, is empty
+// the table and raise the hidden count — so that is what is asserted now.
 test("the read-time transition to ended reaches the screen", async () => {
   const h = harness({ sessions: FLEET });
   await h.boot();
-  const drawn = () => h.writes.filter((w) => w.id === "tab-sessions").length;
-  const before = drawn();
+  assert.match(h.lastTable(), /st-working/, "the fleet starts out working");
 
   // What the server starts answering once the reports stop (internal/server/sessions.go).
   h.sessions = FLEET.map((s) => ({ ...s, status: "ended" }));
   await h.tick();
-  assert.equal(drawn(), before + 1);
-  assert.match(h.writes.at(-1).html, /st-ended/,
+  assert.ok(!h.lastTable().includes("st-working"),
     "a dead watcher must stop reading as `working` — no event announces this, only the tick finds it");
+  assert.match(h.lastBot(), /hidden<\/span> 2/,
+    "and the rows must not vanish silently — the count is what says the fleet is bigger than the table");
+});
+
+test("with ended sessions shown, the transition is visible as a row", async () => {
+  const h = harness({ sessions: FLEET, showEnded: "1" });
+  await h.boot();
+  h.sessions = FLEET.map((s) => ({ ...s, status: "ended" }));
+  await h.tick();
+  assert.match(h.lastTable(), /st-ended/, "the row itself must carry the new status");
 });
 
 // #545. The rule itself is cross-checked against the Go implementation in
@@ -414,7 +432,7 @@ test("the hidden count includes the idle-hidden, not just the ended", async () =
   await h.boot();
   // Two of the three are filtered out; the screen must say so, or it claims a
   // fleet of one.
-  assert.match(h.lastTable(), /hidden<\/span> 2/,
+  assert.match(h.lastBot(), /hidden<\/span> 2/,
     "the count still reports only the ended sessions — the screen understates the fleet");
 });
 
@@ -423,4 +441,46 @@ test("a session whose timestamp will not parse is kept, not lost", async () => {
   h.now = AT;
   await h.boot();
   assert.match(h.lastTable(), /unparseable/, "a row must not disappear over a date that would not parse");
+});
+
+// #548, the twin of internal/tui/chrome_test.go's TestTheSummaryRowIsGone.
+//
+// The strip failed test 1 of sessions-chrome.md § 2 — *it is not already on
+// screen* — and that test says nothing about screen size, so the verdict is the
+// same in a browser as in a terminal (#544). What the table cannot say by itself
+// is what survives.
+const FLEET_S = [
+  { id: "a", title: "api", machine: "m", status: "working", last_seen_at: "2026-08-17T11:59:00Z", usage: { output_tokens: 1000 } },
+  { id: "b", title: "web", machine: "m", status: "ended", last_seen_at: "2026-08-17T11:59:00Z", usage: { output_tokens: 500 } },
+];
+
+test("the summary strip is gone from the dashboard", async () => {
+  const h = harness({ sessions: FLEET_S });
+  await h.boot();
+  const html = h.lastTable();
+  assert.ok(!html.includes('class="summary"'), "the strip itself");
+  assert.ok(!html.includes('class="cnt'), "the status counts — the exact aggregate of the STATUS column");
+  assert.ok(!html.includes(">out<"), "the output total");
+  assert.ok(!html.includes(">rc<"), "the rc count");
+  assert.ok(!html.includes('class="metric'), "and the scopes it mixed at one visual rank");
+});
+
+test("the per-session activity sparkline survives — it says what the table cannot", async () => {
+  const h = harness({ sessions: [{ ...FLEET_S[0], samples: [1, 5, 3] }] });
+  await h.boot();
+  assert.match(h.lastTable(), /<svg class="spark"/, "the column keeps its sparkline; only the aggregate went");
+});
+
+test("hidden N moves to the bottom bar, and only shows when something is hidden", async () => {
+  const h = harness({ sessions: FLEET_S });
+  await h.boot();
+  assert.match(h.lastBot(), /hidden<\/span> 1/, "one ended session is filtered out of the table");
+  // Precise, not the bare word: `aria-hidden="true"` rides on the detail button.
+  assert.ok(!h.lastTable().includes('class="hiddenn"'), "and it is no longer above the table");
+
+  // Nothing hidden: the row goes. A permanent zero trains the eye to skip the
+  // place where the exception will appear (sessions-chrome.md § 2, test 2).
+  const h2 = harness({ sessions: [FLEET_S[0]] });
+  await h2.boot();
+  assert.ok(!h2.lastBot().includes('class="hiddenn"'), "nothing is hidden, yet the bar says so");
 });

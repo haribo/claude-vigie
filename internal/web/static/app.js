@@ -24,7 +24,13 @@ const STATUSES = ["working", "thinking", "compacting", "waiting", "stalled", "id
 let token = adoptLegacyKey(localStorage, "cf_token", TOKEN_KEY) || "";
 let sessions = [], byId = new Map();
 let usage = null, platform = null, stats = null, settings = null, ver = null, watcher = null;
-let activeTab = "sessions", detailId = null, showEnded = false;
+let activeTab = "sessions", detailId = null;
+// Whether ended sessions are listed. A Settings preference rather than a control
+// on the table, as in the TUI: `hidden N` is shown only when something is hidden
+// (sessions-chrome.md § 2), so a button living there would vanish the moment it
+// had been used and leave no way back (#548).
+const ENDED_KEY = "vigie_show_ended";
+let showEnded = localStorage.getItem(ENDED_KEY) === "1";
 // The active filter. Held here rather than read from the DOM so a repaint of the
 // table can never change it (#545).
 let filter = "";
@@ -113,7 +119,7 @@ function switchTab(id) {
   if (id === "machines") renderMachines();
   if (id === "stats") { if (!statsLoaded) loadStats(); else renderStats(); }
   if (id === "settings") { if (!settingsLoaded) loadSettings(); else renderSettings(); }
-  renderTabs(); syncFilterBar(); window.scrollTo(0, 0);
+  renderTabs(); syncFilterBar(); if (usage || platform) renderBottom(); window.scrollTo(0, 0);
 }
 
 // ---------- Sessions ----------
@@ -218,30 +224,6 @@ function visibleSessions() {
   return col && col.cmp ? [...list].sort((a, b) => col.cmp(a, b) * sortDir) : list;
 }
 
-function renderSummary() {
-  const counts = {}; sessions.forEach((s) => counts[s.status] = (counts[s.status] || 0) + 1);
-  const totalOut = sessions.reduce((n, s) => n + (s.usage ? s.usage.output_tokens || 0 : 0), 0);
-  const rc = sessions.filter((s) => s.remote_control).length;
-  const shown = preferenceVisible();
-  const hidden = sessions.length - shown.length; // ended *and* idle-hidden (#547)
-  let agg = []; shown.forEach((s) => (s.samples || []).forEach((v, i) => { agg[i] = (agg[i] || 0) + v; }));
-  const calling = sessions.filter(hasCall).length;
-  // Shown only when non-zero, and first: a call is explicit where every other
-  // count is a status vigie inferred. It borrows the `waiting` colour rather
-  // than introducing a new one.
-  const callCnt = calling ? `<span class="cnt st-waiting"><span class="dot"></span><b>${calling}</b><small>call</small></span>` : "";
-  const cnts = callCnt + STATUSES.map((k) => `<span class="cnt st-${k}"><span class="dot"></span><b>${counts[k] || 0}</b><small>${k}</small></span>`).join("");
-  return `<div class="summary">
-    <div class="grp">${cnts}</div>
-    <div class="div"></div>
-    <span class="metric"><span class="lbl">out</span><b>${humanTokens(totalOut)}</b></span>
-    <span class="metric rc"><span class="lbl">rc</span><b>◉ ${rc}</b></span>
-    <span class="metric"><span class="lbl">activity</span><span class="st-working">${sparkSVG(agg, 90, 16)}</span></span>
-    <span class="push"></span>
-    <button class="metric hiddenm ${showEnded ? "on" : ""}" id="hidden-toggle" title="Show or hide ended sessions"><span class="lbl">${showEnded ? "showing all" : "hidden"}</span> ${hidden}</button>
-  </div>`;
-}
-
 function renderSessions() {
   const cols = activeCols();
   const heads = cols.map((c) => {
@@ -272,14 +254,13 @@ function renderSessions() {
   // fleet and a filter that matched nothing look identical otherwise.
   const empty = visibleSessions().length ? ""
     : `<div class="empty">${filter ? "No sessions match the filter." : "No sessions in view."}</div>`;
-  const html = renderSummary() +
-    `<div class="table-wrap"><div class="table-scroll"><table><thead><tr>${heads}</tr></thead><tbody>${rows}</tbody></table></div>${empty}</div>`;
+  const html = `<div class="table-wrap"><div class="table-scroll"><table><thead><tr>${heads}</tr></thead><tbody>${rows}</tbody></table></div>${empty}</div>`;
   if (!paint("tab-sessions", html)) return; // nothing on screen would change; listeners are still bound
-  $("hidden-toggle").addEventListener("click", () => { showEnded = !showEnded; renderSessions(); });
   $("tab-sessions").querySelectorAll("th[data-sort]").forEach((th) => th.addEventListener("click", () => {
     const k = th.dataset.sort; if (k === sortKey) sortDir = -sortDir; else { sortKey = k; sortDir = 1; } renderSessions();
   }));
   syncFilterBar();
+  if (usage || platform) renderBottom();
   $("tab-sessions").querySelectorAll("tbody tr").forEach((tr) => {
     const go = () => openDetail(tr.dataset.id);
     tr.addEventListener("click", go);
@@ -378,10 +359,16 @@ function renderSettings() {
       <div class="set-row"><span class="k">Session retention<small>how long closed sessions are kept</small></span><span class="v">${esc(retention)}</span></div>
       <div class="set-row"><span class="k">Platform status<small>polled from status.claude.com</small></span><span class="v ${pcls === "ok" ? "ok" : ""}">● ${esc(ptxt)}</span></div>
       <div class="set-row"><span class="k">Token<small>stored in this browser, sent as a bearer token</small></span><span class="v">connected <button class="signout2" id="signout2">sign out</button></span></div>
+      <div class="set-row"><span class="k">Show ended sessions<small>keep closed sessions in the table — saved in this browser</small></span><span class="v"><label class="col-tog"><input type="checkbox" id="ended-toggle"${showEnded ? " checked" : ""}> show</label></span></div>
       <div class="set-row"><span class="k">Hide idle after<small>a session unheard from for longer leaves the table — saved in this browser</small></span><span class="v"><select id="idle-select" aria-label="Hide idle after">${IDLE_PRESETS_MS.map((ms) => `<option value="${ms}"${ms === idleHideAfter ? " selected" : ""}>${esc(idleLabel(ms))}</option>`).join("")}</select></span></div>
       <div class="set-row col-picker"><span class="k">Columns<small>which columns show, and their order — saved in this browser</small></span><span class="v col-list">${colRows}</span></div>
     </div>`;
   $("signout2").addEventListener("click", signOut);
+  $("ended-toggle").addEventListener("change", (e) => {
+    showEnded = Boolean(e.target.checked);
+    localStorage.setItem(ENDED_KEY, showEnded ? "1" : "0");
+    renderTabs(); renderSettings();
+  });
   $("idle-select").addEventListener("change", (e) => {
     const ms = Number(e.target.value);
     idleHideAfter = IDLE_PRESETS_MS.includes(ms) ? ms : 0;
@@ -404,7 +391,15 @@ function renderBottom() {
   const u = usage || {};
   const [pcls, ptxt] = platformClass(platform);
   const platHtml = (platform && platform.indicator) ? `<span class="plat ${pcls}"><span class="dot"></span>platform ${esc(ptxt)}</span>` : "";
-  $("botbar").innerHTML = `<div class="gauges">${g("5h", u.five_hour_pct, u.five_hour_reset)}${g("7d", u.seven_day_pct, u.seven_day_reset)}</div><span class="push"></span>${platHtml}`;
+  // `hidden N` is the one piece of the deleted summary strip that survives: the
+  // visibility preferences filter silently, and without it the screen claims a
+  // smaller fleet than it has (sessions-chrome.md § 2, test 3). Shown only when
+  // something is hidden — a permanent zero trains the eye to skip the place where
+  // the exception will appear — and only beside the table it describes (#548).
+  const n = (activeTab === "sessions" && !detailId) ? sessions.length - preferenceVisible().length : 0;
+  const hiddenHtml = n > 0 ? `<span class="hiddenn"><span class="lbl">hidden</span> ${n}</span>` : "";
+  const html = `<div class="gauges">${g("5h", u.five_hour_pct, u.five_hour_reset)}${g("7d", u.seven_day_pct, u.seven_day_reset)}</div><span class="push"></span>${hiddenHtml}${platHtml}`;
+  if (!paint("botbar", html)) return;
   $("botbar").querySelectorAll("i[data-w]").forEach((i) => { i.style.width = i.dataset.w + "%"; });
 }
 
@@ -465,6 +460,7 @@ async function loadSessions() {
   renderTabs();
   if (activeTab === "sessions" && !detailId) renderSessions();
   if (activeTab === "machines") renderMachines();
+  if (usage || platform) renderBottom(); // the hidden count lives there now (#548)
 }
 async function loadMeta() {
   try { usage = await api("/api/usage"); } catch (e) { /* optional */ }
