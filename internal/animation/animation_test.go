@@ -3,6 +3,7 @@ package animation
 import (
 	"os"
 	"path/filepath"
+	"reflect"
 	"regexp"
 	"strings"
 	"testing"
@@ -122,6 +123,83 @@ func TestClipPathIdsAreThemeScoped(t *testing.T) {
 		}
 		if strings.Contains(svg, "-"+other+`"`) {
 			t.Errorf("%s: carries the other theme's ids", p.Name)
+		}
+	}
+}
+
+// #571. The hero is drawn from a template for the same reason the animation is:
+// it could not be rebuilt, so nothing could check it, and it drifted — its two
+// dark copies had ended up in different palettes, and neither matched the other.
+//
+// These are the twins of the guards above. Without them the hero would be
+// regenerable in principle and unchecked in practice, which is the state that
+// produced the drift.
+func TestTheCommittedHeroesAreWhatTheGeneratorProduces(t *testing.T) {
+	for _, p := range HeroThemes() {
+		svg, err := RenderHero(p)
+		if err != nil {
+			t.Fatalf("%s: %v", p.Name, err)
+		}
+		for _, target := range HeroTargets(p) {
+			committed, err := os.ReadFile(filepath.Join(repoRoot, target)) //nolint:gosec // our own committed asset
+			if err != nil {
+				t.Fatalf("reading %s: %v", target, err)
+			}
+			if string(committed) != svg {
+				t.Errorf("%s is not what the generator produces — run `just docs-animation`", target)
+			}
+		}
+	}
+}
+
+// The two copies are one drawing. They were maintained by hand and diverged;
+// rendering both from one template is what stops that, and this says so.
+func TestBothHeroCopiesAreIdentical(t *testing.T) {
+	for _, p := range HeroThemes() {
+		targets := HeroTargets(p)
+		if len(targets) != 2 {
+			t.Fatalf("%s: %d targets, want the README copy and the site copy", p.Name, len(targets))
+		}
+		a, err := os.ReadFile(filepath.Join(repoRoot, targets[0])) //nolint:gosec // our own committed asset
+		if err != nil {
+			t.Fatalf("reading %s: %v", targets[0], err)
+		}
+		b, err := os.ReadFile(filepath.Join(repoRoot, targets[1])) //nolint:gosec // our own committed asset
+		if err != nil {
+			t.Fatalf("reading %s: %v", targets[1], err)
+		}
+		if string(a) != string(b) {
+			t.Errorf("%s and %s are not the same drawing", targets[0], targets[1])
+		}
+	}
+}
+
+// An empty color renders as an invalid attribute and paints nothing, which is
+// easy to miss on a dark background.
+func TestBothHeroPalettesAreComplete(t *testing.T) {
+	for _, p := range HeroThemes() {
+		v := reflect.ValueOf(p)
+		for i := 0; i < v.NumField(); i++ {
+			if v.Field(i).String() == "" {
+				t.Errorf("%s palette: %s is empty", p.Name, v.Type().Field(i).Name)
+			}
+		}
+	}
+}
+
+// The window buttons are the same three colors in both themes on purpose — they
+// are macOS chrome, not part of the palette. Everything else must differ, or a
+// theme is not a theme.
+func TestTheHeroThemesActuallyDiffer(t *testing.T) {
+	light, dark := heroLight, heroDark
+	lv, dv := reflect.ValueOf(light), reflect.ValueOf(dark)
+	for i := 0; i < lv.NumField(); i++ {
+		name := lv.Type().Field(i).Name
+		if name == "Name" {
+			continue
+		}
+		if lv.Field(i).String() == dv.Field(i).String() {
+			t.Errorf("%s is %s in both themes", name, lv.Field(i).String())
 		}
 	}
 }
