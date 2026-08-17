@@ -28,9 +28,12 @@ func renderUsageStrip(u api.UsageReport) string {
 	if u.FetchedAt == "" {
 		return dimStyle.Render("usage — not fetched yet")
 	}
-	return labelStyle.Render("usage  ") +
+	// The space goes inside the gauges, not between them: `5h` and `7d` are two
+	// elements of the same nature, already told apart by their own labels, while
+	// the bar and its figure have nothing separating them at all (#568).
+	return labelStyle.Render("usage ") +
 		compactGauge("5h", u.FiveHourPct, u.FiveHourReset) +
-		dimStyle.Render("    ") +
+		dimStyle.Render("  ") +
 		compactGauge("7d", u.SevenDayPct, u.SevenDayReset)
 }
 
@@ -52,11 +55,17 @@ func compactGauge(label string, pct float64, reset string) string {
 	}
 	bar := lipgloss.NewStyle().Foreground(color).Render(strings.Repeat("▓", filled)) +
 		dimStyle.Render(strings.Repeat("░", width-filled))
-	// Tight against the bar and against the reset: the gauges give up the space
-	// the chrome no longer has to spare (#492). The `%3.0f` padding that kept the
-	// 5h and 7d blocks aligned whatever the figure goes with it — a deliberate
-	// reading trade, not an oversight (docs/design/sessions-chrome.md § 2).
-	s := labelStyle.Render(label+" ") + bar + fmt.Sprintf("%.0f%%", pct)
+	// The reset stays tight against the percentage — it qualifies that figure, and
+	// a space would make it read as a third element. The bar does not: the fill
+	// glyph and the digit carry the same visual weight, so `░░4%` was one block
+	// and the eye had to hunt for where the bar ended (#568).
+	//
+	// #492 tightened both, on the grounds that the gauges give up the space the
+	// chrome no longer has to spare. That holds for the space *between* the two
+	// gauges, which is where it was taken back from; it did not hold here. The
+	// `%3.0f` padding that kept the 5h and 7d blocks aligned whatever the figure
+	// is still gone — that part of the trade stands.
+	s := labelStyle.Render(label+" ") + bar + " " + fmt.Sprintf("%.0f%%", pct)
 	if r := resetIn(reset); r != "" {
 		s += dimStyle.Render("(" + r + ")")
 	}
