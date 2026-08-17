@@ -100,14 +100,27 @@ provide. Sessions are grouped in the UI by machine and project directory (see
 
 ## Configuration & install
 
-Two files, kept separate:
+**Two files carry configuration**, kept separate:
 
 - **Hooks** → `~/.claude/settings.json` (user level). One install covers every
   Claude Code session on the machine, present and future.
 - **Client config** → `~/.config/vigie/config.toml` (XDG). Holds the
   server URL, the shared auth token, and the machine name. Never committed — it
-  contains a secret. Written by `vigie init`, read by `report`/`watch`/`tui`.
-  A pre-TOML `config.json` is migrated on first load.
+  contains a secret. Written by `vigie init`, read by
+  `report`/`watch`/`tui`/`call`. A pre-TOML `config.json` is migrated on first
+  load.
+
+**Five more paths the client touches**, listed because an operator removing vigie
+from a machine needs the whole set, and because "two files" read as the whole set
+for a long time:
+
+| Path | What | Written by |
+| --- | --- | --- |
+| `~/.claude/skills/vigie-call/SKILL.md` | the Agent Skill teaching Claude the `vigie call` command ([design](design/call-discoverability.md)) | the watcher, refreshed at startup |
+| `~/.config/vigie/tui.toml` | the TUI's own preferences — columns, sort, grouping ([ADR-0007](adr/0007-read-only-to-operator.md)) | `vigie tui` |
+| `~/.local/state/vigie/sessions/` | presence mappings, `{PID, procStart}` per session ([ADR-0006](adr/0006-session-presence-via-proc.md)) | the reporting hooks |
+| `~/.local/state/vigie/compacting/` | compaction markers ([ADR-0008](adr/0008-compacting-status.md)) | the `PreCompact` hook |
+| `~/.local/state/vigie/watcher` | the local mark that tells hooks the watcher is reading transcripts ([design](design/transcript-reads.md)) | the watcher, after each scan |
 
 The watcher and the daemon run as systemd user services
 (`vigie-watch.service`, `vigied.service`).

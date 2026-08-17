@@ -185,6 +185,23 @@ file is the single source of truth, not a second narrative.
 
 ### Fixed
 
+- Five documents describe the machine that exists. `transcript-reads.md` said the
+  local watcher mark is written on the 5 s liveness heartbeat; it is written after
+  each successful scan, on the scan clock, and never while the watcher is drifted
+  — which is the property that makes hooks resume reading transcripts for
+  themselves when a watcher goes inert, so it is worth stating rather than
+  discovering. The architecture map promised "two files" under *Configuration &
+  install* while the client writes seven; the other five — the call skill, the
+  TUI's preferences and three state directories — are now listed, because an
+  operator removing vigie from a machine needs the whole set. `code.md` and the
+  `internal/client` package comment both listed three of the client's six
+  commands. The GNOME extension's `metadata.json`, the description the Extensions
+  site and app display, still said the indicator counts sessions "waiting for
+  input" — the schema and README were corrected to the full attention set long
+  ago. And `sessions-chrome.md` credited `session-list.md` with specifying the
+  column picker, which it does not: the picker shipped in #308/#315 and is
+  specified nowhere, which is now said plainly instead of pointed at (#557).
+
 - ADR-0008 no longer states a consequence that #508 reversed. It said `compacting`
   clears a hook-posted `waiting` "like `working`/`thinking`" — true when it was
   written, and false since the reconciler became a deny list. The reason has
@@ -198,6 +215,7 @@ file is the single source of truth, not a second narrative.
   decision itself stands — the marker, the boundary close, the timeout cap, the
   rollup behaviour — and only the overtaken sentence carries an amendment (#559).
 
+||||||| parent of 44b13a8 (docs: correct five documents that describe a machine that changed)
 - Three small defects, none urgent, all real. The desktop notifier called `Start`
   and never `Wait`, so every attention transition and every raised call left an
   unreaped child until the TUI exited — on a tool meant to stay open all day. It

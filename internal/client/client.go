@@ -1,9 +1,11 @@
 // Package client implements the vigie client command-line dispatch.
 //
 // The client is installed on every machine running Claude Code sessions. It
-// configures reporting (`init`), reports session events invoked by hooks
-// (`report`), and shows the live dashboard in the terminal (`tui`). The server
-// runs separately as the `vigied` daemon.
+// writes the config (`init`), installs the reporting hooks by hand where no
+// watcher runs (`hooks`), reports session events invoked by those hooks
+// (`report`), raises an operator call from inside a session (`call`), runs the
+// background watcher (`watch`), and shows the live dashboard in the terminal
+// (`tui`). The server runs separately as the `vigied` daemon.
 package client
 
 import (

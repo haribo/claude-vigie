@@ -7,8 +7,11 @@ table, and for how the operator learns that something between them and the truth
 is broken. It sits above [tui-viewport.md](tui-viewport.md), which specifies how
 the remaining rows are budgeted, and beside
 [session-list.md](session-list.md), which specifies the table itself. The table
-is unchanged by this document: columns, ordering, grouping, filtering and the
-column picker all stay exactly as specified there.
+is unchanged by this document: columns, ordering, grouping and filtering all stay
+exactly as specified there. The column picker is unchanged too, though
+`session-list.md` does not in fact specify it — it shipped in #308/#315 and its
+behaviour lives in the code and its tests. Saying so is more useful than a
+pointer to a section that is not there (#557).
 
 ---
 
