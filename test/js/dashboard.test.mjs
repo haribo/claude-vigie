@@ -13,6 +13,7 @@ import {
   adoptLegacyKey, ATTENTION, needsAttention, attentionCount, streamIsSilent, SILENCE_MS,
   fuzzyMatch, sessionHaystack, sessionName, shortId, matchesFilter,
   GROUP_MODES, groupKeyOf, groupSessions, IDLE_PRESETS_MS, idleLabel, hiddenByIdle,
+  contextCell, contextKnown, contextPct, modeLabel, migrateV1Columns, V1_COLUMN_KEYS,
 } from "../../internal/web/static/lib.js";
 
 // esc is the dashboard's only defence against DOM-based XSS: session titles,
@@ -438,4 +439,58 @@ test("an unreadable timestamp keeps the session visible", () => {
 test("the presets and their labels match what the TUI offers", () => {
   assert.deepEqual(IDLE_PRESETS_MS, [0, 900000, 1800000, 3600000, 10800000, 21600000]);
   assert.deepEqual(IDLE_PRESETS_MS.map(idleLabel), ["off (never)", "15m", "30m", "1h", "3h", "6h"]);
+});
+
+// #550. CTX and MODE are two more rules copied out of Go. Neither copy is
+// trusted: this reads the same fixture internal/tui/column_shared_test.go reads.
+test("contextCell agrees with the shared fixture the Go side reads", async () => {
+  const raw = await readFile(new URL("../fixtures/column-cases.json", import.meta.url), "utf8");
+  const { context } = JSON.parse(raw);
+  assert.ok(context.length > 0, "the fixture has no context cases");
+  for (const c of context) {
+    const s = { model: c.model, context_tokens: c.tokens };
+    assert.equal(contextCell(s), c.want, `model=${c.model} tokens=${c.tokens} — ${c.why}`);
+  }
+});
+
+test("modeLabel agrees with the shared fixture the Go side reads", async () => {
+  const raw = await readFile(new URL("../fixtures/column-cases.json", import.meta.url), "utf8");
+  const { mode } = JSON.parse(raw);
+  for (const c of mode) assert.equal(modeLabel(c.raw), c.want, `${c.raw} — ${c.why}`);
+});
+
+test("unknown and known-to-be-zero are different states", () => {
+  // The daemon returns a nil pointer for the first and a 0 for the second, on
+  // purpose (#367). Collapsing them here would rebuild the defect it fixed.
+  assert.equal(contextKnown({ model: "claude-opus-4-8" }), false);
+  assert.equal(contextKnown({ model: "claude-opus-4-8", context_tokens: null }), false);
+  assert.equal(contextKnown({ model: "claude-opus-4-8", context_tokens: 0 }), true);
+  assert.equal(contextCell({ model: "claude-opus-4-8" }), "-");
+  assert.equal(contextCell({ model: "claude-opus-4-8", context_tokens: 0 }), "0%");
+  assert.equal(contextPct({ model: "claude-opus-4-8" }), 0, "an unknown reading still sorts as zero");
+});
+
+// #550. A saved layout is live state: renaming four keys without carrying it over
+// drops columns out of the operator's order, and a hidden one silently reappears.
+test("a v1 layout is remapped, once", () => {
+  assert.deepEqual(migrateV1Columns(["name", "project", "tokens", "activity", "act"]),
+    ["name", "dir", "total", "act", "open"]);
+  assert.deepEqual(migrateV1Columns(["doing"]), ["detail"], "the #393 rename is folded in");
+  assert.deepEqual(migrateV1Columns([]), []);
+  assert.deepEqual(migrateV1Columns(null), []);
+});
+
+test("the v1 remap is deliberately not idempotent, which is why it runs once", () => {
+  // `activity` → `act` and `act` → `open` in the same pass. Applying it twice
+  // turns the freshly-migrated sparkline into the detail button, which is exactly
+  // why it must never be merged into LEGACY_COLS (applied on every read).
+  const once = migrateV1Columns(["activity"]);
+  assert.deepEqual(once, ["act"]);
+  assert.deepEqual(migrateV1Columns(once), ["open"],
+    "a second pass corrupts it — the storage key bump is what prevents that, not the map");
+  assert.equal(V1_COLUMN_KEYS.act, "open");
+});
+
+test("the remap collapses a duplicate rather than listing a column twice", () => {
+  assert.deepEqual(migrateV1Columns(["tokens", "total"]), ["total"]);
 });

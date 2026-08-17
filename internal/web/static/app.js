@@ -9,7 +9,7 @@ import {
   esc, dash, trim, hasCall, detailText, humanTokens, ageSec, relAge, relResetHint,
   shortModel, projectName, totalTokens, sparkSVG, migrateKeys, fullColOrder, colHidden, rank,
   adoptLegacyKey, needsAttention, attentionCount, streamIsSilent, REFRESH_MS,
-  sessionName, matchesFilter, GROUP_MODES, groupSessions,
+  sessionName, matchesFilter, GROUP_MODES, groupSessions, contextKnown, contextPct, contextCell, modeLabel, migrateV1Columns,
   IDLE_PRESETS_MS, idleLabel, hiddenByIdle,
 } from "./lib.js";
 
@@ -126,51 +126,91 @@ function switchTab(id) {
 // Each column carries how to render its cell, so the header and the rows are both
 // driven by the (operator-ordered, filtered) column list — see activeCols (#309).
 const COLS = [
+  // The TUI's set, in its built-in order (internal/tui/render.go `columns`), plus
+  // one affordance a pointer needs and a keyboard does not. A Go test compares the
+  // two key sets and fails on drift (#550, #544).
+  //
   // sessionName, not `title || id`: an untitled session is named by the first
   // eight characters of its id in the TUI, and the filter searches that name — a
   // column showing 36 characters of a key the filter cannot reach is a trap (#545).
   { key: "name", label: "Session", cmp: (a, b) => sessionName(a).localeCompare(sessionName(b)),
     cell: (s) => { const n = esc(sessionName(s)); return `<td class="name" title="${esc(s.title || s.id)}"><span class="nm">${n}</span></td>`; } },
+  { key: "user", label: "User", cmp: (a, b) => (a.user || "").localeCompare(b.user || ""),
+    cell: (s) => `<td class="${s.user ? "dim" : "faint"}">${esc(dash(s.user))}</td>` },
   { key: "machine", label: "Machine", cmp: (a, b) => a.machine.localeCompare(b.machine),
     cell: (s) => `<td class="dim">${esc(s.machine)}</td>` },
-  { key: "project", label: "Project", cmp: (a, b) => projectName(a.project_dir).localeCompare(projectName(b.project_dir)),
-    cell: (s) => { const p = esc(projectName(s.project_dir)); return `<td class="proj" title="${p}">${p}</td>`; } },
+  { key: "dir", label: "Dir", cmp: (a, b) => projectName(a.project_dir).localeCompare(projectName(b.project_dir)),
+    cell: (s) => { const p = esc(projectName(s.project_dir)); return `<td class="proj" title="${esc(s.project_dir || "")}">${p}</td>`; } },
   { key: "branch", label: "Branch", cmp: (a, b) => (a.git_branch || "").localeCompare(b.git_branch || ""),
     cell: (s) => { const b = esc(dash(s.git_branch)); return `<td class="branch dim" title="${b}">${b}</td>`; } },
   { key: "model", label: "Model", cmp: (a, b) => (a.model || "").localeCompare(b.model || ""),
     cell: (s) => `<td class="${s.model ? "dim" : "faint"}">${esc(dash(shortModel(s.model)))}</td>` },
   { key: "effort", label: "Effort", cmp: (a, b) => (a.effort || "").localeCompare(b.effort || ""),
     cell: (s) => `<td class="${s.effort ? "dim" : "faint"}">${esc(dash(s.effort))}</td>` },
-  { key: "tokens", label: "Tokens", num: true, cmp: (a, b) => totalTokens(a.usage || {}) - totalTokens(b.usage || {}),
+  // Unknown and known-to-be-zero are different states on screen, and the daemon
+  // keeps them apart precisely so this cell can say so (#367).
+  { key: "ctx", label: "Ctx", num: true, cmp: (a, b) => contextPct(a) - contextPct(b),
+    cell: (s) => { const k = contextKnown(s); const p = contextPct(s); const cls = !k ? "faint" : p >= 85 ? "ctx-hot" : p >= 60 ? "ctx-warn" : ""; return `<td class="num ${cls}">${contextCell(s)}</td>`; } },
+  { key: "out", label: "Out", num: true, cmp: (a, b) => ((a.usage || {}).output_tokens || 0) - ((b.usage || {}).output_tokens || 0),
+    cell: (s) => `<td class="num">${humanTokens((s.usage || {}).output_tokens)}</td>` },
+  { key: "total", label: "Total", num: true, cmp: (a, b) => totalTokens(a.usage || {}) - totalTokens(b.usage || {}),
     cell: (s) => `<td class="num">${humanTokens(totalTokens(s.usage || {}))}</td>` },
   { key: "seen", label: "Seen", num: true, cmp: (a, b) => ageSec(b.last_seen_at) - ageSec(a.last_seen_at),
     cell: (s) => `<td class="num dim">${relAge(s.last_seen_at)}</td>` },
-  { key: "activity", label: "Activity", nosort: true,
+  { key: "act", label: "Act", nosort: true,
     cell: (s) => `<td>${sparkSVG(s.samples)}</td>` },
   { key: "rc", label: "RC", cmp: (a, b) => (a.remote_control === b.remote_control ? 0 : a.remote_control ? -1 : 1),
     cell: (s) => `<td>${s.remote_control ? '<span class="rc-on" title="Remote control on">◉</span>' : '<span class="rc-off" title="Remote control off">○</span>'}</td>` },
   { key: "status", label: "Status", cmp: (a, b) => rank(a.status) - rank(b.status),
     cell: (s) => { const st = STATUSES.includes(s.status) ? s.status : "idle"; const code = (s.status === "error" && s.api_error_status) ? ` <span class="code">${s.api_error_status}</span>` : ""; return `<td><span class="pill st-${st}${hasCall(s) ? " call" : ""}"><span class="dot"></span>${st}${code}</span></td>`; } },
+  // An unrecognised mode is surfaced raw, never relabelled "manual": a new mode
+  // must not read as the safe default (#304).
+  { key: "mode", label: "Mode", cmp: (a, b) => modeLabel(a.permission_mode).localeCompare(modeLabel(b.permission_mode)),
+    cell: (s) => `<td class="${s.permission_mode ? "mode-" + esc(modeLabel(s.permission_mode)) : "faint"}">${esc(modeLabel(s.permission_mode))}</td>` },
   { key: "detail", label: "Detail", nosort: true,
     cell: (s) => { const d = detailText(s); const cls = hasCall(s) ? "detail call" : (s.status === "waiting" ? "detail wait" : "detail"); return `<td class="${cls}" title="${d}">${d}</td>`; } },
-  { key: "act", label: "", nosort: true,
+  // A gesture, not content: a keyboard opens the detail with Enter on the row, a
+  // pointer needs something to click. Declared as such in the Go guard (#544).
+  { key: "open", label: "", nosort: true,
     cell: () => `<td><button class="det-btn" aria-label="Open detail" title="Open detail"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg></button></td>` },
 ];
+
 
 // COLS_KEY holds the operator's column layout for this browser, {order, hidden}:
 // the display order of ALL columns plus the hidden set. Client-local like the
 // token. Hiding a column keeps its position — only its visibility changes (#315).
-const COLS_KEY = "vigie_columns";
+// v2 because #550 renamed four keys at once. A layout is live state — renaming
+// in place would drop a column out of the operator's order, and if it had been
+// hidden it would silently reappear (#393, #478). The carry-over runs exactly
+// once: v1 is read, remapped, written under v2, and removed. It cannot run twice,
+// which matters because the remap is not idempotent — `activity` becomes `act`
+// and `act` becomes `open`, so a second pass would turn the sparkline into the
+// detail button.
+const COLS_KEY = "vigie_columns_v2";
+const COLS_KEY_V1 = "vigie_columns";
 const MANDATORY_COLS = new Set(["name", "status"]);
 const COL_KEYS = COLS.map((c) => c.key);
 
 
 function loadLayout() {
   try {
-    const v = JSON.parse(adoptLegacyKey(localStorage, "cf_columns", COLS_KEY) || "null");
-    // Migrate the old visible-only array form to {order, hidden}.
-    if (Array.isArray(v)) return { order: v.slice(), hidden: COL_KEYS.filter((k) => !v.includes(k) && !MANDATORY_COLS.has(k)) };
-    if (v && Array.isArray(v.order)) return { order: migrateKeys(v.order), hidden: migrateKeys(Array.isArray(v.hidden) ? v.hidden : []) };
+    const v2 = localStorage.getItem(COLS_KEY);
+    if (v2 !== null) {
+      const v = JSON.parse(v2);
+      if (v && Array.isArray(v.order)) return { order: migrateKeys(v.order), hidden: migrateKeys(Array.isArray(v.hidden) ? v.hidden : []) };
+    }
+    // One-time carry-over: the pre-#550 key set, and before it the old brand's.
+    const raw = adoptLegacyKey(localStorage, "cf_columns", COLS_KEY_V1);
+    if (raw !== null) {
+      const v = JSON.parse(raw || "null");
+      let l = { order: [], hidden: [] };
+      if (Array.isArray(v)) l = { order: v.slice(), hidden: [] }; // the oldest, visible-only form
+      else if (v && Array.isArray(v.order)) l = { order: v.order, hidden: Array.isArray(v.hidden) ? v.hidden : [] };
+      l = { order: migrateV1Columns(l.order), hidden: migrateV1Columns(l.hidden) };
+      saveLayout(l);
+      localStorage.removeItem(COLS_KEY_V1);
+      return l;
+    }
   } catch (e) { /* fall through to default */ }
   return { order: [], hidden: [] };
 }

@@ -253,3 +253,16 @@ tr.grouphead .gm { font-weight: 400; font-variant-numeric: tabular-nums; }
 /* `hidden N`, the one survivor of the summary strip, in the bottom bar (#548). */
 .hiddenn { color: var(--faint); display: inline-flex; align-items: center; gap: 6px; font-variant-numeric: tabular-nums; }
 .hiddenn .lbl { text-transform: uppercase; letter-spacing: 0.8px; font-size: 10px; }
+
+/* CTX fill, the TUI's thresholds: green below 60, amber to 85, red past it
+   (#279). Not "% before auto-compact" — Claude Code's threshold is undocumented. */
+.ctx-warn { color: var(--waiting); }
+.ctx-hot { color: var(--error); }
+
+/* Permission mode, the #303 taxonomy. Vigilance rises manual → accept → plan →
+   auto → bypass; an unrecognised mode gets no class and stays neutral (#304). */
+.mode-manual { color: var(--muted); }
+.mode-accept { color: var(--accent2, var(--accent)); }
+.mode-plan { color: var(--accent); }
+.mode-auto { color: var(--waiting); }
+.mode-bypass { color: var(--error); }

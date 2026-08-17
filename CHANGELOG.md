@@ -11,6 +11,22 @@ file is the single source of truth, not a second narrative.
 
 ### Added
 
+- The web dashboard shows the four columns it was missing: the session's user, how
+  full its context is, its output tokens on their own, and its permission mode.
+  All four already travelled in the API; the browser simply never drew them, so
+  `plan` against `bypassPermissions` — which decides what a session may do without
+  asking — was legible in the terminal and invisible in the tab left open all day.
+  Context distinguishes *no reading* from *a reading of zero*, as the daemon does
+  and for the reason it does (#367): a dash and `0%` are different facts. An
+  unrecognised permission mode is surfaced raw rather than relabelled, so a mode
+  added tomorrow cannot read as the safe default (#304). Both rules are checked
+  against the Go originals through a shared fixture rather than trusted.
+  Four column keys are renamed to the TUI's — `project`, `tokens`, `activity` and
+  the detail button's `act` — and a saved layout is carried across the rename
+  once, under a new storage key, so no operator loses their order or has a hidden
+  column reappear. A Go test now compares the two column sets and names what is
+  missing, which is what makes the next divergence a CI failure instead of an
+  audit finding (#550).
 - The web dashboard can hide sessions it has not heard from in a while, on the
   TUI's rule and with the TUI's steps. Three details of that rule are load-bearing
   and are now shared rather than reinvented: the clock is `last_seen_at` and not

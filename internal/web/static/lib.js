@@ -87,6 +87,19 @@ export function adoptLegacyKey(storage, oldKey, newKey) {
 // it, a layout saved before a rename silently loses that column.
 export const LEGACY_COLS = { doing: "detail" };
 
+// V1_COLUMN_KEYS is the one-shot remap from the pre-#550 dashboard key set to the
+// TUI's. It is deliberately NOT merged into LEGACY_COLS, which is applied on
+// every layout read: this map is not idempotent — it renames `activity` to `act`
+// *and* `act` to `open`, so a second pass would turn the freshly-migrated
+// sparkline into the detail button. It runs exactly once, when a v1 layout is
+// carried over to the v2 storage key, and the v1 key is then removed.
+export const V1_COLUMN_KEYS = { doing: "detail", project: "dir", tokens: "total", activity: "act", act: "open" };
+
+export function migrateV1Columns(keys) {
+  const seen = new Set();
+  return (keys || []).map((k) => V1_COLUMN_KEYS[k] || k).filter((k) => !seen.has(k) && seen.add(k));
+}
+
 export function migrateKeys(keys) {
   const seen = new Set();
   return keys.map((k) => LEGACY_COLS[k] || k).filter((k) => !seen.has(k) && seen.add(k));
@@ -176,6 +189,59 @@ export function matchesFilter(s, filter) {
   if (!filter) return true;
   if (filter.toLowerCase() === "rc") return Boolean(s && s.remote_control);
   return fuzzyMatch(filter, sessionHaystack(s));
+}
+
+// modelVersion splits a short model name ("opus-4-8") into family and versions —
+// the twin of internal/tui/context.go. The strict numeric test matters: Go's
+// strconv.Atoi rejects "4x" and yields 0, where parseInt would happily return 4
+// and silently move a model into the wrong context window.
+export function modelVersion(short) {
+  const parts = String(short == null ? "" : short).split("-");
+  const num = (p) => (/^[+-]?\d+$/.test(p == null ? "" : p) ? Number(p) : 0);
+  return { family: parts[0] || "", major: num(parts[1]), minor: num(parts[2]) };
+}
+
+// contextWindow is how many tokens the model's context holds. Kept identical to
+// internal/tui/context.go; a shared fixture checks both against the same cases.
+export function contextWindow(model) {
+  const BIG = 1000000, BASE = 200000;
+  const { family, major, minor } = modelVersion(shortModel(model));
+  if (family === "fable") return BIG;
+  if (family === "opus" || family === "sonnet") return (major > 4 || (major === 4 && minor >= 6)) ? BIG : BASE;
+  return BASE;
+}
+
+// contextKnown separates "no reading at all" from "a reading that happens to be
+// zero". The daemon keeps them apart on purpose — `contextView` returns a nil
+// pointer for the first — and collapsing them here would rebuild the defect #367
+// fixed on the server.
+export function contextKnown(s) { return s != null && s.context_tokens != null; }
+
+export function contextPct(s) {
+  if (!contextKnown(s) || s.context_tokens <= 0) return 0;
+  return (s.context_tokens / contextWindow(s.model)) * 100;
+}
+
+// contextCell is the CTX column: a dash when unknown, a percentage otherwise —
+// including `0%` for a session known to have just been cleared.
+//
+// Go formats with %.0f, which rounds half to even, while Math.round rounds half
+// up. They part company only on an exact .5, which a token count over a window of
+// 200 000 or 1 000 000 does not produce in practice; the shared fixture stays off
+// that boundary rather than pretending it does not exist.
+export function contextCell(s) { return contextKnown(s) ? `${Math.round(contextPct(s))}%` : "-"; }
+
+// PERMISSION_MODES is the #303 taxonomy, raw value to label. An unrecognised
+// non-empty value is shown as it came rather than relabelled: a new mode must
+// never read as the safe default (#304).
+export const PERMISSION_MODES = {
+  "": "-", default: "manual", acceptEdits: "accept",
+  plan: "plan", auto: "auto", bypassPermissions: "bypass",
+};
+
+export function modeLabel(raw) {
+  const r = raw == null ? "" : String(raw);
+  return Object.prototype.hasOwnProperty.call(PERMISSION_MODES, r) ? PERMISSION_MODES[r] : r;
 }
 
 // IDLE_PRESETS_MS are the "hide idle after" steps the TUI offers, in its order
