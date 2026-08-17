@@ -37,5 +37,18 @@ func run() error {
 			fmt.Println("wrote", path)
 		}
 	}
+
+	for _, p := range animation.HeroThemes() {
+		svg, err := animation.RenderHero(p)
+		if err != nil {
+			return err
+		}
+		for _, path := range animation.HeroTargets(p) {
+			if err := os.WriteFile(path, []byte(svg), 0o644); err != nil { //nolint:gosec // a committed asset, world-readable on purpose
+				return fmt.Errorf("writing %s: %w", path, err)
+			}
+			fmt.Println("wrote", path)
+		}
+	}
 	return nil
 }

@@ -11,6 +11,11 @@ file is the single source of truth, not a second narrative.
 
 ### Changed
 
+- The hero images are drawn from a template and rendered to both their copies,
+  so they can be rebuilt and no longer drift apart — their two dark versions had
+  ended up in different palettes. No pixel changed except the site's dark copy,
+  which now matches the README's (#571).
+
 - The usage strip spends its spacing inside the gauges rather than between them:
   the bar no longer runs into its percentage, and the two gauges are two spaces
   apart instead of four. One column narrower overall (#568).
