@@ -484,3 +484,48 @@ test("hidden N moves to the bottom bar, and only shows when something is hidden"
   await h2.boot();
   assert.ok(!h2.lastBot().includes('class="hiddenn"'), "nothing is hidden, yet the bar says so");
 });
+
+// #550. The wiring: the four new columns must actually render, and a saved v1
+// layout must survive the rename rather than dropping columns.
+const FLEET_C = [{
+  id: "a", title: "api", user: "nico", machine: "m", project_dir: "/h/gateway",
+  status: "working", model: "claude-opus-4-5", permission_mode: "plan",
+  context_tokens: 100000, last_seen_at: "2026-08-17T11:59:00Z",
+  usage: { input_tokens: 10, output_tokens: 5000, cache_read_tokens: 85 },
+}];
+
+test("the four columns the dashboard was missing now render", async () => {
+  const h = harness({ sessions: FLEET_C });
+  await h.boot();
+  const html = h.lastTable();
+  assert.match(html, />nico</, "user");
+  assert.match(html, />50%</, "ctx — 100k of opus-4-5's 200k window");
+  assert.match(html, />5k</, "out, on its own rather than only inside the total");
+  assert.match(html, />plan</, "mode");
+});
+
+test("an unknown context reading is a dash, not a zero", async () => {
+  const h = harness({ sessions: [{ ...FLEET_C[0], context_tokens: null }] });
+  await h.boot();
+  assert.match(h.lastTable(), /class="num faint">-</, "no reading at all must not read as an empty window");
+});
+
+test("a layout saved before the rename survives it", async () => {
+  // The operator had hidden `branch` and moved `tokens` to the front, under the
+  // old key names. Both must still hold after the migration.
+  const v1 = JSON.stringify({ order: ["tokens", "name", "activity"], hidden: ["branch"] });
+  const store = new Map([["vigie_token", "t0k3n"], ["vigie_columns", v1]]);
+  const h = harness({ sessions: FLEET_C });
+  globalThis.localStorage = {
+    getItem: (k) => (store.has(k) ? store.get(k) : null),
+    setItem: (k, v) => store.set(k, v),
+    removeItem: (k) => store.delete(k),
+  };
+  await h.boot();
+
+  const saved = JSON.parse(store.get("vigie_columns_v2"));
+  assert.deepEqual(saved.order.slice(0, 3), ["total", "name", "act"], "the renamed keys kept their positions");
+  assert.deepEqual(saved.hidden, ["branch"], "and the hidden one stayed hidden");
+  assert.equal(store.has("vigie_columns"), false, "the old key is removed, so the remap cannot run twice");
+  assert.ok(!h.lastTable().includes("Branch"), "the hidden column is still hidden after the migration");
+});
