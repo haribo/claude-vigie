@@ -114,7 +114,12 @@ effect — a list that fits carries no indicator and loses no row to it.
 Extend the width-sweep harness ([scaling_test.go](../../internal/tui/scaling_test.go))
 with a **height sweep**: for a populated fleet, render across a range of terminal
 heights and assert (a) the output never exceeds `height` lines, (b) the selected
-row is always visible, (c) the pinned header and summary are always present, and
+row is always visible, (c) the pinned column header is always present, and
 (d) the position indicator appears exactly when the band overflows. A pure
 `window(lines, selected, budget, offset)` helper carries its own unit tests
 (top edge, bottom edge, scroll-off, resize re-clamp, list-shorter-than-budget).
+
+> **Amended by #556.** This asked for the "summary" to be present too. That
+> summary was deleted by #492, and the assertion written for it went on passing
+> against a STATUS cell — it would have passed with no header at all. What is
+> checked, and what this now asks for, is the pinned column header.

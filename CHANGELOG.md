@@ -67,6 +67,22 @@ file is the single source of truth, not a second narrative.
 
 ### Changed
 
+- Four guards now check what they claim. `depguard` enforces ADR-0003's barrier
+  over a list of packages kept by hand, and the list was eight short: `api`,
+  `apiclient`, `clock`, `compaction`, `config`, `status`, `transcript` and
+  `version` all ship in the `vigie` binary and sat outside it, so an import of
+  the store added to any of them would have compiled, linked and passed CI. The
+  list is no longer trusted — a test derives it from `go list -deps ./cmd/vigie`.
+  The route test that `deployment.md` cites by name as the evidence the API is
+  closed covered nine of eleven paths; it reads them out of the mux now, so it
+  cannot be short again. The command guard read only the `vigie` lines of a block
+  titled "Two binaries", which is how `vigied stats-repair` came to be documented
+  in the architecture map, printed by the CLI, and missing from the README. And a
+  viewport assertion labelled "summary counts missing" had been matching a STATUS
+  cell since #492 deleted the summary — it would have passed with no header at
+  all; it checks the pinned column header now, and the specification that still
+  asked for the summary is amended (#556).
+
 - The web dashboard no longer draws the summary strip the TUI deleted in #492 —
   the status counts, the output total, the `rc` count and the aggregate activity
   sparkline. The tempting defence, that a browser has room a 24-row terminal does
