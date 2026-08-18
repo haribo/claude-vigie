@@ -6,10 +6,26 @@ See also: [git-commits.md](git-commits.md) for commit conventions, [git-issues.m
 
 | Branch | Role |
 |--------|------|
-| `main` | Stable, tagged releases |
-| `develop` | Integration branch — the default branch, where features land |
+| `main` | Stable, tagged releases — **the default branch** |
+| `develop` | Integration branch, where features land |
 
 Both branches are permanent — never push directly, always via PR.
+
+**Why `main` is the default.** It is what a visitor lands on, and it is the only
+branch that describes something they can download: `main` matches the latest tag
+and the published binaries. A README on `develop` describes a build that exists
+nowhere. Both have a lag — a doc correction stays invisible on the landing page
+until the next release — and only one of them is consistent with what is online.
+
+The cost is real and is paid deliberately: **the safe base for a feature PR
+stopped being the automatic one.** `gh pr create` and the GitHub UI now offer
+`main` first. Two things answer that, and they are one decision with the default
+itself:
+
+- `.claude/commands/gh-pr-create.md` passes `--base develop` **explicitly**;
+- `.github/workflows/pr-base.yaml` refuses a PR that targets `main` from anything
+  but `develop`, and is a required check — so the mistake is blocked, not merely
+  reported.
 
 ## Issue-first workflow
 
@@ -104,8 +120,13 @@ gh release edit vX.Y.Z --notes-file <section>
 | Level | Mechanism |
 |-------|-----------|
 | Local | `.githooks/pre-commit` refuses any commit made directly on `main` or `develop` |
-| Server | GitHub ruleset: require a PR to merge, block force-push, block deletion |
+| Server | GitHub ruleset `protect main and develop`: require a PR, block force-push, block deletion, require status checks |
 | Process | This doc + `CLAUDE.md` + the `/git-commit` command |
+
+The ruleset covers **both** branches with one list of required checks, which is
+why `pr-base.yaml` also runs on PRs to `develop` and passes there immediately: a
+required check that never reported on a develop PR would leave every one of them
+waiting for a status that is not coming.
 
 The only unavoidable exception is the **repository's root commit**: a PR requires
 a base branch that already exists on the remote, so the very first commit of the

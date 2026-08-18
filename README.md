@@ -12,7 +12,7 @@
 
 <p align="center">
   <a href="https://github.com/haribo/claude-vigie/releases/latest"><img src="https://img.shields.io/github/v/release/haribo/claude-vigie?sort=semver&color=D9663F" alt="Latest release"></a>
-  <a href="https://github.com/haribo/claude-vigie/actions/workflows/ci.yaml"><img src="https://img.shields.io/github/actions/workflow/status/haribo/claude-vigie/ci.yaml?branch=develop&label=CI" alt="CI"></a>
+  <a href="https://github.com/haribo/claude-vigie/actions/workflows/ci.yaml"><img src="https://img.shields.io/github/actions/workflow/status/haribo/claude-vigie/ci.yaml?branch=main&label=CI" alt="CI"></a>
   <a href="LICENSE"><img src="https://img.shields.io/github/license/haribo/claude-vigie?color=blue" alt="License: MIT"></a>
 </p>
 
