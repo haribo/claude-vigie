@@ -23,6 +23,7 @@ import (
 	"github.com/haribo/claude-vigie/internal/config"
 	"github.com/haribo/claude-vigie/internal/localwatch"
 	"github.com/haribo/claude-vigie/internal/presence"
+	"github.com/haribo/claude-vigie/internal/reachability"
 	"github.com/haribo/claude-vigie/internal/transcript"
 )
 
@@ -199,14 +200,26 @@ func recordPresence(event, sessionID string) {
 // sets a context deadline.
 var httpClient = &http.Client{Timeout: 10 * time.Second}
 
+// postTimeout bounds the one request a hook makes. It is a var, not a const, so
+// a test can shrink it: the deadline is the cost this package exists to bound,
+// and a test asserting on it should not have to wait it out.
+var postTimeout = 3 * time.Second
+
 func post(cfg *config.Config, req api.ReportRequest) error {
+	// A hook must not wait on a daemon that has already been found unreachable:
+	// the deadline below is paid per event, and a black-holing daemon charges it
+	// on every tool call (docs/design/unreachable-daemon.md, #578).
+	if reachability.Unreachable(cfg.ServerURL, clock.Now()) {
+		return fmt.Errorf("not posting: %s was unreachable less than %s ago", cfg.ServerURL, reachability.StaleAfter)
+	}
+
 	body, err := json.Marshal(req)
 	if err != nil {
 		return fmt.Errorf("encoding report: %w", err)
 	}
 	url := strings.TrimRight(cfg.ServerURL, "/") + "/api/report"
 
-	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), postTimeout)
 	defer cancel()
 	httpReq, err := http.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewReader(body))
 	if err != nil {
@@ -217,9 +230,17 @@ func post(cfg *config.Config, req api.ReportRequest) error {
 
 	resp, err := httpClient.Do(httpReq)
 	if err != nil {
+		// Best-effort, like every other side effect here: failing to record the
+		// failure costs the next hook one deadline, and must not add an error of
+		// its own to a path that already has one.
+		_ = reachability.Mark(cfg.ServerURL, clock.Now(), err)
 		return fmt.Errorf("posting report: %w", err)
 	}
 	defer func() { _ = resp.Body.Close() }()
+	// It answered, so it is reachable — whatever it answered. A refusal is about
+	// the report's content (drift, validation), not about reaching the daemon,
+	// and must not keep the next report from being sent.
+	_ = reachability.Clear(cfg.ServerURL)
 	if resp.StatusCode >= http.StatusMultipleChoices {
 		return fmt.Errorf("server returned %s", resp.Status)
 	}
