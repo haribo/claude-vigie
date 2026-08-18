@@ -33,7 +33,10 @@ Every change starts with a GitHub issue, except trivial changes (typo, formattin
 
 - The issue describes the **what/why** — the PR describes the **how**
 - The branch name includes the issue number for traceability
-- The PR body references the issue with `Closes #N` to auto-close on merge
+- The PR body references the issue with `Closes #N`. It does **not** auto-close:
+  GitHub only does that when a PR merges into the default branch, and that is
+  `main` — a feature PR merges into `develop`. `/gh-merge-develop` closes the
+  issue itself, naming the merge commit. `Part of #N` deliberately closes nothing
 
 ```
 issue #12 → branch feat/12-web-dashboard → PR "Closes #12" → squash merge
