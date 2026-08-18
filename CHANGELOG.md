@@ -9,6 +9,13 @@ file is the single source of truth, not a second narrative.
 
 ## [Unreleased]
 
+### Added
+
+- `vigie init` warns when the server URL is plain HTTP and its address is public:
+  the token would travel in the clear on every request. It stays silent on a LAN
+  or a private overlay, where plain HTTP is a legitimate choice, and it warns
+  rather than refuses (#581).
+
 ### Changed
 
 - The hero images show the screen the TUI renders. They drew the summary strip,
