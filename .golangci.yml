@@ -111,6 +111,7 @@ linters:
             - "**/internal/install/**"
             - "**/internal/presence/**"
             - "**/internal/localwatch/**"
+            - "**/internal/reachability/**"
             # …and the packages those import: api, apiclient, clock, compaction,
             # config, status, transcript and version all ship in the same binary.
             # #515 widened this list from three to eight and still left these
