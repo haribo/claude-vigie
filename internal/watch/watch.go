@@ -23,6 +23,7 @@ import (
 	"github.com/haribo/claude-vigie/internal/config"
 	"github.com/haribo/claude-vigie/internal/localwatch"
 	"github.com/haribo/claude-vigie/internal/presence"
+	"github.com/haribo/claude-vigie/internal/reachability"
 	"github.com/haribo/claude-vigie/internal/transcript"
 	"github.com/haribo/claude-vigie/internal/usage"
 	"github.com/haribo/claude-vigie/internal/version"
@@ -745,9 +746,10 @@ func getJSON(cfg *config.Config, path string, out any) error {
 	req.Header.Set("Authorization", "Bearer "+cfg.Token)
 	resp, err := httpClient.Do(req)
 	if err != nil {
-		return err
+		return noteReachability(cfg, err)
 	}
 	defer func() { _ = resp.Body.Close() }()
+	_ = noteReachability(cfg, nil)
 	if resp.StatusCode != http.StatusOK {
 		return &httpError{status: resp.StatusCode, statusLine: resp.Status}
 	}
@@ -772,6 +774,30 @@ func reportDaemonDrift(cfg *config.Config) {
 
 // postJSON POSTs body to path on the server (with auth) and, if out is
 // non-nil, decodes the response into it.
+// noteReachability records what this request just learned about the daemon, for
+// the reporting hooks to read (docs/design/unreachable-daemon.md, #578). A
+// transport error means unreachable; any answer — including a refusal — means
+// reachable.
+//
+// It lives here rather than on the heartbeat because the heartbeat is not
+// reliably every 5 s: during an outage each session report waits out its own
+// deadline first, so a machine with a dozen live sessions can take longer than
+// the mark's window to come back round to beating. Every request refreshing it
+// makes the mark independent of how long a scan cycle happens to take.
+//
+// Best-effort: the mark is an optimisation for the hooks, and failing to write it
+// costs one deadline, never a report. The watcher never reads it — it is
+// long-lived, so waiting out a deadline delays nobody, and it must keep probing
+// or nothing would ever clear the mark.
+func noteReachability(cfg *config.Config, err error) error {
+	if err != nil {
+		_ = reachability.Mark(cfg.ServerURL, clock.Now(), err)
+		return err
+	}
+	_ = reachability.Clear(cfg.ServerURL)
+	return nil
+}
+
 func postJSON(cfg *config.Config, path string, body, out any) error {
 	b, err := json.Marshal(body)
 	if err != nil {
@@ -790,9 +816,10 @@ func postJSON(cfg *config.Config, path string, body, out any) error {
 
 	resp, err := httpClient.Do(req)
 	if err != nil {
-		return err
+		return noteReachability(cfg, err)
 	}
 	defer func() { _ = resp.Body.Close() }()
+	_ = noteReachability(cfg, nil)
 	if resp.StatusCode >= http.StatusMultipleChoices {
 		return &httpError{status: resp.StatusCode, statusLine: resp.Status, msg: serverErrorMessage(resp)}
 	}

@@ -24,6 +24,13 @@ file is the single source of truth, not a second narrative.
   the bar no longer runs into its percentage, and the two gauges are two spaces
   apart instead of four. One column narrower overall (#568).
 
+### Fixed
+
+- A session no longer waits on a daemon that has stopped answering. Every tool
+  call used to pay a three-second timeout for as long as the outage lasted —
+  minutes over a busy turn, with nothing said — and reporting resumes on its own
+  once the daemon answers again (#578).
+
 ## [0.6.0] - 2026-08-17
 
 ### Added
