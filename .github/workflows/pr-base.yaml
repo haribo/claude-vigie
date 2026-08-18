@@ -1,0 +1,51 @@
+name: PR base
+
+# `main` is the default branch, so `gh pr create` and the GitHub UI both offer it
+# first. That is the cost of making the released state the repository's public
+# face: the safe target stopped being the automatic one.
+#
+# Only `develop` may target `main`, and only as the release PR. A ruleset gates a
+# branch; it cannot express a relationship between two, so this does.
+#
+# It refuses, it does not repair. `.claude/commands/gh-pr-create.md` passes
+# `--base develop` explicitly, and that is what prevents the mistake — this is
+# what catches it when something else opens the PR.
+#
+# It runs on PRs to `develop` too, and passes immediately there. That is not
+# waste: the ruleset covers both branches with one list of required checks, so a
+# check that never reported on a develop PR would leave every one of them waiting
+# for a status that is not coming.
+
+on:
+  pull_request:
+    types: [opened, edited, reopened, synchronize]
+    branches: [main, develop]
+
+permissions:
+  contents: read
+
+jobs:
+  only-develop-targets-main:
+    name: Only develop may target main
+    runs-on: ubuntu-latest
+    steps:
+      - name: Verify the head branch
+        env:
+          BASE_REF: ${{ github.event.pull_request.base.ref }}
+          HEAD_REF: ${{ github.event.pull_request.head.ref }}
+          HEAD_REPO: ${{ github.event.pull_request.head.repo.full_name }}
+          BASE_REPO: ${{ github.repository }}
+        run: |
+          if [ "$BASE_REF" != "main" ]; then
+            echo "Targets $BASE_REF, not main — nothing to check."
+            exit 0
+          fi
+          if [ "$HEAD_REF" = "develop" ] && [ "$HEAD_REPO" = "$BASE_REPO" ]; then
+            echo "develop → main: this is the release PR."
+            exit 0
+          fi
+          echo "::error::\`$HEAD_REF\` targets main. Only develop may, and only as the release PR."
+          echo "::error::Retarget it: gh pr edit <N> --base develop"
+          echo "::error::Or open it correctly: gh pr create --base develop"
+          echo "::error::See docs/git-workflow.md § Protected branches."
+          exit 1
