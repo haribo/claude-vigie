@@ -145,3 +145,5 @@ chore/short-description
 
 Prefix matches commit type. Include issue number after the slash. Use kebab-case.
 May omit issue number for trivial `chore`/`style` changes without an issue.
+
+<!-- throwaway: proving the base guard refuses. This PR is closed, not merged. -->
