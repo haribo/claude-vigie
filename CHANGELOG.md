@@ -11,6 +11,10 @@ file is the single source of truth, not a second narrative.
 
 ### Changed
 
+- The hero images show the screen the TUI renders. They drew the summary strip,
+  five rules and eleven key hints — a terminal from before #492, #493 and #494 —
+  and a guard now compares their chrome against a live render (#571).
+
 - The hero images are drawn from a template and rendered to both their copies,
   so they can be rebuilt and no longer drift apart — their two dark versions had
   ended up in different palettes. No pixel changed except the site's dark copy,
