@@ -18,6 +18,11 @@ file is the single source of truth, not a second narrative.
 
 ### Changed
 
+- The HTTP code of a live API error moves out of the STATUS cell into DETAIL, in
+  the terminal and in the browser, and is spelled out: `● error` with
+  `529 Overloaded` beside it. `error` was the only status carrying a refinement
+  inside its own cell (#584).
+
 - The hero images show the screen the TUI renders. They drew the summary strip,
   five rules and eleven key hints — a terminal from before #492, #493 and #494 —
   and a guard now compares their chrome against a live render (#571).

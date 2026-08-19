@@ -119,6 +119,15 @@ func detailCell(s api.SessionView) string {
 		}
 		return "called you"
 	}
+	// An API error outranks the activity: once the API answers 529 the last tool
+	// that ran is of no interest, and the code is the only thing that separates
+	// an outage from throttling. It is computed here rather than written into
+	// Detail by the watcher — Detail is persisted and cleared on a status change,
+	// so putting the code there as text would be a second source of truth for
+	// what APIErrorStatus already holds (#584).
+	if s.Status == "error" && s.APIErrorStatus != 0 {
+		return apiErrorLabel(s.APIErrorStatus)
+	}
 	if s.Detail == "" {
 		return "-"
 	}
@@ -285,7 +294,7 @@ func renderDetail(s api.SessionView) string {
 		detailField("Model", orDash(s.Model)),
 		detailField("Effort", orDash(s.Effort)),
 		detailField("Context", contextGauge(s)),
-		detailField("Status", statusDetail(s)),
+		detailField("Status", s.Status),
 		detailField("Mode", modeDetail(s)),
 		detailField("Detail", orDash(s.Detail)),
 		detailField("Remote control", rcLabel(s.RemoteControl)),
@@ -471,25 +480,18 @@ func statusStyle(status string) lipgloss.Style {
 	}
 }
 
-// statusCell renders the ● status for the table, appending the HTTP code for a
-// live API error (e.g. "● error 529") so the list tells an outage from throttling.
+// statusCell renders the ● status for the table.
+//
+// The HTTP code of a live API error used to be appended here ("● error 529"),
+// which made `error` the only status carrying a refinement inside its own cell.
+// design/session-status.md § 2 sends a signal that annotates a state without
+// changing it to DETAIL — `shell`, `interrupted`, a permission prompt — and this
+// one now goes there too (#584).
 func statusCell(s api.SessionView) string {
-	if s.Status == "error" && s.APIErrorStatus != 0 {
-		return fmt.Sprintf("● error %d", s.APIErrorStatus)
-	}
 	if s.Status == "stale" { // dotted: no fresh signal, state unknown (#285)
 		return "◌ " + s.Status
 	}
 	return "● " + s.Status
-}
-
-// statusDetail renders the status for the detail panel, spelling out an API
-// error (e.g. "error — 529 Overloaded").
-func statusDetail(s api.SessionView) string {
-	if s.Status == "error" && s.APIErrorStatus != 0 {
-		return "error — " + apiErrorLabel(s.APIErrorStatus)
-	}
-	return s.Status
 }
 
 // apiErrorLabel names the common Claude API error codes.

@@ -21,7 +21,7 @@ Every session shows exactly one status. What each tells the operator:
 | `waiting`  | Claude has stopped and is **waiting on the human** (a prompt or permission). |
 | `stalled`  | A turn is **parked on a hung tool** — a `tool_use` never got its `tool_result` and the session has gone quiet. Distinct from idle: the turn is unfinished, not between turns. |
 | `idle`     | The session is open and alive but between turns — nobody is acting.     |
-| `error`    | The session hit a live Claude API error (500 / 529 / 429). Transient — clears when it recovers. |
+| `error`    | The session hit a live Claude API error (500 / 529 / 429). Transient — clears when it recovers. The HTTP code is a DETAIL refinement, not part of the status (§ 2, #584). |
 | `stale`    | No recent report **and the machine has no watcher**, so the true state is unknown. Shown (grey, dotted `◌`) instead of a false `ended`: *no news* ≠ *dead*. Resolves once a watcher runs there (#284/#285). |
 | `ended`    | The session is over (closed, or its process is gone).                   |
 
@@ -140,7 +140,28 @@ the state itself is unchanged:
   distinguishable from one that finished cleanly. It clears with no timer: the
   next real user prompt or assistant message replaces it (#351). The synthetic
   line carries its `content` as a block array, where a typed prompt is a plain
-  string, so a user typing that literal text does not false-positive.
+  string, so a user typing that literal text does not false-positive;
+- the **HTTP code of a live API error** keeps the status `error` and sets DETAIL
+  to the named code — `529 Overloaded`, or the bare number when it is not one the
+  client names. It used to be appended inside the status cell (`● error 529`),
+  which made `error` the only status carrying a refinement in its own cell; it
+  now follows the same rule as the two above (#584).
+
+**DETAIL has one occupant, so it has an order.** The watcher writes the current
+activity there, and two refinements can want the cell at once. The precedence is
+stated rather than left to whichever branch runs first:
+
+**a raised call > an API error > the activity.**
+
+A call is why the row is blinking ([ADR-0010](../adr/0010-session-raised-operator-call.md), #389)
+and outranks everything. An API error outranks the activity because once the API
+answers 529 the tool that ran last is of no interest, and the code is the only
+thing separating an outage from throttling.
+
+The label is computed when the cell is rendered, never written into DETAIL by the
+watcher: DETAIL is persisted and cleared on a status change, so storing the code
+there as text would be a second source of truth for what `api_error_status`
+already carries.
 
 ---
 

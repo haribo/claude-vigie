@@ -19,10 +19,27 @@ export const trim = (x) => x.toFixed(1).replace(/\.0$/, "");
 // optional, and a call with none is still a call.
 export function hasCall(s) { return Boolean(s && s.call_at); }
 
-// detailText is the Detail cell's content: a raised call takes it, because it is
-// the reason the row is pulsing and it outranks the tool that ran last.
+// apiErrorLabel names the common Claude API error codes. The TUI has the same
+// list (internal/tui/render.go) and the two must agree: they are one vocabulary
+// with two implementations, and architecture.md binds the dashboard to the TUI
+// on content. test/fixtures/api-error-labels.json is that agreement, read by
+// both test suites (#584).
+export function apiErrorLabel(code) {
+  switch (Number(code)) {
+    case 429: return "429 Rate limited";
+    case 500: return "500 Internal server error";
+    case 529: return "529 Overloaded";
+    default: return String(code);
+  }
+}
+
+// detailText is the Detail cell's content. A raised call takes it, because it is
+// the reason the row is pulsing and it outranks everything else. An API error
+// comes next: once the API answers 529 the tool that ran last is of no interest,
+// and the code is what separates an outage from throttling (#584).
 export function detailText(s) {
   if (hasCall(s)) return s.call_message ? esc(s.call_message) : "called you";
+  if (s && s.status === "error" && s.api_error_status) return esc(apiErrorLabel(s.api_error_status));
   return s.detail ? esc(s.detail) : "-";
 }
 
