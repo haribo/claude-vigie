@@ -31,7 +31,7 @@ type Store interface {
 	AddDailyStatusSeconds(ctx context.Context, day, model, status string, secs int64) error
 	ListDailyStats(ctx context.Context, sinceDay string) ([]store.DailyStat, error)
 	LastSampleAt(ctx context.Context, sessionID string) (string, error)
-	ListSamples(ctx context.Context, sessionID, since string, limit int) ([]int64, error)
+	RecentSamples(ctx context.Context, since string, limit int) (map[string][]int64, error)
 	AcquireLease(ctx context.Context, holder string, ttl time.Duration, now time.Time) (bool, string, error)
 	LeaseHolder(ctx context.Context, now time.Time) (string, bool, error)
 	GetMeta(ctx context.Context, key string) (string, bool, error)

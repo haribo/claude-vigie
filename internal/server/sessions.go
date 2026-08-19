@@ -28,6 +28,10 @@ const staleReportAfter = 60 * time.Second
 // (which stops producing samples) renders an empty graph instead of a frozen one.
 const activityWindow = 15 * time.Minute
 
+// sampleWindow is how many points one sparkline may draw. The cap is applied per
+// session by the query, so a busy session cannot crowd a quiet one out.
+const sampleWindow = 30
+
 func (s *Server) handleSessions(w http.ResponseWriter, r *http.Request) {
 	sessions, err := s.store.ListSessions(r.Context())
 	if err != nil {
@@ -39,13 +43,19 @@ func (s *Server) handleSessions(w http.ResponseWriter, r *http.Request) {
 	now := s.now()
 	since := now.Add(-activityWindow).UTC().Format(time.RFC3339)
 	watched := watchedMachines(r.Context(), s.store, sessions, now)
+	// One read for the whole board, not one per session: this route is what the
+	// TUI, the browser and the GNOME indicator all fetch on every change, so a
+	// query per row multiplied by every client on every change (#580). A failure
+	// costs the sparklines and nothing else, so it is logged and the board is
+	// still served.
+	samples, err := s.store.RecentSamples(r.Context(), since, sampleWindow)
+	if err != nil {
+		s.log.Error("listing recent samples", "error", err)
+		samples = nil
+	}
 	views := make([]api.SessionView, 0, len(sessions))
 	for _, ss := range sessions {
-		samples, err := s.store.ListSamples(r.Context(), ss.ID, since, 30)
-		if err != nil {
-			s.log.Error("listing samples", "error", err)
-		}
-		views = append(views, toView(ss, samples, now, watched[ss.Machine]))
+		views = append(views, toView(ss, samples[ss.ID], now, watched[ss.Machine]))
 	}
 	s.writeJSON(w, http.StatusOK, views)
 }
