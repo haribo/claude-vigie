@@ -1,0 +1,10 @@
+{
+  "why": "The TUI and the web dashboard both name an API error in the DETAIL cell (#584). They are two implementations of one vocabulary, and architecture.md binds them to agree on content: 'A divergence in content is debt, not design.' This fixture is that agreement, read by both sides.",
+  "cases": [
+    { "code": 429, "label": "429 Rate limited" },
+    { "code": 500, "label": "500 Internal server error" },
+    { "code": 529, "label": "529 Overloaded" },
+    { "code": 503, "label": "503" },
+    { "code": 42, "label": "42" }
+  ]
+}

@@ -162,7 +162,7 @@ const COLS = [
   { key: "rc", label: "RC", cmp: (a, b) => (a.remote_control === b.remote_control ? 0 : a.remote_control ? -1 : 1),
     cell: (s) => `<td>${s.remote_control ? '<span class="rc-on" title="Remote control on">◉</span>' : '<span class="rc-off" title="Remote control off">○</span>'}</td>` },
   { key: "status", label: "Status", cmp: (a, b) => rank(a.status) - rank(b.status),
-    cell: (s) => { const st = STATUSES.includes(s.status) ? s.status : "idle"; const code = (s.status === "error" && s.api_error_status) ? ` <span class="code">${s.api_error_status}</span>` : ""; return `<td><span class="pill st-${st}${hasCall(s) ? " call" : ""}"><span class="dot"></span>${st}${code}</span></td>`; } },
+    cell: (s) => { const st = STATUSES.includes(s.status) ? s.status : "idle"; return `<td><span class="pill st-${st}${hasCall(s) ? " call" : ""}"><span class="dot"></span>${st}</span></td>`; } },
   // An unrecognised mode is surfaced raw, never relabelled "manual": a new mode
   // must not read as the safe default (#304).
   { key: "mode", label: "Mode", cmp: (a, b) => modeLabel(a.permission_mode).localeCompare(modeLabel(b.permission_mode)),
@@ -450,7 +450,6 @@ function openDetail(id) {
   detailId = id;
   const st = STATUSES.includes(s.status) ? s.status : "idle";
   const u = s.usage || {};
-  const code = (s.status === "error" && s.api_error_status) ? ` <span class="code">${s.api_error_status}</span>` : "";
   const waiting = s.status === "waiting";
   const ctx = [
     field("Session id", esc(s.id), "mut"), field("User", esc(dash(s.user)), "mut"), field("Machine", esc(s.machine)),
@@ -473,7 +472,7 @@ function openDetail(id) {
         <div class="fact"><span class="k">Seen</span><span class="v">${relAge(s.last_seen_at)}</span></div>
         <div class="fact"><span class="k">Remote ctl</span><span class="v">${s.remote_control ? "on" : "off"}</span></div>
       </div></div>
-      <div class="h-right"><span class="pill st-${st}${hasCall(s) ? " call" : ""}"><span class="dot"></span>${st}${code}</span></div></div>
+      <div class="h-right"><span class="pill st-${st}${hasCall(s) ? " call" : ""}"><span class="dot"></span>${st}</span></div></div>
     <div class="d-grid">
       <div class="card"><h3>Context</h3>${ctx}<h3>Timeline</h3>${times}</div>
       <div class="card"><h3>Tokens</h3>

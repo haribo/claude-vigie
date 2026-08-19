@@ -8,7 +8,7 @@ import { test } from "node:test";
 import { readFile } from "node:fs/promises";
 
 import {
-  esc, dash, trim, hasCall, detailText, humanTokens, relAge, relResetHint,
+  esc, dash, trim, hasCall, detailText, apiErrorLabel, humanTokens, relAge, relResetHint,
   shortModel, projectName, totalTokens, sparkSVG, migrateKeys, fullColOrder, colHidden, rank,
   adoptLegacyKey, ATTENTION, needsAttention, attentionCount, streamIsSilent, SILENCE_MS,
   fuzzyMatch, sessionHaystack, sessionName, shortId, matchesFilter,
@@ -493,4 +493,26 @@ test("the v1 remap is deliberately not idempotent, which is why it runs once", (
 
 test("the remap collapses a duplicate rather than listing a column twice", () => {
   assert.deepEqual(migrateV1Columns(["tokens", "total"]), ["total"]);
+});
+
+// The TUI names an API error too (internal/tui/render.go). architecture.md binds
+// this dashboard to it on content, and two hand-kept lists of one vocabulary is
+// how that debt is taken on. Both sides read this fixture (#584).
+test("the API error labels match the shared fixture", async () => {
+  const { cases } = JSON.parse(await readFile(new URL("../fixtures/api-error-labels.json", import.meta.url), "utf8"));
+  assert.ok(cases.length > 0, "the shared fixture has no cases — the extraction is broken, not the code");
+  for (const c of cases) {
+    assert.equal(apiErrorLabel(c.code), c.label, `apiErrorLabel(${c.code})`);
+  }
+});
+
+// The code left the status pill for DETAIL, and DETAIL was already taken by the
+// watcher's activity — so the cell needs a stated order (#584).
+test("detailText puts a call first, then an API error, then the activity", () => {
+  const err = { status: "error", api_error_status: 529, detail: "Bash" };
+  assert.equal(detailText({ ...err, call_at: "2026-08-19T10:00:00Z", call_message: "done" }), "done");
+  assert.equal(detailText(err), "529 Overloaded");
+  assert.equal(detailText({ status: "error", api_error_status: 503, detail: "Bash" }), "503");
+  assert.equal(detailText({ status: "error", detail: "Bash" }), "Bash");
+  assert.equal(detailText({ status: "working", api_error_status: 529, detail: "Bash" }), "Bash");
 });
