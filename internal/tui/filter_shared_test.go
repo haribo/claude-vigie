@@ -62,7 +62,7 @@ func TestFuzzyMatchAgreesWithTheSharedFixture(t *testing.T) {
 // the next. The dashboard asserts the same example against its own twin.
 func TestSessionHaystackShape(t *testing.T) {
 	s := stubSessionForHaystack()
-	const want = "api-gateway minet-dev gateway main working"
+	const want = "api-gateway orion-dev gateway main working"
 	if got := sessionHaystack(s); got != want {
 		t.Errorf("sessionHaystack = %q, want %q", got, want)
 	}
@@ -85,7 +85,7 @@ func TestAnUntitledSessionIsSearchableByItsShortId(t *testing.T) {
 
 func stubSessionForHaystack() api.SessionView {
 	return api.SessionView{
-		Title: "api-gateway", Machine: "minet-dev",
-		ProjectDir: "/home/nico/gateway", GitBranch: "main", Status: "working",
+		Title: "api-gateway", Machine: "orion-dev",
+		ProjectDir: "/home/ada/gateway", GitBranch: "main", Status: "working",
 	}
 }

@@ -60,7 +60,7 @@ func TestRenderStats(t *testing.T) {
 				{Day: "2026-07-29", Model: "opus", OutputTokens: 1200, WaitingSeconds: 312, WorkingSeconds: 1660},
 			},
 			TopSessions: []api.TopSession{
-				{Name: "claude-fleet", Machine: "minet", Model: "opus", Status: "waiting", OutputTokens: 1200},
+				{Name: "claude-fleet", Machine: "orion", Model: "opus", Status: "waiting", OutputTokens: 1200},
 			},
 		},
 	}

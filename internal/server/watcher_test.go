@@ -17,7 +17,7 @@ func TestWatcherVersionRoundTrip(t *testing.T) {
 	srv := newTestServer(t)
 
 	report, _ := json.Marshal(api.ReportRequest{
-		Event: "watch", SessionID: "s1", Machine: "minet", Status: "working",
+		Event: "watch", SessionID: "s1", Machine: "orion", Status: "working",
 		WatcherVersion: "0.3.0", WatcherCommit: "abc1234",
 		Timestamp: "2026-08-07T10:00:00Z",
 	})
@@ -33,9 +33,9 @@ func TestWatcherVersionRoundTrip(t *testing.T) {
 	if err := json.Unmarshal(rec.Body.Bytes(), &ws); err != nil {
 		t.Fatal(err)
 	}
-	got, ok := ws.Versions["minet"]
+	got, ok := ws.Versions["orion"]
 	if !ok {
-		t.Fatalf("no watcher version for minet: %+v", ws.Versions)
+		t.Fatalf("no watcher version for orion: %+v", ws.Versions)
 	}
 	if got.Version != "0.3.0" || got.Commit != "abc1234" {
 		t.Errorf("watcher version = %+v, want 0.3.0/abc1234", got)

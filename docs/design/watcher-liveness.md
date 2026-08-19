@@ -29,7 +29,7 @@ scan is empty) is not a fix.
 `POST /api/watcher/heartbeat`, carrying the machine and the watcher's build:
 
 ```json
-{"machine": "minet", "watcher_version": "0.5.0", "watcher_commit": "a1b2c3d"}
+{"machine": "orion", "watcher_version": "0.5.0", "watcher_commit": "a1b2c3d"}
 ```
 
 Rejected alternatives:

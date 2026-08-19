@@ -98,13 +98,13 @@ func TestCursorAndDetail(t *testing.T) {
 
 func TestRenderDetailContainsFields(t *testing.T) {
 	out := renderDetail(api.SessionView{
-		ID: "5c483c16-x", Title: "claude-fleet", Machine: "minet",
-		ProjectDir: "/home/haribo/dev/claude-fleet", GitBranch: "develop",
+		ID: "5c483c16-x", Title: "claude-fleet", Machine: "orion",
+		ProjectDir: "/home/ada/dev/claude-fleet", GitBranch: "develop",
 		Model: "claude-opus-4-8", Status: "working", LastTool: "Bash",
 		Usage:     api.Usage{InputTokens: 100, OutputTokens: 200},
 		StartedAt: "2026-07-26T10:00:00Z", LastSeenAt: "2026-07-26T10:05:00Z",
 	})
-	for _, want := range []string{"claude-fleet", "5c483c16-x", "minet", "/home/haribo/dev/claude-fleet", "develop", "Bash", "Started", "Output"} {
+	for _, want := range []string{"claude-fleet", "5c483c16-x", "orion", "/home/ada/dev/claude-fleet", "develop", "Bash", "Started", "Output"} {
 		if !strings.Contains(out, want) {
 			t.Errorf("detail missing %q:\n%s", want, out)
 		}
