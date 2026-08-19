@@ -23,7 +23,7 @@ func sampleModel(t tab) model {
 	var sessions []api.SessionView
 	add := func(title, dir, status string, out int64, rc bool) {
 		sessions = append(sessions, api.SessionView{
-			Title: title, Machine: "minet-dev", User: "nico", ProjectDir: "/home/nico/" + dir,
+			Title: title, Machine: "orion-dev", User: "ada", ProjectDir: "/home/ada/" + dir,
 			Status: status, RemoteControl: rc, Detail: "editing " + dir,
 			LastSeenAt: "2026-08-04T15:00:00Z", Usage: api.Usage{OutputTokens: out},
 		})
@@ -76,7 +76,7 @@ func TestSessionsTabNeverOverflowsWidth(t *testing.T) {
 // extend the scaling guard to the remaining tabs (#329).
 func TestMachinesTabNeverOverflowsWidth(t *testing.T) {
 	m := sampleModel(tabMachines)
-	m.watcherMachines = map[string]string{"minet": "2026-07-26T10:00:00Z"}
+	m.watcherMachines = map[string]string{"orion": "2026-07-26T10:00:00Z"}
 	assertNoOverflow(t, m)
 }
 

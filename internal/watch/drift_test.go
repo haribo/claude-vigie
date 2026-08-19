@@ -112,9 +112,9 @@ func TestBeatDeclaresMachineAndBuild(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	beat(&config.Config{ServerURL: srv.URL, Token: "t", Machine: "minet"}, false, false)
-	if got.Machine != "minet" {
-		t.Errorf("machine = %q, want minet", got.Machine)
+	beat(&config.Config{ServerURL: srv.URL, Token: "t", Machine: "orion"}, false, false)
+	if got.Machine != "orion" {
+		t.Errorf("machine = %q, want orion", got.Machine)
 	}
 	if got.WatcherVersion != version.Version || got.WatcherCommit != version.Commit {
 		t.Errorf("build = %s/%s, want %s/%s", got.WatcherVersion, got.WatcherCommit, version.Version, version.Commit)

@@ -129,3 +129,75 @@ func TestTheReadmeOffersBothThemes(t *testing.T) {
 		}
 	}
 }
+
+// #589. `animationAssets` above covers the four `session-call` files and nothing
+// else. The **hero** — the first thing a reader sees in the README and on the
+// site — carries far more names than they do, and was guarded by nothing.
+//
+// It is safe today, verified: its six rows are literals in
+// `internal/tui/hero_asset_test.go`, and nothing reads a live machine. But that
+// is exactly what the comment on TestTheAnimationCarriesNoRealProjectNames says
+// must not be taken on trust — the first version of *that* asset leaked three
+// real project names.
+var heroAssets = []string{
+	"../../docs/assets/hero.svg",
+	"../../docs/assets/hero-dark.svg",
+	"../../site/assets/hero.svg",
+	"../../site/assets/hero-dark.svg",
+}
+
+func publishedAssets() []string { return append(append([]string{}, animationAssets...), heroAssets...) }
+
+// TestNoPublishedAssetShowsAHomeDirectory: an asset rebuilt from a live board
+// carries whatever that machine is called and wherever its work lives. A home
+// path is the signature of that, and the one leak that cannot be mistaken for a
+// placeholder.
+//
+// This is what covers the hero. The `~/` allowlist above does not: the hero
+// prints bare directory names in its DIR column, so that pattern matches nothing
+// there — adding the hero to its list would have passed while checking nothing.
+func TestNoPublishedAssetShowsAHomeDirectory(t *testing.T) {
+	home := regexp.MustCompile(`(?:/home/|/Users/)[a-zA-Z0-9._-]+`)
+	for _, p := range publishedAssets() {
+		if m := home.FindString(readAsset(t, p)); m != "" {
+			t.Errorf("%s shows %q — rebuilt from a live machine rather than from the fixtures",
+				filepath.Base(p), m)
+		}
+	}
+}
+
+// heroFixtureNames are the machine and project names the hero's generator
+// declares, read out of the generator rather than listed here: a hand-kept copy
+// of what to check is not a check (#556).
+func heroFixtureNames(t *testing.T) []string {
+	t.Helper()
+	// add("<title>", "<machine>", "<project>", …)
+	row := regexp.MustCompile(`add\("[^"]*", "([^"]+)", "([^"]+)"`)
+	body := read(t, "../../internal/tui/hero_asset_test.go")
+	rows := row.FindAllStringSubmatch(body, -1)
+	names := make([]string, 0, 2*len(rows))
+	for _, m := range rows {
+		names = append(names, m[1], m[2])
+	}
+	if len(names) == 0 {
+		t.Fatal("no add(…) row found in the hero generator — the extraction is broken, not the asset")
+	}
+	return names
+}
+
+// TestTheHeroShowsTheNamesItsGeneratorDeclares pins the asset to its fixtures
+// from the other side: rather than enumerating names that must not appear —
+// which would mean committing the real ones to say so — it requires the
+// placeholder ones to still be there. An asset redrawn from someone's live
+// board loses them, and says so here.
+func TestTheHeroShowsTheNamesItsGeneratorDeclares(t *testing.T) {
+	names := heroFixtureNames(t)
+	for _, p := range heroAssets {
+		body := readAsset(t, p)
+		for _, n := range names {
+			if !strings.Contains(body, n) {
+				t.Errorf("%s does not show %q, which its generator declares", filepath.Base(p), n)
+			}
+		}
+	}
+}
