@@ -70,3 +70,44 @@ func (s *Store) ListSamples(ctx context.Context, sessionID, since string, limit 
 	}
 	return out, nil
 }
+
+// RecentSamples returns the newest samples of every session that has any newer
+// than since, keyed by session id and oldest-first — the same order and the same
+// per-session cap as ListSamples, in one query instead of one per session (#580).
+//
+// The window function does the capping, so the cap is per session and not per
+// result set: a busy session cannot crowd a quiet one out of the answer. That is
+// the whole reason this is not a plain `WHERE session_id IN (…)`.
+//
+// It takes no session list on purpose. Its caller wants every session it is
+// about to render, so filtering to a set would only add a placeholder list long
+// enough to meet SQLite's bound on them; `since` is what keeps the answer small.
+func (s *Store) RecentSamples(ctx context.Context, since string, limit int) (map[string][]int64, error) {
+	rows, err := s.db.QueryContext(ctx, `
+		SELECT session_id, output_tokens FROM (
+			SELECT session_id, output_tokens, at,
+			       ROW_NUMBER() OVER (PARTITION BY session_id ORDER BY at DESC) AS rn
+			FROM token_samples
+			WHERE at > ?
+		)
+		WHERE rn <= ?
+		ORDER BY session_id, at`, since, limit)
+	if err != nil {
+		return nil, fmt.Errorf("listing recent samples: %w", err)
+	}
+	defer func() { _ = rows.Close() }()
+
+	out := map[string][]int64{}
+	for rows.Next() {
+		var id string
+		var v int64
+		if err := rows.Scan(&id, &v); err != nil {
+			return nil, fmt.Errorf("scanning sample: %w", err)
+		}
+		out[id] = append(out[id], v)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterating recent samples: %w", err)
+	}
+	return out, nil
+}
