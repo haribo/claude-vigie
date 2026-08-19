@@ -201,6 +201,12 @@ against the OS trust store — no client-side TLS code, no flags.
   the config. It takes **no flags**: the token is read without echo, so it never
   reaches the shell history or `ps`. It needs a terminal, and says so rather than
   blocking when it has none.
+- It **warns** when the URL is plain HTTP and the server's address is public —
+  the case this page's warning above is about, said where the address is actually
+  chosen. It stays silent on loopback, a private LAN, and the overlay ranges
+  recommended below, where plain HTTP is a legitimate choice; and it warns rather
+  than refuses, because which networks are trusted is the operator's to know
+  (#581).
 
 ## Recommended for dynamic client IPs
 

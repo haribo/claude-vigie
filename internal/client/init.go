@@ -55,6 +55,14 @@ this config only at startup:
 
 It installs the reporting hooks and the call skill, and keeps them current.
 `, cfgPath, cfg.ServerURL, cfg.Machine)
+
+	// Last, deliberately: it is what the operator should be left looking at, and
+	// a warning printed above a success block is a warning nobody reads. The
+	// config is already written, so a name that resolves slowly here costs
+	// nothing that matters — and it is a warning, not a refusal (#581).
+	if w := cleartextWarning(cfg.ServerURL); w != "" {
+		fmt.Fprintf(os.Stderr, "\n%s\n", w)
+	}
 	return 0
 }
 
