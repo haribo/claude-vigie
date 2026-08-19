@@ -16,7 +16,8 @@ var lookupHost = func(host string) ([]net.IP, error) { return net.LookupIP(host)
 var _, cgnat, _ = net.ParseCIDR("100.64.0.0/10")
 
 // cleartextWarning returns what to tell the operator when the token would cross
-// an untrusted network in the clear, and "" when it would not (#581).
+// an untrusted network in the clear, and "" when it would not
+// (docs/design/cleartext-token-warning.md, #581).
 //
 // The token rides the Authorization header on every request, and PostToolUse is
 // installed by default, so it is several per turn. deployment.md: "The shared

@@ -203,10 +203,10 @@ against the OS trust store — no client-side TLS code, no flags.
   blocking when it has none.
 - It **warns** when the URL is plain HTTP and the server's address is public —
   the case this page's warning above is about, said where the address is actually
-  chosen. It stays silent on loopback, a private LAN, and the overlay ranges
-  recommended below, where plain HTTP is a legitimate choice; and it warns rather
-  than refuses, because which networks are trusted is the operator's to know
-  (#581).
+  chosen. It stays silent on a trusted LAN and on the overlay ranges recommended
+  below, and it warns rather than refuses. Where that boundary sits, and the
+  narrower rule it replaced, are specified in
+  [design/cleartext-token-warning.md](design/cleartext-token-warning.md) (#581).
 
 ## Recommended for dynamic client IPs
 
