@@ -111,11 +111,29 @@ directly:
 |------|--------------|
 | `time.Now()` | an injected `func() time.Time` (default `clock.Now`) |
 | `os.Getenv()` | `internal/config` (the env-reading layer) |
-| `http.DefaultClient` | a client with a timeout (`http.DefaultClient` has none) |
+| `http.DefaultClient` | a client with a timeout (`http.DefaultClient` has none) — a package-level one, **not** injected; see below |
 
 Enforced by `forbidigo` in `.golangci.yml`. The seams are excepted: `internal/clock`
 defines the wall clock, `internal/config` and `internal/daemon` (the composition
 root) read env, and tests use the real ones.
+
+**The HTTP client is the exception to "inject", deliberately.** The rule above
+asks for injection and the first two rows get it; the third does not, and saying
+so is the point of this paragraph — an intro promising more than its own table
+delivers is how a rule stops being read.
+
+The client is stateless, one configuration serves the whole binary, and the
+packages that hold it (`apiclient`, `client`, `report`, `tui`, `watch`) expose
+free functions rather than structs — `post(cfg, req)`, `getJSON(cfg, path, out)`.
+Injecting would mean a constructor per package or a parameter on every signature
+and every call site, for a dependency nobody varies in production. `var
+httpClient` is a package-level **var**, so a test substitutes it, which is what
+the seam is for.
+
+What that costs, stated rather than hidden: a test that swaps the client mutates
+process state, so it cannot run in parallel with another test in the same
+package. Injection would fix that. It has not been worth the refactor; if it ever
+is, this paragraph is what has to change with it.
 
 ## Error handling
 
