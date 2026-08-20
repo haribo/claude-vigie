@@ -4,13 +4,9 @@
 package watch
 
 import (
-	"bytes"
 	"context"
-	"encoding/json"
-	"errors"
 	"fmt"
 	"io"
-	"net/http"
 	"os"
 	"os/user"
 	"path/filepath"
@@ -690,118 +686,6 @@ func statusFor(sessionID, lastStopReason string, age time.Duration) string {
 // within toolWindow (a long-running tool that has not written yet).
 func activelyWorking(lastStopReason string, age time.Duration) bool {
 	return age < activeWindow || (lastStopReason == "tool_use" && age < toolWindow)
-}
-
-// httpClient carries a timeout (http.DefaultClient has none); each request also
-// sets a context deadline.
-var httpClient = &http.Client{Timeout: 10 * time.Second}
-
-func post(cfg *config.Config, req api.ReportRequest) error {
-	return postJSON(cfg, "/api/report", req, nil)
-}
-
-// httpError carries a non-2xx response so callers can act on the status, not just
-// log it: the daemon answers 409 to a watch report whose build does not match its
-// own (#384).
-type httpError struct {
-	status     int
-	statusLine string
-	msg        string
-}
-
-func (e *httpError) Error() string {
-	if e.msg != "" {
-		return fmt.Sprintf("server returned %s: %s", e.statusLine, e.msg)
-	}
-	return fmt.Sprintf("server returned %s", e.statusLine)
-}
-
-// isDrift reports whether err is the daemon refusing this watcher's build (#384).
-func isDrift(err error) bool {
-	var he *httpError
-	return errors.As(err, &he) && he.status == http.StatusConflict
-}
-
-// serverErrorMessage extracts the daemon's {"error": "..."} message, or "" when
-// the body carries none.
-func serverErrorMessage(resp *http.Response) string {
-	var body struct {
-		Error string `json:"error"`
-	}
-	if err := json.NewDecoder(resp.Body).Decode(&body); err != nil {
-		return ""
-	}
-	return body.Error
-}
-
-// getJSON GETs path from the server (with auth) and decodes it into out.
-func getJSON(cfg *config.Config, path string, out any) error {
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, strings.TrimRight(cfg.ServerURL, "/")+path, nil)
-	if err != nil {
-		return err
-	}
-	req.Header.Set("Authorization", "Bearer "+cfg.Token)
-	resp, err := httpClient.Do(req)
-	if err != nil {
-		return err
-	}
-	defer func() { _ = resp.Body.Close() }()
-	if resp.StatusCode != http.StatusOK {
-		return &httpError{status: resp.StatusCode, statusLine: resp.Status}
-	}
-	return json.NewDecoder(resp.Body).Decode(out)
-}
-
-// reportDaemonDrift probes the daemon's build once at startup so a mismatch is
-// named immediately, with its remediation, instead of only surfacing later as
-// refused reports. Unknown is not drifted: an unreachable or erroring server
-// leaves the watcher running and lets the daemon arbitrate per report (#384).
-func reportDaemonDrift(cfg *config.Config) {
-	var v api.VersionInfo
-	if err := getJSON(cfg, "/api/version", &v); err != nil {
-		return
-	}
-	if version.Match(version.Version, version.Commit, v.Version, v.Commit) {
-		return
-	}
-	fmt.Fprintf(os.Stderr, "watch: this watcher is %s but the daemon is %s — session reports will be refused until this machine is upgraded\n",
-		version.Describe(version.Version, version.Commit), version.Describe(v.Version, v.Commit))
-}
-
-// postJSON POSTs body to path on the server (with auth) and, if out is
-// non-nil, decodes the response into it.
-func postJSON(cfg *config.Config, path string, body, out any) error {
-	b, err := json.Marshal(body)
-	if err != nil {
-		return fmt.Errorf("encoding request: %w", err)
-	}
-	url := strings.TrimRight(cfg.ServerURL, "/") + path
-
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewReader(b))
-	if err != nil {
-		return fmt.Errorf("building request: %w", err)
-	}
-	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("Authorization", "Bearer "+cfg.Token)
-
-	resp, err := httpClient.Do(req)
-	if err != nil {
-		return err
-	}
-	defer func() { _ = resp.Body.Close() }()
-	if resp.StatusCode >= http.StatusMultipleChoices {
-		return &httpError{status: resp.StatusCode, statusLine: resp.Status, msg: serverErrorMessage(resp)}
-	}
-	if out != nil {
-		if err := json.NewDecoder(resp.Body).Decode(out); err != nil {
-			return fmt.Errorf("decoding response: %w", err)
-		}
-	}
-	return nil
 }
 
 // runUsageLoop periodically tries to hold the usage lease and, when it does,

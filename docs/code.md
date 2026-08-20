@@ -81,6 +81,7 @@ the client never imports the server/store packages, so it never links them.
 | `internal/presence` | client | Session→process mapping, read back through `/proc` |
 | `internal/compaction` | client | Compaction markers dropped by the `PreCompact` hook |
 | `internal/localwatch` | client | The local mark saying a watcher is running here |
+| `internal/reachability` | client | The local mark saying the daemon did not answer, so a hook stops waiting on it |
 | `internal/usage` | client | Subscription usage fetch, held under a fleet-wide lease |
 | `internal/animation` | — | Renders the README asset; not built into either binary |
 | `internal/clock` | both | Time source, so tests do not wait |

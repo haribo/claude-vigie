@@ -60,11 +60,11 @@ func TestDashboardSharesTheGroupModes(t *testing.T) {
 // checked the same project out under different roots must land in one group.
 func TestGroupKeyUsesTheProjectName(t *testing.T) {
 	s := stubSessionForHaystack()
-	s.ProjectDir = "/home/nico/dev/api-gateway"
+	s.ProjectDir = "/home/ada/dev/api-gateway"
 	if got := groupKey(s, groupProject); got != "api-gateway" {
 		t.Errorf("project group key = %q, want the last segment", got)
 	}
-	if got := groupKey(s, groupMachine); got != "minet-dev" {
+	if got := groupKey(s, groupMachine); got != "orion-dev" {
 		t.Errorf("machine group key = %q", got)
 	}
 }

@@ -1,0 +1,25 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 943 328" font-family="ui-monospace, 'SFMono-Regular', 'JetBrains Mono', Menlo, Consolas, monospace" font-size="14" role="img" aria-label="vigie TUI — Sessions">
+  <rect x="0.5" y="0.5" width="942" height="327" rx="11" fill="{{.Background}}" stroke="{{.Frame}}"/>
+  <path d="M0 12 a11 11 0 0 1 11 -11 h921 a11 11 0 0 1 11 11 v26 h-943 z" fill="{{.Panel}}"/>
+  <line x1="0" y1="38" x2="943" y2="38" stroke="{{.Frame}}"/>
+  <circle cx="20" cy="19" r="5.5" fill="#ff5f57"/>
+  <circle cx="38" cy="19" r="5.5" fill="#febc2e"/>
+  <circle cx="56" cy="19" r="5.5" fill="#28c840"/>
+  <text x="471.5" y="24" fill="{{.Dim}}" text-anchor="middle" font-size="12">vigie tui — fleet</text>
+  <rect x="18.0" y="140" width="907.2" height="22" rx="4" fill="{{.Selection}}"/>
+  <rect x="18.0" y="142" width="3.0" height="18" rx="0" fill="{{.Accent}}"/>
+  <rect x="883.2" y="55" width="25.2" height="16" rx="3" fill="{{.Border}}"/>
+  <rect x="858.0" y="297" width="25.2" height="16" rx="3" fill="{{.Border}}"/>
+  <text xml:space="preserve" x="18.0" y="67.0"><tspan fill="{{.Accent}}" class="b">Sessions</tspan><tspan fill="{{.Dim}}">   Stats   Machines   Settings                                                                 </tspan><tspan fill="{{.Text}}"> i </tspan><tspan fill="{{.Green}}"> ●</tspan></text>
+  <text xml:space="preserve" x="18.0" y="89.0"><tspan fill="{{.Accent}}">━━━━━━━━</tspan><tspan fill="{{.Border}}">────────────────────────────────────────────────────────────────────────────────────────────────────</tspan></text>
+  <text xml:space="preserve" x="18.0" y="111.0"><tspan fill="{{.Dim}}" class="b">  NAME                    MACHINE     DIR               MODEL            OUT    TOTAL   SEEN▼  STATUS       </tspan></text>
+  <text xml:space="preserve" x="18.0" y="133.0"><tspan fill="{{.Border}}">────────────────────────────────────────────────────────────────────────────────────────────────────────────</tspan></text>
+  <text xml:space="preserve" x="18.0" y="155.0"><tspan fill="{{.Accent}}">▎ </tspan><tspan fill="{{.Green}}">refactor auth flow      </tspan><tspan fill="{{.Text}}">nebula      api-gateway       </tspan><tspan fill="{{.Dim}}">opus-4-8      820</tspan><tspan fill="{{.Text}}">.0k     3.1M   </tspan><tspan fill="{{.Dim}}">   4s  </tspan><tspan fill="{{.Green}}">● working    </tspan></text>
+  <text xml:space="preserve" x="18.0" y="177.0"><tspan fill="{{.Accent}}">  </tspan><tspan fill="{{.Amber}}">fix flaky e2e test      </tspan><tspan fill="{{.Text}}">orion       web-app           </tspan><tspan fill="{{.Dim}}">sonnet-5      612</tspan><tspan fill="{{.Text}}">.0k     1.4M   </tspan><tspan fill="{{.Dim}}">   9s  </tspan><tspan fill="{{.Amber}}">● waiting    </tspan></text>
+  <text xml:space="preserve" x="18.0" y="199.0"><tspan fill="{{.Accent}}">  </tspan><tspan fill="{{.Green}}">profile query plan      </tspan><tspan fill="{{.Text}}">forge       analytics         </tspan><tspan fill="{{.Dim}}">opus-4-8      410</tspan><tspan fill="{{.Text}}">.0k     1.9M   </tspan><tspan fill="{{.Dim}}">  31s  </tspan><tspan fill="{{.Green}}">● working    </tspan></text>
+  <text xml:space="preserve" x="18.0" y="221.0"><tspan fill="{{.Accent}}">  </tspan><tspan fill="{{.Blue}}">write migration 0011    </tspan><tspan fill="{{.Text}}">forge       vigie             </tspan><tspan fill="{{.Dim}}">opus-4-8       77</tspan><tspan fill="{{.Text}}">.0k   290.0k   </tspan><tspan fill="{{.Dim}}">   1m  </tspan><tspan fill="{{.Blue}}">● idle       </tspan></text>
+  <text xml:space="preserve" x="18.0" y="243.0"><tspan fill="{{.Accent}}">  </tspan><tspan fill="{{.Blue}}">review PR #204          </tspan><tspan fill="{{.Text}}">nebula      infra             </tspan><tspan fill="{{.Dim}}">haiku-4-5      31</tspan><tspan fill="{{.Text}}">.0k   120.0k   </tspan><tspan fill="{{.Dim}}">   2m  </tspan><tspan fill="{{.Blue}}">● idle       </tspan></text>
+  <text xml:space="preserve" x="18.0" y="265.0"><tspan fill="{{.Accent}}">  </tspan><tspan fill="{{.Dim}}">draft release notes     </tspan><tspan fill="{{.Text}}">orion       docs-site         </tspan><tspan fill="{{.Dim}}">sonnet-5       58</tspan><tspan fill="{{.Text}}">.0k   210.0k   </tspan><tspan fill="{{.Dim}}">   8m  </tspan><tspan fill="{{.Dim}}">● ended      </tspan></text>
+  <text xml:space="preserve" x="18.0" y="287.0"><tspan fill="{{.Border}}">────────────────────────────────────────────────────────────────────────────────────────────────────────────</tspan></text>
+  <text xml:space="preserve" x="18.0" y="309.0"><tspan fill="{{.Dim}}">usage 5h </tspan><tspan fill="{{.Green}}">▓▓▓</tspan><tspan fill="{{.Dim}}">░░░░░░░</tspan><tspan fill="{{.Text}}"> 38%</tspan><tspan fill="{{.Dim}}">(3h)  7d </tspan><tspan fill="{{.Amber}}">▓▓▓▓▓▓</tspan><tspan fill="{{.Dim}}">░░░░</tspan><tspan fill="{{.Text}}"> 61%</tspan><tspan fill="{{.Dim}}">(4d)                                sort last seen▼ · </tspan><tspan fill="{{.Text}}"> h </tspan><tspan fill="{{.Dim}}"> help</tspan></text>
+</svg>

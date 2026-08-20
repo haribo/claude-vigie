@@ -36,10 +36,14 @@ Analyze all commits and draft:
 ### 5. Push and create PR
 
 - Push with `git push -u origin <branch>`
-- Create PR:
+- Create PR. **`--base develop` is explicit, never implied**: without it `gh`
+  targets the repository's default branch, which is `main`, and a feature PR must
+  never target `main` (`docs/git-workflow.md`). The guard in
+  `.github/workflows/pr-base.yaml` refuses such a PR, but relying on it to catch
+  what this flag prevents is the wrong way round.
 
 ```
-gh pr create --title "<title>" --body "$(cat <<'EOF'
+gh pr create --base develop --title "<title>" --body "$(cat <<'EOF'
 ## Summary
 <1-3 bullet points>
 

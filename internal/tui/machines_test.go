@@ -27,11 +27,11 @@ func TestAggregateMachines(t *testing.T) {
 
 func TestRenderMachines(t *testing.T) {
 	out := renderMachines([]api.SessionView{
-		{Machine: "minet", Status: "working", User: "haribo", Usage: api.Usage{OutputTokens: 2000000}, LastSeenAt: "2026-07-29T10:00:00Z"},
-		{Machine: "minet", Status: "idle", User: "haribo", Usage: api.Usage{OutputTokens: 1000000}, LastSeenAt: "2026-07-29T10:01:00Z"},
+		{Machine: "orion", Status: "working", User: "ada", Usage: api.Usage{OutputTokens: 2000000}, LastSeenAt: "2026-07-29T10:00:00Z"},
+		{Machine: "orion", Status: "idle", User: "ada", Usage: api.Usage{OutputTokens: 1000000}, LastSeenAt: "2026-07-29T10:01:00Z"},
 		{Machine: "box", Status: "waiting", User: "bob", Usage: api.Usage{OutputTokens: 500000}, LastSeenAt: "2026-07-29T09:00:00Z"},
 	}, nil, nil, 100)
-	for _, want := range []string{"MACHINE", "minet", "box", "haribo", "3.0M"} {
+	for _, want := range []string{"MACHINE", "orion", "box", "ada", "3.0M"} {
 		if !strings.Contains(out, want) {
 			t.Errorf("machines view missing %q:\n%s", want, out)
 		}

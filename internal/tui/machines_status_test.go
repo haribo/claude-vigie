@@ -26,7 +26,7 @@ import (
 func oneOfEachStatus() []api.SessionView {
 	out := make([]api.SessionView, 0, len(status.All))
 	for i, st := range status.All {
-		out = append(out, api.SessionView{ID: string(rune('a' + i)), Machine: "minet", Status: st})
+		out = append(out, api.SessionView{ID: string(rune('a' + i)), Machine: "orion", Status: st})
 	}
 	return out
 }
@@ -35,7 +35,7 @@ func oneOfEachStatus() []api.SessionView {
 // either in a column of its own, or spelled out at the end of the row.
 func TestNoStatusIsCountedButInvisible(t *testing.T) {
 	sessions := oneOfEachStatus()
-	out := renderMachines(sessions, map[string]string{"minet": "2026-08-16T12:00:00Z"},
+	out := renderMachines(sessions, map[string]string{"orion": "2026-08-16T12:00:00Z"},
 		map[string]api.VersionInfo{}, 300)
 
 	for _, st := range status.All {
@@ -78,8 +78,8 @@ func TestTheMachineTotalMatchesWhatIsShown(t *testing.T) {
 // server owns the vocabulary and a client may be older than it.
 func TestAnUnknownStatusIsStillAccountedFor(t *testing.T) {
 	agg := aggregateMachines([]api.SessionView{
-		{ID: "a", Machine: "minet", Status: "quantum"},
-		{ID: "b", Machine: "minet", Status: "idle"},
+		{ID: "a", Machine: "orion", Status: "quantum"},
+		{ID: "b", Machine: "orion", Status: "idle"},
 	})
 	m := agg[0]
 	if m.sessions != 2 {
@@ -94,15 +94,15 @@ func TestAnUnknownStatusIsStillAccountedFor(t *testing.T) {
 // column renders exactly as before, with no trailing overflow.
 func TestAFleetWithinTheColumnsAddsNothing(t *testing.T) {
 	out := renderMachines([]api.SessionView{
-		{ID: "a", Machine: "minet", Status: "working"},
-		{ID: "b", Machine: "minet", Status: "idle"},
-	}, map[string]string{"minet": "2026-08-16T12:00:00Z"}, map[string]api.VersionInfo{}, 200)
+		{ID: "a", Machine: "orion", Status: "working"},
+		{ID: "b", Machine: "orion", Status: "idle"},
+	}, map[string]string{"orion": "2026-08-16T12:00:00Z"}, map[string]api.VersionInfo{}, 200)
 
 	// The machine's own row, not the no-watcher banner below it — whose prose
 	// legitimately contains the word "stale".
 	var row string
 	for _, line := range strings.Split(out, "\n") {
-		if strings.Contains(line, "minet") && !strings.Contains(line, "no watcher") {
+		if strings.Contains(line, "orion") && !strings.Contains(line, "no watcher") {
 			row = line
 			break
 		}

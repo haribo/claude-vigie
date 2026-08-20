@@ -24,10 +24,10 @@
     { "why": "a repeated pattern character needs two occurrences", "pattern": "pp", "text": "web-app", "want": true },
     { "why": "three of them do not exist here", "pattern": "ppp", "text": "web-app", "want": false },
     { "why": "the empty text matches only the empty pattern", "pattern": "a", "text": "", "want": false },
-    { "why": "a pattern may span two fields of the haystack", "pattern": "appmin", "text": "web-app minet-dev", "want": true },
+    { "why": "a pattern may span two fields of the haystack", "pattern": "appori", "text": "web-app orion-dev", "want": true },
     { "why": "accented Latin folds the same in both languages", "pattern": "ÉTÉ", "text": "un été chaud", "want": true },
     { "why": "digits and punctuation are ordinary characters", "pattern": "v2.1", "text": "release v2.1.0", "want": true },
-    { "why": "a status is searchable, it is part of the haystack", "pattern": "wait", "text": "api-gateway minet-dev gw main waiting", "want": true },
+    { "why": "a status is searchable, it is part of the haystack", "pattern": "wait", "text": "api-gateway orion-dev gw main waiting", "want": true },
     { "why": "rc is only special as a whole pattern; as text it matches normally", "pattern": "rc", "text": "src-tool", "want": true }
   ]
 }

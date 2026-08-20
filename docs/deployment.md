@@ -201,6 +201,12 @@ against the OS trust store — no client-side TLS code, no flags.
   the config. It takes **no flags**: the token is read without echo, so it never
   reaches the shell history or `ps`. It needs a terminal, and says so rather than
   blocking when it has none.
+- It **warns** when the URL is plain HTTP and the server's address is public —
+  the case this page's warning above is about, said where the address is actually
+  chosen. It stays silent on a trusted LAN and on the overlay ranges recommended
+  below, and it warns rather than refuses. Where that boundary sits, and the
+  narrower rule it replaced, are specified in
+  [design/cleartext-token-warning.md](design/cleartext-token-warning.md) (#581).
 
 ## Recommended for dynamic client IPs
 

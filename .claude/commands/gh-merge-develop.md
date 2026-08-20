@@ -50,7 +50,29 @@ If **any** check fails: report all violations in a structured summary and **stop
 - Execute: `gh pr merge <number> --squash --delete-branch --subject "<approved message>" --body ""`
 - If merge fails: report the error, do not retry
 
-### 6. Local cleanup
+### 6. Close the issues the PR resolves
+
+GitHub auto-closes an issue only when the PR merges into the **default branch**,
+which is `main`. A feature PR merges into `develop`, so `Closes #N` links the two
+and closes nothing — the issue would stay open until the next release.
+
+- Extract every closing reference from the PR body, the same keywords
+  `.github/workflows/pr-issue-check.yaml` accepts:
+  `(close[sd]?|fix(e[sd])?|resolve[sd]?)\s+#[0-9]+`, case-insensitive.
+- **`Part of #N` is not one of them** and must not close anything: a PR that
+  advances an issue without finishing it says so on purpose.
+- Close each with the merge commit, so the issue records where it was resolved:
+
+```bash
+gh issue close <N> --comment "Resolved by <sha> on develop (#<PR>). It reaches a release with the next tag."
+```
+
+- If the body carries no closing reference — a `chore` or `style` PR, which the
+  CI check exempts — skip this step silently.
+- Report which issues were closed; if one was already closed, say so rather than
+  treating the command's success as proof it did something.
+
+### 7. Local cleanup
 
 - `git checkout develop`
 - `git pull origin develop`
@@ -65,4 +87,5 @@ Report a summary:
 PR #<number> merged into develop
   <commit hash> <commit message>
   Branch <branch> deleted (remote + local)
+  Closed #<N> (or: no closing reference in the body)
 ```
