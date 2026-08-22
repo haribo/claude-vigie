@@ -109,7 +109,7 @@ func Run(ctx context.Context, cfg *config.Config, opts Options) error {
 			markFailing = markLocal(markFailing)
 			drifted = postReports(cfg, reports, drifted)
 		}
-		if time.Since(lastGC) > gcInterval {
+		if clock.Now().Sub(lastGC) > gcInterval {
 			collectDeadMappings(opts.MaxAge)
 			lastGC = clock.Now()
 		}

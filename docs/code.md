@@ -109,13 +109,25 @@ directly:
 
 | Call | Replace with |
 |------|--------------|
-| `time.Now()` | an injected `func() time.Time` (default `clock.Now`) |
+| `time.Now()`, `time.Since()`, `time.Until()` | an injected `func() time.Time` (default `clock.Now`); `clock.Since`/`clock.Until` at the presentation edge |
 | `os.Getenv()` | `internal/config` (the env-reading layer) |
 | `http.DefaultClient` | a client with a timeout (`http.DefaultClient` has none) — a package-level one, **not** injected; see below |
 
 Enforced by `forbidigo` in `.golangci.yml`. The seams are excepted: `internal/clock`
 defines the wall clock, `internal/config` and `internal/daemon` (the composition
 root) read env, and tests use the real ones.
+
+**All three clock names, not `time.Now` alone.** `time.Since(t)` *is*
+`time.Now().Sub(t)`, so a rule naming one of them enforces spelling rather than
+the property it wants. It banned one for months while three call sites used the
+other two — two of them deciding rather than rendering, and one comparing a
+`clock.Now()` operand against a `time.Since()` one, which a substituted clock
+would have made meaningless (#601).
+
+A struct that already carries an injected clock has no excuse to reach past it:
+`watcherStale` was a method on the one struct in the TUI that holds one, and it
+read the wall clock instead — with a test that built its fixtures from
+`time.Now()` and so agreed with the mistake by construction.
 
 **The HTTP client is the exception to "inject", deliberately.** The rule above
 asks for injection and the first two rows get it; the third does not, and saying

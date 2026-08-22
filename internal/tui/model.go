@@ -197,7 +197,7 @@ func (m model) watcherStale() bool {
 	if err != nil {
 		return false // unknown format: don't cry wolf
 	}
-	return time.Since(t) > watcherStaleAfter
+	return m.now().Sub(t) > watcherStaleAfter
 }
 
 type sessionsMsg struct {

@@ -152,7 +152,7 @@ func withMetrics(next http.Handler) http.Handler {
 		// The SSE stream is long-lived; its "duration" is a connection lifetime,
 		// not a latency, so keep it out of the request-latency histogram.
 		if route != "/api/events" {
-			metricHTTPDuration.WithLabelValues(route, r.Method).Observe(time.Since(start).Seconds())
+			metricHTTPDuration.WithLabelValues(route, r.Method).Observe(clock.Since(start).Seconds())
 		}
 	})
 }
