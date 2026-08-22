@@ -183,21 +183,14 @@ func (m model) now() time.Time {
 	return m.clock()
 }
 
-// watcherStaleAfter is how long the server may go without a watch report before
-// the TUI warns that statuses may be stale.
-const watcherStaleAfter = 15 * time.Second
+// watcherStale reports whether the statuses on screen may be frozen — no watch
+// report reached the server recently, or the one that did cannot be read. The
+// rule itself lives in watcher.go, so every indicator answers from one place.
+func (m model) watcherStale() bool { return m.watcherVerdict().alarm() }
 
-// watcherStale reports whether no watch report has reached the server recently
-// (so the watcher is likely down and statuses are frozen).
-func (m model) watcherStale() bool {
-	if m.watcherSeen == "" {
-		return true
-	}
-	t, err := time.Parse(time.RFC3339, m.watcherSeen)
-	if err != nil {
-		return false // unknown format: don't cry wolf
-	}
-	return m.now().Sub(t) > watcherStaleAfter
+// watcherVerdict is the fleet-wide reading of the last watch report.
+func (m model) watcherVerdict() watcherVerdict {
+	return readWatcher(m.watcherSeen, m.now())
 }
 
 type sessionsMsg struct {

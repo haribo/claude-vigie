@@ -4,7 +4,6 @@ import (
 	"sort"
 	"strconv"
 	"strings"
-	"time"
 
 	"github.com/charmbracelet/lipgloss"
 
@@ -94,8 +93,8 @@ func renderMachines(sessions []api.SessionView, watcherSeen map[string]string, v
 	b.WriteString(rule(width) + "\n")
 	var noWatcher []string
 	for _, a := range aggregateMachines(sessions) {
-		fresh := watcherFresh(watcherSeen[a.name], now)
-		if !fresh {
+		verdict := readWatcher(watcherSeen[a.name], now)
+		if verdict.alarm() {
 			noWatcher = append(noWatcher, a.name)
 		}
 		b.WriteString(clampWidth("  "+
@@ -108,7 +107,7 @@ func renderMachines(sessions []api.SessionView, watcherSeen map[string]string, v
 			padLeft(humanizeTokens(a.out), 10)+"   "+
 			userStyle.Render(pad(orDash(a.user), 12))+
 			dimStyle.Render(padLeft(relativeAge(a.lastSeen, now), 6))+"   "+
-			watchCell(fresh)+"   "+
+			watchCell(verdict)+"   "+
 			dimStyle.Render(pad(versionCell(versions[a.name]), 12))+
 			otherStatuses(a.byStatus), width) + "\n")
 	}
@@ -160,26 +159,20 @@ func otherStatuses(byStatus map[string]int) string {
 	return "   " + strings.Join(parts, "  ")
 }
 
-// watcherFresh reports whether a machine's last watch report is recent enough to
-// trust its statuses. Empty or unparseable → stale (#284).
-func watcherFresh(seen string, now time.Time) bool {
-	if seen == "" {
-		return false
-	}
-	t, err := time.Parse(time.RFC3339, seen)
-	if err != nil {
-		return false
-	}
-	return now.Sub(t) <= watcherStaleAfter
-}
-
-// watchCell renders the per-machine watcher indicator: green "● live" when a
-// fresh watcher reports, amber "⚠ none" otherwise.
-func watchCell(fresh bool) string {
-	if fresh {
+// watchCell renders the per-machine watcher indicator: green "● live" when the
+// watcher is reporting, amber otherwise — naming which alarm it is, because the
+// two send the operator to different places. "⚠ none" is a watcher that stopped;
+// "⚠ time?" is a heartbeat vigie recorded and cannot read, which is a fault on
+// this side and not on that machine (docs/design/watcher-liveness.md § 5).
+func watchCell(v watcherVerdict) string {
+	switch v {
+	case watcherReporting:
 		return watchLiveStyle.Render(pad("● live", 8))
+	case watcherUnreadable:
+		return warnStyle.Render(pad("⚠ time?", 8))
+	default:
+		return warnStyle.Render(pad("⚠ none", 8))
 	}
-	return warnStyle.Render(pad("⚠ none", 8))
 }
 
 // countCell renders a status count right-aligned to w, dimmed when zero, else

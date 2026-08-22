@@ -43,16 +43,17 @@ func TestRenderMachines(t *testing.T) {
 
 func TestWatcherFresh(t *testing.T) {
 	now := time.Date(2026, 8, 3, 12, 0, 0, 0, time.UTC)
-	if !watcherFresh(now.Add(-5*time.Second).Format(time.RFC3339), now) {
+	fresh := func(seen string) bool { return readWatcher(seen, now) == watcherReporting }
+	if !fresh(now.Add(-5 * time.Second).Format(time.RFC3339)) {
 		t.Error("a recent heartbeat should be fresh")
 	}
-	if watcherFresh(now.Add(-60*time.Second).Format(time.RFC3339), now) {
+	if fresh(now.Add(-60 * time.Second).Format(time.RFC3339)) {
 		t.Error("an old heartbeat should be stale")
 	}
-	if watcherFresh("", now) {
+	if fresh("") {
 		t.Error("an empty heartbeat should be stale")
 	}
-	if watcherFresh("not-a-time", now) {
+	if fresh("not-a-time") {
 		t.Error("an unparseable heartbeat should be stale")
 	}
 }

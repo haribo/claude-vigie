@@ -184,6 +184,12 @@ func (m model) watcherRow() stateRow {
 	switch {
 	case !m.gotWatcher:
 		return stateRow{"watcher", levelUnknown, "unknown · not reported yet"}
+	case m.watcherVerdict() == watcherUnreadable:
+		// Also red — the statuses may be frozen exactly as they may be with a dead
+		// watcher — but the fault is in what vigie recorded, not on that machine, so
+		// the detail says so rather than sending the operator to the wrong host
+		// (docs/design/watcher-liveness.md § 5, #600).
+		return stateRow{"watcher", levelBroken, "unreadable heartbeat · statuses may be frozen"}
 	case m.watcherStale():
 		// No watcher means no status is being refreshed: every status on screen may
 		// be a frozen one, which is the definition of red here.

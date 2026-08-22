@@ -9,6 +9,13 @@ file is the single source of truth, not a second narrative.
 
 ## [Unreleased]
 
+### Fixed
+
+- An unreadable watcher heartbeat now raises the alarm on both screens, instead
+  of reading as healthy at the top of the TUI while the Machines tab called the
+  watcher missing. Each says which fault it is, so it never sends you to the
+  wrong machine (#600).
+
 ## [0.7.0] - 2026-08-20
 
 ### Added
