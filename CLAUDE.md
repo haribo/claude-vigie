@@ -47,6 +47,8 @@ Rules must be concise. One rule per line when possible.
 - Say what you could not confirm, and record a claim that turns out false **in the issue itself** — a wrong claim dropped in silence is raised again six months later
 - Check the issue is still current: close it with evidence if already delivered, post an audit comment if the architecture drifted under it
 - Then, before touching anything, explain the problem simply and concisely — an example when an example is what makes it clear. The user validates *that explanation*, not the issue. Build after
+- That explanation is in the operator's terms — what is on screen, what changes for them. Naming a file, a function, a field or a storage key means it has failed: those citations belong in the issue and the PR, which is what they are for. The litmus — could the reader decide without opening the repository?
+- "I don't understand" is never answered with more detail: the explanation was too close to the code, not too vague. Rewrite it further from the code, never nearer
 - Exempt: trivial changes (typo, formatting, dep bump) — the same boundary that exempts them from needing an issue. Friction that buys nothing is how a rule gets routed around
 
 ## Code
