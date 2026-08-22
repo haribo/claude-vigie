@@ -76,7 +76,6 @@ ON CONFLICT(id) DO UPDATE SET
 	return nil
 }
 
-// GetSession returns the session with the given ID, or ErrNotFound.
 // ApplySession runs merge against the session's current row and writes the
 // result, with no other report able to slip between the two.
 //
@@ -115,6 +114,7 @@ func (s *Store) ApplySession(ctx context.Context, id string, merge func(current 
 	return merged, nil
 }
 
+// GetSession returns the session with the given ID, or ErrNotFound.
 func (s *Store) GetSession(ctx context.Context, id string) (Session, error) {
 	row := s.db.QueryRowContext(ctx, `SELECT `+sessionColumns+` FROM sessions WHERE id = ?`, id)
 	sess, err := scanSession(row)
