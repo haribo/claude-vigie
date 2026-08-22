@@ -61,11 +61,57 @@ func TestBothIndicatorsAgreeOnAnUnreadableHeartbeat(t *testing.T) {
 	out := renderMachines(
 		[]api.SessionView{{ID: "s1", Machine: "orion", Status: "working"}},
 		map[string]string{"orion": seen},
-		map[string]api.VersionInfo{}, 300)
+		map[string]api.VersionInfo{}, 300, fixedClock())
 	if strings.Contains(out, "● live") {
 		t.Error("the Machines tab shows a live watcher while the state pill calls it broken — the two must not disagree (#600)")
 	}
 	if !strings.Contains(out, "⚠ time?") {
 		t.Errorf("the Machines tab should name the unreadable heartbeat, got:\n%s", out)
+	}
+}
+
+// TestBothIndicatorsAgreeOnTheClockDependentVerdicts is the case #600 could not
+// assert and #609 unlocked.
+//
+// "Unreadable" is clock-independent, so it was the only verdict the two
+// indicators could be compared on while the Machines tab read the package clock
+// and the state pill read the model's. These two are the ordinary ones — a
+// heartbeat that is recent, and one that has gone silent — and they are only
+// decidable against a clock both sides share.
+//
+// The fixtures are dated from fixedClock, which is weeks off the wall clock. That
+// is deliberate: read against time.Now() the "recent" heartbeat is ancient, so the
+// tab would show a missing watcher next to a pill calling it healthy — the very
+// disagreement #600 removed, reintroduced through the clock instead of the rule.
+func TestBothIndicatorsAgreeOnTheClockDependentVerdicts(t *testing.T) {
+	now := fixedClock()
+	cases := []struct {
+		name      string
+		seen      string
+		wantLevel level
+		wantRow   string
+		wantCell  string
+	}{
+		{"a recent heartbeat", now.Add(-5 * time.Second).UTC().Format(time.RFC3339), levelOK, "reporting", "● live"},
+		{"a silent watcher", now.Add(-time.Minute).UTC().Format(time.RFC3339), levelBroken, "not reporting", "⚠ none"},
+	}
+	for _, c := range cases {
+		m := model{clock: fixedClock, gotWatcher: true, watcherSeen: c.seen}
+		row := rowsByLabel(m)["watcher"]
+		if row.level != c.wantLevel {
+			t.Errorf("%s: state pill level = %v, want %v", c.name, row.level, c.wantLevel)
+		}
+		if !strings.Contains(row.detail, c.wantRow) {
+			t.Errorf("%s: state pill detail = %q, want it to contain %q", c.name, row.detail, c.wantRow)
+		}
+
+		out := renderMachines(
+			[]api.SessionView{{ID: "s1", Machine: "orion", Status: "working"}},
+			map[string]string{"orion": c.seen},
+			map[string]api.VersionInfo{}, 300, now)
+		if !strings.Contains(out, c.wantCell) {
+			t.Errorf("%s: the Machines tab should show %q while the pill shows %q, got:\n%s",
+				c.name, c.wantCell, row.detail, out)
+		}
 	}
 }

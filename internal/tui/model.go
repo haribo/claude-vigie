@@ -767,7 +767,7 @@ func (m model) View() string {
 		b.WriteString(m.renderStats())
 	case tabMachines:
 		b.WriteString(m.staleNote(srcWatcher))
-		b.WriteString(renderMachines(m.sessions, m.watcherMachines, m.watcherVersions, m.width))
+		b.WriteString(renderMachines(m.sessions, m.watcherMachines, m.watcherVersions, m.width, m.now()))
 	case tabSettings:
 		b.WriteString(m.renderSettings())
 	}

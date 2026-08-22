@@ -4,11 +4,11 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/charmbracelet/lipgloss"
 
 	"github.com/haribo/claude-vigie/internal/api"
-	"github.com/haribo/claude-vigie/internal/clock"
 	"github.com/haribo/claude-vigie/internal/status"
 )
 
@@ -77,11 +77,16 @@ func versionCell(v api.VersionInfo) string {
 // maps each machine to the RFC3339 time of its last watch report, so machines
 // running on hooks alone are flagged (#284); versions carries each watcher's
 // build so a drifted watcher is visible (#356).
-func renderMachines(sessions []api.SessionView, watcherSeen map[string]string, versions map[string]api.VersionInfo, width int) string {
+// renderMachines draws the Machines tab. now comes from the caller rather than
+// the package clock: it dates the relative SEEN ages, and since #600 it also
+// decides the WATCH verdict — a verdict the state pill reaches from the model's
+// injected clock, so reading a second clock here left one rule answered against
+// two time sources, and the ordinary "the watcher went silent" case could not be
+// asserted on both indicators at once (#609).
+func renderMachines(sessions []api.SessionView, watcherSeen map[string]string, versions map[string]api.VersionInfo, width int, now time.Time) string {
 	if len(sessions) == 0 {
 		return dimStyle.Render("no sessions yet")
 	}
-	now := clock.Now() // presentation: relative "SEEN" ages
 
 	var b strings.Builder
 	// The overview table has no column-drop of its own; clamp each row to width so
