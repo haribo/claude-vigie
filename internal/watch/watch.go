@@ -29,6 +29,14 @@ type Options struct {
 	Interval      time.Duration
 	MaxAge        time.Duration
 	UsageInterval time.Duration
+
+	// Now is the loop's wall clock, defaulting to clock.Now. It is here because
+	// the cadences Run owns — the 5 s heartbeat and the 5 min GC — are decided by
+	// subtracting two readings of it, and a test cannot assert "on its own rhythm,
+	// not the scan's" by waiting five real seconds per case. docs/code.md asks for
+	// an injected func() time.Time in business logic and this loop had gone
+	// without one, so the rules that live only here had no guard at all (#602).
+	Now func() time.Time
 }
 
 // Status thresholds derived from how recently a transcript changed.
@@ -78,8 +86,13 @@ func Run(ctx context.Context, cfg *config.Config, opts Options) error {
 	ticker := time.NewTicker(opts.Interval)
 	defer ticker.Stop()
 
+	now := opts.Now
+	if now == nil {
+		now = clock.Now
+	}
+
 	sc := newScanner()
-	lastGC := clock.Now()
+	lastGC := now()
 	var drifted, beatFailing, markFailing bool
 	var lastBeat time.Time
 	for {
@@ -87,9 +100,9 @@ func Run(ctx context.Context, cfg *config.Config, opts Options) error {
 		// watcher with nothing to report is still running, and a machine with no
 		// live session used to read as watcher-less (#386). The answer also carries
 		// the drift verdict, so it is what ends a drifted state (#384).
-		if clock.Now().Sub(lastBeat) >= heartbeatInterval {
+		if now().Sub(lastBeat) >= heartbeatInterval {
 			drifted, beatFailing = beat(cfg, drifted, beatFailing)
-			lastBeat = clock.Now()
+			lastBeat = now()
 		}
 
 		// A drifted watcher goes inert rather than exiting: the packaged unit uses
@@ -97,7 +110,7 @@ func Run(ctx context.Context, cfg *config.Config, opts Options) error {
 		// the machine all observability. It keeps beating, so it stays visible, and
 		// resumes by itself once the builds realign.
 		if !drifted {
-			reports, err := sc.scan(root, cfg.Machine, opts.MaxAge, clock.Now())
+			reports, err := sc.scan(root, cfg.Machine, opts.MaxAge, now())
 			if err != nil {
 				fmt.Fprintf(os.Stderr, "watch: %v\n", err)
 			}
@@ -109,9 +122,9 @@ func Run(ctx context.Context, cfg *config.Config, opts Options) error {
 			markFailing = markLocal(markFailing)
 			drifted = postReports(cfg, reports, drifted)
 		}
-		if clock.Now().Sub(lastGC) > gcInterval {
-			collectDeadMappings(opts.MaxAge)
-			lastGC = clock.Now()
+		if now().Sub(lastGC) > gcInterval {
+			collectDeadMappings(opts.MaxAge, now())
+			lastGC = now()
 		}
 		select {
 		case <-ctx.Done():
@@ -206,8 +219,13 @@ func postReports(cfg *config.Config, reports []api.ReportRequest, drifted bool) 
 
 // collectDeadMappings removes presence mappings for sessions whose process died
 // without a SessionEnd and whose transcript is past the watcher's window.
-func collectDeadMappings(maxAge time.Duration) {
-	n, err := presence.GC(maxAge, clock.Now())
+//
+// It takes now from its caller rather than reading the clock itself: Run decides
+// *whether* to collect by subtracting two readings of its own clock, and
+// presence.GC decides *what* is old enough by comparing against one more. Two
+// clocks either side of one decision is the shape #601 fixed elsewhere.
+func collectDeadMappings(maxAge time.Duration, now time.Time) {
+	n, err := presence.GC(maxAge, now)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "watch: presence gc: %v\n", err)
 	} else if n > 0 {
