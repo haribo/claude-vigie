@@ -49,7 +49,7 @@ func TestReadWatcherVerdicts(t *testing.T) {
 func TestBothIndicatorsAgreeOnAnUnreadableHeartbeat(t *testing.T) {
 	const seen = "not-a-time"
 
-	m := model{clock: fixedClock, gotWatcher: true, watcherSeen: seen}
+	m := model{clock: fixedClock, gotWatcher: true, watcherMachines: map[string]string{"orion": seen}}
 	row := rowsByLabel(m)["watcher"]
 	if row.level != levelBroken {
 		t.Errorf("state pill level = %v, want red — an unreadable heartbeat means the screen may be lying", row.level)
@@ -96,7 +96,7 @@ func TestBothIndicatorsAgreeOnTheClockDependentVerdicts(t *testing.T) {
 		{"a silent watcher", now.Add(-time.Minute).UTC().Format(time.RFC3339), levelBroken, "not reporting", "⚠ none"},
 	}
 	for _, c := range cases {
-		m := model{clock: fixedClock, gotWatcher: true, watcherSeen: c.seen}
+		m := model{clock: fixedClock, gotWatcher: true, watcherMachines: map[string]string{"orion": c.seen}}
 		row := rowsByLabel(m)["watcher"]
 		if row.level != c.wantLevel {
 			t.Errorf("%s: state pill level = %v, want %v", c.name, row.level, c.wantLevel)
@@ -112,6 +112,75 @@ func TestBothIndicatorsAgreeOnTheClockDependentVerdicts(t *testing.T) {
 		if !strings.Contains(out, c.wantCell) {
 			t.Errorf("%s: the Machines tab should show %q while the pill shows %q, got:\n%s",
 				c.name, c.wantCell, row.detail, out)
+		}
+	}
+}
+
+// TestTheFleetVerdictCoversEveryMachine is the regression test for #599.
+//
+// The state pill used to read the daemon's global `watch_seen` — the most recent
+// beat from anywhere — so one live watcher hid every dead one: on three machines,
+// orion going silent left the pill green while orion's sessions sat frozen, and
+// the only place saying so was a tab the operator had to already suspect.
+//
+// The three cases are the ones docs/design/watcher-liveness.md § 6 settles: a
+// machine that stopped is an alarm and is named, a machine that never beat is a
+// deployment choice and is not, and a fleet with nothing beating at all is an
+// alarm even though no single machine stopped.
+func TestTheFleetVerdictCoversEveryMachine(t *testing.T) {
+	now := fixedClock()
+	live := now.Add(-2 * time.Second).UTC().Format(time.RFC3339)
+	dead := now.Add(-time.Minute).UTC().Format(time.RFC3339)
+
+	cases := []struct {
+		name      string
+		machines  map[string]string
+		wantLevel level
+		wantText  string
+	}{
+		{
+			name:      "one of three stopped is an alarm that names it",
+			machines:  map[string]string{"orion": dead, "box": live, "nova": live},
+			wantLevel: levelBroken,
+			wantText:  "1 of 3 not reporting (orion)",
+		},
+		{
+			name:      "two stopped are both named, in a stable order",
+			machines:  map[string]string{"orion": dead, "box": dead, "nova": live},
+			wantLevel: levelBroken,
+			wantText:  "2 of 3 not reporting (box, orion)",
+		},
+		{
+			// The case option 1 would have got wrong: a machine reporting on hooks
+			// alone is a choice, and making it red forever is how an indicator stops
+			// being read.
+			name:      "a hooks-only machine beside a live one is not an alarm",
+			machines:  map[string]string{"hooks-only": "", "box": live},
+			wantLevel: levelOK,
+			wantText:  "reporting",
+		},
+		{
+			// …and the exception to that: nobody is refreshing anything.
+			name:      "no watcher anywhere is still an alarm",
+			machines:  map[string]string{"hooks-only": "", "other": ""},
+			wantLevel: levelBroken,
+			wantText:  "not reporting · statuses may be frozen",
+		},
+		{
+			name:      "an unreadable heartbeat names its own cause",
+			machines:  map[string]string{"orion": "not-a-time", "box": live},
+			wantLevel: levelBroken,
+			wantText:  "1 of 2 unreadable heartbeat (orion)",
+		},
+	}
+	for _, c := range cases {
+		m := model{clock: fixedClock, gotWatcher: true, watcherMachines: c.machines}
+		row := rowsByLabel(m)["watcher"]
+		if row.level != c.wantLevel {
+			t.Errorf("%s: level = %v, want %v", c.name, row.level, c.wantLevel)
+		}
+		if row.detail != c.wantText {
+			t.Errorf("%s: detail = %q, want %q", c.name, row.detail, c.wantText)
 		}
 	}
 }

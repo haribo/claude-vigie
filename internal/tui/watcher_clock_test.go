@@ -25,7 +25,7 @@ func TestWatcherStaleReadsTheModelClock(t *testing.T) {
 		{"well before the injected now", now.Add(-time.Minute), true},
 	}
 	for _, c := range cases {
-		m := model{clock: fixedClock, watcherSeen: c.seen.UTC().Format(time.RFC3339)}
+		m := model{clock: fixedClock, watcherMachines: map[string]string{"orion": c.seen.UTC().Format(time.RFC3339)}}
 		if got := m.watcherStale(); got != c.want {
 			t.Errorf("%s: watcherStale = %v, want %v", c.name, got, c.want)
 		}

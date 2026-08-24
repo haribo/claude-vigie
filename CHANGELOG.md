@@ -11,6 +11,11 @@ file is the single source of truth, not a second narrative.
 
 ### Fixed
 
+- The watcher warning covers every machine instead of the freshest one, and names
+  the ones that stopped. A watcher dying on one host used to leave the indicator
+  green for as long as any other machine kept reporting, while that host's
+  sessions sat frozen on screen (#599).
+
 - An unreadable watcher heartbeat now raises the alarm on both screens, instead
   of reading as healthy at the top of the TUI while the Machines tab called the
   watcher missing. Each says which fault it is, so it never sends you to the
