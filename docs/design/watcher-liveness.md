@@ -129,7 +129,52 @@ the other is a watcher that stopped. Each indicator says which — the state pil
 its detail line, the Machines tab in its cell — so raising the alarm never costs
 the operator a search on the wrong machine.
 
-## 6. Testing
+## 6. The fleet verdict
+
+§ 5 reads one machine's heartbeat. This section says what the whole-fleet
+indicator — the TUI's state pill and its banner — makes of *several* (#599).
+
+**It is not the freshest machine.** The daemon keeps a global `watch_seen`
+alongside the per-machine keys, overwritten by every heartbeat from any machine,
+so it holds the most recent beat *anywhere*. Deriving the fleet verdict from it
+means one live watcher hides every dead one: on three machines, `orion` going
+silent leaves the pill green for as long as `box` or `nova` keep beating, while
+`orion`'s sessions sit frozen with nothing on the main screen saying so. The
+indicator gets *less* trustworthy as the fleet grows, which inverts its purpose.
+
+**The verdict is over every known machine.** `GET /api/watcher` already returns
+the per-machine map, and the TUI already holds it — the Machines tab draws from
+it. The pill reads the same map rather than a summary of it.
+
+### A machine that never beat is not a fault
+
+A machine reporting through hooks alone, with no watcher service, is a
+deployment choice. The daemon distinguishes it without ambiguity: an empty
+timestamp means no heartbeat was ever recorded, a non-empty one means a watcher
+beat at least once. Nothing prunes those keys, so the distinction survives
+restarts and session retention.
+
+So the fleet alarm covers machines that **beat and then stopped** — silent or
+unreadable per § 5 — and not machines that never beat. Otherwise a fleet with one
+deliberately hooks-only machine is red permanently, and an indicator that is
+always red is one the operator stops reading; the day a real watcher dies, it says
+nothing new.
+
+**With one exception: no live watcher anywhere is an alarm.** Applied literally,
+the rule above turns the pill green on a fleet where *no* machine has a watcher —
+the first-run case, where `vigie watch` was never started and nothing is
+refreshing anything. That is the one situation the indicator exists for, so it
+stays an alarm even though no individual machine qualifies as having stopped.
+
+### The alarm names the machines
+
+`watcher · 1 of 3 not reporting (orion)` rather than a fleet-wide yes/no. The
+operator learns which host to go to without opening another tab, and the count
+says how much of the board is affected. The Machines tab keeps showing every
+machine's own verdict, hooks-only ones included — that view answers "what is the
+state of each", not "can I trust this screen".
+
+## 7. Testing
 
 - **Server** — a heartbeat records `watch_seen`/`watch_seen:<machine>`/
   `watch_version:<machine>` and answers `204`; a drifted heartbeat answers `409`
@@ -144,3 +189,6 @@ the operator a search on the wrong machine.
 - **Reading it back** — the three verdicts of § 5, and the fact that every
   indicator derives from the same function: a test that reads the rule once must
   be enough to know what each screen will show (#600).
+- **The fleet verdict** — a fleet where one machine of three has gone silent
+  raises the alarm and names it; a hooks-only machine beside live ones does not;
+  a fleet with no live watcher at all does. This is the regression test for #599.
