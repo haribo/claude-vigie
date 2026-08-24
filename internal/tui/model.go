@@ -122,8 +122,7 @@ type model struct {
 	sessions        []api.SessionView
 	usage           api.UsageReport
 	platform        api.PlatformStatus
-	daemonVersion   api.VersionInfo // the server's build, fetched once (#341)
-	watcherSeen     string
+	daemonVersion   api.VersionInfo            // the server's build, fetched once (#341)
 	watcherMachines map[string]string          // per-machine last watch report, RFC3339 (#284)
 	watcherVersions map[string]api.VersionInfo // per-machine watcher build (#356)
 	gotWatcher      bool
@@ -183,14 +182,12 @@ func (m model) now() time.Time {
 	return m.clock()
 }
 
-// watcherStale reports whether the statuses on screen may be frozen — no watch
-// report reached the server recently, or the one that did cannot be read. The
-// rule itself lives in watcher.go, so every indicator answers from one place.
-func (m model) watcherStale() bool { return m.watcherVerdict().alarm() }
-
-// watcherVerdict is the fleet-wide reading of the last watch report.
-func (m model) watcherVerdict() watcherVerdict {
-	return readWatcher(m.watcherSeen, m.now())
+// watcherStale reports whether the statuses on screen may be frozen anywhere in
+// the fleet — a watcher that beat and stopped, or none beating at all. The rule
+// itself lives in watcher.go, so every indicator answers from one place.
+func (m model) watcherStale() bool {
+	alarm, _, _, _ := fleetAlarm(m.watcherMachines, m.now())
+	return alarm
 }
 
 type sessionsMsg struct {
@@ -221,7 +218,6 @@ type eventMsg struct{}
 type connMsg struct{ live bool }
 
 type watcherMsg struct {
-	seen     string
 	machines map[string]string
 	versions map[string]api.VersionInfo
 	err      error
@@ -323,7 +319,7 @@ func (m model) watcherCmd() tea.Cmd {
 	}
 	return func() tea.Msg {
 		s, err := m.fetchWatcher()
-		return watcherMsg{seen: s.LastSeen, machines: s.Machines, versions: s.Versions, err: err}
+		return watcherMsg{machines: s.Machines, versions: s.Versions, err: err}
 	}
 }
 
@@ -498,7 +494,6 @@ func (m model) applyDataMsg(msg tea.Msg) model {
 	case watcherMsg:
 		m.markRefresh(srcWatcher, msg.err)
 		if msg.err == nil {
-			m.watcherSeen = msg.seen
 			m.watcherMachines = msg.machines
 			m.watcherVersions = msg.versions
 			m.gotWatcher = true

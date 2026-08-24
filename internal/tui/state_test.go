@@ -22,7 +22,7 @@ func healthyModel() model {
 	m.clock = func() time.Time { return time.Date(2026, 8, 16, 12, 0, 0, 0, time.UTC) }
 	m.sseLive = true
 	m.gotWatcher = true
-	m.watcherSeen = m.now().UTC().Format(time.RFC3339)
+	m.watcherMachines = map[string]string{"orion": m.now().UTC().Format(time.RFC3339)}
 	m.platform = api.PlatformStatus{Indicator: "none", Description: "All Systems Operational"}
 	m.daemonVersion = api.VersionInfo{Version: "dev", Commit: "none"}
 	m.usage = api.UsageReport{FetchedAt: "2026-08-16T11:58:00Z"}
@@ -116,7 +116,7 @@ func TestUnknownAloneDoesNotColorThePill(t *testing.T) {
 // definition of red here.
 func TestAMissingWatcherIsRed(t *testing.T) {
 	m := healthyModel()
-	m.watcherSeen = m.now().Add(-time.Hour).UTC().Format(time.RFC3339)
+	m.watcherMachines = map[string]string{"orion": m.now().Add(-time.Hour).UTC().Format(time.RFC3339)}
 	if got := m.stateLevel(); got != levelBroken {
 		t.Errorf("level = %v, want red: no watcher means the statuses may be frozen", got)
 	}
