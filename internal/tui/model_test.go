@@ -9,6 +9,7 @@ import (
 	"github.com/charmbracelet/lipgloss"
 
 	"github.com/haribo/claude-vigie/internal/api"
+	"github.com/haribo/claude-vigie/internal/status"
 )
 
 // TestOverflowBannerWrapsToWidth is the #325 regression: the "N columns hidden"
@@ -269,13 +270,16 @@ func TestStatusRankAndSort(t *testing.T) {
 	// #464 inverted the convention: statusRank is now an index into the shared
 	// order (lower sorts higher), so this asserts the *visible* order instead of
 	// the direction of the integer — which is what the test was standing in for.
-	if statusRank("working") >= statusRank("waiting") || statusRank("idle") >= statusRank("ended") {
+	if status.Rank("working") >= status.Rank("waiting") || status.Rank("idle") >= status.Rank("ended") {
 		t.Fatal("status order must place working before waiting, and idle before ended")
 	}
+	// Rank travels with the session since ADR-0011 (#617); the daemon fills it, so
+	// a fixture that omits it leaves every row at zero and the sort measuring
+	// nothing.
 	s := []api.SessionView{
-		{Status: "idle", LastSeenAt: "2026-07-27T10:00:00Z"},
-		{Status: "working", LastSeenAt: "2026-07-27T09:00:00Z"},
-		{Status: "ended", LastSeenAt: "2026-07-27T11:00:00Z"},
+		{Status: "idle", Rank: status.Rank("idle"), LastSeenAt: "2026-07-27T10:00:00Z"},
+		{Status: "working", Rank: status.Rank("working"), LastSeenAt: "2026-07-27T09:00:00Z"},
+		{Status: "ended", Rank: status.Rank("ended"), LastSeenAt: "2026-07-27T11:00:00Z"},
 	}
 	sortSessions(s, sortStatus, false)
 	if s[0].Status != "working" || s[2].Status != "ended" {

@@ -4,13 +4,14 @@ import (
 	"testing"
 
 	"github.com/haribo/claude-vigie/internal/api"
+	"github.com/haribo/claude-vigie/internal/status"
 )
 
 func TestNextAttention(t *testing.T) {
 	sessions := []api.SessionView{
 		{ID: "work", Status: "working", StatusChangedAt: "2026-08-02T09:00:00Z"},
-		{ID: "new-wait", Status: "waiting", StatusChangedAt: "2026-08-02T10:00:00Z"},
-		{ID: "old-err", Status: "error", StatusChangedAt: "2026-08-02T08:00:00Z"},
+		{ID: "new-wait", Status: "waiting", Attention: true, StatusChangedAt: "2026-08-02T10:00:00Z"},
+		{ID: "old-err", Status: "error", Attention: true, StatusChangedAt: "2026-08-02T08:00:00Z"},
 		{ID: "idle", Status: "idle", StatusChangedAt: "2026-08-02T07:00:00Z"},
 	}
 	if got := nextAttention(sessions); got != "old-err" {
@@ -30,8 +31,11 @@ func TestNotifyTransitions(t *testing.T) {
 	base := func() model {
 		return model{prefs: prefs{notify: true}, focus: focusOff, sess: sessionsView{prevStatus: map[string]string{}}}
 	}
-	sess := func(id, status string) api.SessionView {
-		return api.SessionView{ID: id, Title: id, Status: status}
+	// The daemon marks a blocked session as needing attention (ADR-0011, #617), so
+	// the helper does too: a fixture that omits it describes an answer the server
+	// never sends.
+	sess := func(id, st string) api.SessionView {
+		return api.SessionView{ID: id, Title: id, Status: st, Attention: status.NeedsAttention(st)}
 	}
 
 	// First apply arms prevStatus; no working predecessor → nothing fires.

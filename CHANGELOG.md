@@ -11,6 +11,11 @@ file is the single source of truth, not a second narrative.
 
 ### Changed
 
+- Which sessions need you, and the order they sort in, are decided by the server
+  rather than by each screen. The terminal, the browser and the GNOME indicator
+  can no longer disagree about when to interrupt you — a new status reaches all
+  three at once (#617).
+
 - The context fill is computed by the server rather than by each client, so a new
   Claude model is taught to one place instead of two. The terminal and the browser
   now show the same percentage because it is the same number, not because two

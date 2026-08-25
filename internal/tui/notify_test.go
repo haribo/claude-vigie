@@ -53,7 +53,7 @@ func TestNotifiesWhenFocusWasNeverReported(t *testing.T) {
 	m := model{prefs: prefs{notify: true}, // focus left at its zero value: unknown
 		sess: sessionsView{prevStatus: map[string]string{}, prevCall: map[string]bool{}}}
 	m = m.withNotifiedTransitions([]api.SessionView{{ID: "a", Title: "a", Status: "working"}})
-	m.withNotifiedTransitions([]api.SessionView{{ID: "a", Title: "a", Status: "waiting"}})
+	m.withNotifiedTransitions([]api.SessionView{{ID: "a", Title: "a", Status: "waiting", Attention: true}})
 
 	if len(fired) != 1 {
 		t.Errorf("fired %v, want one notification despite never hearing about focus", fired)

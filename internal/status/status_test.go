@@ -200,14 +200,6 @@ func TestRankPutsTheUnknownLast(t *testing.T) {
 	}
 }
 
-// TestDashboardRanksEveryStatus: the web comparator subtracts two ranks, so a
-// status missing from the list yielded undefined and therefore NaN — a comparator
-// that returns NaN does not order at all, and the table came out with `ended`
-// first (#464).
-func TestDashboardRanksEveryStatus(t *testing.T) {
-	diff(t, dashboardLib+" RANK_ORDER", jsArray(t, dashboardLib, "RANK_ORDER"), Order)
-}
-
 // TestAttentionIsASubsetOfAll: an attention status that does not exist would
 // silently never fire.
 func TestAttentionIsASubsetOfAll(t *testing.T) {
@@ -224,25 +216,6 @@ func TestAttentionIsASubsetOfAll(t *testing.T) {
 			t.Errorf("NeedsAttention(%q) = true — it does not block the operator", s)
 		}
 	}
-}
-
-// TestGnomeExtensionSharesTheAttentionSet: the indicator exists to interrupt the
-// operator, so it must agree with the TUI on when that is warranted. A list
-// copied per consumer is what #421 and #422 were (#466).
-func TestGnomeExtensionSharesTheAttentionSet(t *testing.T) {
-	diff(t, gnomeLib+" ATTENTION", jsArray(t, gnomeLib, "ATTENTION"), Attention)
-}
-
-// TestDashboardSharesTheAttentionSet is the twin of the GNOME guard, and it did
-// not exist. #466 gave the indicator the shared list and left the dashboard
-// deciding for itself: it highlighted a call, `waiting` and `stalled`, so an
-// `error` session — a status this very file calls one that blocks the operator —
-// carried no mark at all, and the tab badge counted `waiting` alone (#538).
-//
-// Two consumers agreeing and a third inventing its own answer is the same defect
-// #421 and #422 were, one consumer later.
-func TestDashboardSharesTheAttentionSet(t *testing.T) {
-	diff(t, dashboardLib+" ATTENTION", jsArray(t, dashboardLib, "ATTENTION"), Attention)
 }
 
 // docSection isolates a numbered section of the design document, the way

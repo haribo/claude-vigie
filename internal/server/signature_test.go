@@ -43,9 +43,16 @@ var signatureExcluded = map[string]string{
 	"Samples":    "a rolling window recomputed per read, not session state",
 	"StartedAt":  "immutable after creation; a change is impossible",
 	"EndedAt":    "always accompanied by a Status change, which is covered",
-	// Derived by the daemon since ADR-0011 (#616), from inputs already covered.
+	// Derived by the daemon since ADR-0011 (#616, #617), from inputs already covered.
 	"ContextWindow": "derived from Model, which is covered — it cannot change without it",
 	"ContextPct":    "derived from Model and the context reading, all covered — it cannot change without one of them",
+	// These two derive from the *effective* status, not the stored one: it turns
+	// stale on its own when reports stop, is evaluated at read time, and is
+	// already outside the signature by that design — clients learn of it by
+	// asking again, not by an event. Covering the derivations would not change
+	// that, only lengthen the string.
+	"Attention": "derived from the effective status, which is evaluated at read time and outside the signature by design",
+	"Rank":      "derived from the effective status, which is evaluated at read time and outside the signature by design",
 }
 
 // fieldsCovered lists what the signature reads, by view field name. Kept beside

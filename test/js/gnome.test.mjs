@@ -63,12 +63,16 @@ test("a call counts, whatever the status underneath", () => {
   assert.equal(needsAttention({ status: "idle" }), false);
 });
 
-test("every blocking status counts, not just waiting", () => {
+test("the daemon's verdict is honoured, whatever the status beside it", () => {
+  // This indicator used to carry its own copy of the blocking statuses, and #466
+  // exists because a copy that disagrees with the TUI about when to interrupt you
+  // is worse than no indicator. The daemon sends the verdict now (ADR-0011,
+  // #617), so the only thing left to get wrong here is ignoring it.
   for (const status of ["waiting", "stalled", "error"]) {
-    assert.equal(needsAttention({ status }), true, `${status} must call the operator`);
+    assert.equal(needsAttention({ status, attention: true }), true, `${status} must call the operator`);
   }
   for (const status of ["working", "thinking", "compacting", "idle", "stale", "ended"]) {
-    assert.equal(needsAttention({ status }), false, `${status} must not interrupt`);
+    assert.equal(needsAttention({ status, attention: false }), false, `${status} must not interrupt`);
   }
 });
 
@@ -99,11 +103,11 @@ test("a call outranks the status it rides on", () => {
 // re-notify on the next poll.
 test("attentionIds holds exactly the sessions calling for the operator", () => {
   const sessions = [
-    { id: "a", status: "waiting" },
-    { id: "b", status: "working" },
-    { id: "c", status: "stalled" },
-    { id: "d", status: "idle", call_at: "t" },
-    { id: "e", status: "ended" },
+    { id: "a", status: "waiting", attention: true },
+    { id: "b", status: "working", attention: false },
+    { id: "c", status: "stalled", attention: true },
+    { id: "d", status: "idle", attention: false, call_at: "t" },
+    { id: "e", status: "ended", attention: false },
   ];
   assert.deepEqual([...attentionIds(sessions)].sort(), ["a", "c", "d"]);
   assert.equal(attentionIds([]).size, 0);
