@@ -66,6 +66,13 @@ standing row. It is the same product answering the same question — *which sess
 needs me* — and an operator must not carry two mental models across two windows.
 A divergence in content is debt, not design.
 
+**How that line is held** is [ADR-0011](adr/0011-derive-the-session-view-on-the-server.md):
+what derives from a session alone is derived once by the daemon and rendered by
+every client, and what depends on the operator — the filter, the grouping, the
+idle threshold — stays client-side and is proved against a shared case list read
+by both test suites. A hand copy was the mechanism until then, and it drifted
+five times.
+
 It does not owe the same **mechanisms**. The input device differs, and a control
 built for a fixed-width terminal corner driven by the keyboard is not
 automatically right for a mouse: an `h` modal listing shortcuts is meaningless
