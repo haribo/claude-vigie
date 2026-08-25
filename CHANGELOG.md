@@ -9,6 +9,13 @@ file is the single source of truth, not a second narrative.
 
 ## [Unreleased]
 
+### Changed
+
+- The context fill is computed by the server rather than by each client, so a new
+  Claude model is taught to one place instead of two. The terminal and the browser
+  now show the same percentage because it is the same number, not because two
+  calculations agree (#616).
+
 ### Fixed
 
 - The watcher warning covers every machine instead of the freshest one, and names

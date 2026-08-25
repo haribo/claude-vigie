@@ -123,6 +123,7 @@ linters:
             - "**/internal/clock/**"
             - "**/internal/compaction/**"
             - "**/internal/config/**"
+            - "**/internal/modelinfo/**"
             - "**/internal/status/**"
             - "**/internal/transcript/**"
             - "**/internal/version/**"

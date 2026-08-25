@@ -490,7 +490,7 @@ test("hidden N moves to the bottom bar, and only shows when something is hidden"
 const FLEET_C = [{
   id: "a", title: "api", user: "nico", machine: "m", project_dir: "/h/gateway",
   status: "working", model: "claude-opus-4-5", permission_mode: "plan",
-  context_tokens: 100000, last_seen_at: "2026-08-17T11:59:00Z",
+  context_tokens: 100000, context_pct: 50, last_seen_at: "2026-08-17T11:59:00Z",
   usage: { input_tokens: 10, output_tokens: 5000, cache_read_tokens: 85 },
 }];
 
@@ -499,13 +499,13 @@ test("the four columns the dashboard was missing now render", async () => {
   await h.boot();
   const html = h.lastTable();
   assert.match(html, />nico</, "user");
-  assert.match(html, />50%</, "ctx — 100k of opus-4-5's 200k window");
+  assert.match(html, />50%</, "ctx — the percentage the daemon derived (ADR-0011)");
   assert.match(html, />5k</, "out, on its own rather than only inside the total");
   assert.match(html, />plan</, "mode");
 });
 
 test("an unknown context reading is a dash, not a zero", async () => {
-  const h = harness({ sessions: [{ ...FLEET_C[0], context_tokens: null }] });
+  const h = harness({ sessions: [{ ...FLEET_C[0], context_tokens: null, context_pct: null }] });
   await h.boot();
   assert.match(h.lastTable(), /class="num faint">-</, "no reading at all must not read as an empty window");
 });

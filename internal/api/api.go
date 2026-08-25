@@ -73,7 +73,14 @@ type SessionView struct {
 	// ContextTokens is the real prompt size of the latest request (#279). nil when
 	// vigie has no reading (rendered "-"); a non-nil value is known, including a
 	// known 0 for a just-cleared session shown as 0% (#367).
-	ContextTokens   *int64  `json:"context_tokens,omitempty"`
+	ContextTokens *int64 `json:"context_tokens,omitempty"`
+	// ContextWindow is the model's window in tokens, and ContextPct how full it
+	// is, rounded — both derived by the daemon so no client owns a copy of the
+	// model table or of the rounding (ADR-0011, #616). ContextPct is nil exactly
+	// when ContextTokens is: a session with a known reading of 0 carries a
+	// pointer to 0, which #367 exists to keep distinct from "no reading".
+	ContextWindow   int64   `json:"context_window,omitempty"`
+	ContextPct      *int    `json:"context_pct,omitempty"`
 	PermissionMode  string  `json:"permission_mode,omitempty"` // default/acceptEdits/plan/auto/bypassPermissions (#304)
 	Status          string  `json:"status"`
 	LastTool        string  `json:"last_tool,omitempty"`

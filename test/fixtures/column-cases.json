@@ -1,34 +1,142 @@
 {
   "_comment": [
     "Shared cases for the two column rules the dashboard had to copy from the TUI (#550):",
-    "the CTX percentage (internal/tui/context.go) and the permission-mode label",
-    "(internal/tui/mode.go). Both are read by internal/tui/column_shared_test.go and by",
-    "test/js/dashboard.test.mjs, which must agree case for case.",
-    "CTX cases stay off an exact .5 percentage: Go's %.0f rounds half to even and",
-    "Math.round rounds half up, and this fixture is not the place to discover that."
+    "the CTX percentage and the permission-mode label (internal/tui/mode.go).",
+    "Since ADR-0011 (#616) the CTX cases prove a chain rather than two twins:",
+    "the daemon derives `pct` from `model` + `tokens` (internal/server/sessions.go),",
+    "and each client renders `want` from `pct` — internal/tui/column_shared_test.go",
+    "and test/js/dashboard.test.mjs, which must agree case for case.",
+    "The note that used to live here, on Go rounding half to even where Math.round",
+    "rounds half up, is gone with the second rounding: there is one now."
   ],
   "context": [
-    { "why": "no reading at all is a dash, not a zero", "model": "claude-opus-4-8", "tokens": null, "want": "-" },
-    { "why": "a reading that happens to be zero is 0%, and #367 exists to keep these apart", "model": "claude-opus-4-8", "tokens": 0, "want": "0%" },
-    { "why": "opus 4.8 has the million-token window", "model": "claude-opus-4-8", "tokens": 100000, "want": "10%" },
-    { "why": "opus 4.5 does not", "model": "claude-opus-4-5", "tokens": 100000, "want": "50%" },
-    { "why": "the boundary is 4.6", "model": "claude-opus-4-6", "tokens": 100000, "want": "10%" },
-    { "why": "sonnet follows the same rule", "model": "claude-sonnet-5", "tokens": 100000, "want": "10%" },
-    { "why": "fable is always big", "model": "claude-fable-5", "tokens": 250000, "want": "25%" },
-    { "why": "haiku is always base", "model": "claude-haiku-4-5", "tokens": 20000, "want": "10%" },
-    { "why": "an unknown family falls back to base", "model": "claude-mystery-9", "tokens": 20000, "want": "10%" },
-    { "why": "no model at all falls back to base", "model": "", "tokens": 20000, "want": "10%" },
-    { "why": "a non-numeric version part is zero, not a parsed prefix — strconv.Atoi rejects it", "model": "claude-opus-4x-9", "tokens": 20000, "want": "10%" },
-    { "why": "a negative reading clamps to zero rather than rendering a negative fill", "model": "claude-opus-4-8", "tokens": -5, "want": "0%" },
-    { "why": "a full window", "model": "claude-opus-4-5", "tokens": 200000, "want": "100%" }
+    {
+      "why": "no reading at all is a dash, not a zero",
+      "model": "claude-opus-4-8",
+      "tokens": null,
+      "pct": null,
+      "want": "-"
+    },
+    {
+      "why": "a reading that happens to be zero is 0%, and #367 exists to keep these apart",
+      "model": "claude-opus-4-8",
+      "tokens": 0,
+      "pct": 0,
+      "want": "0%"
+    },
+    {
+      "why": "opus 4.8 has the million-token window",
+      "model": "claude-opus-4-8",
+      "tokens": 100000,
+      "pct": 10,
+      "want": "10%"
+    },
+    {
+      "why": "opus 4.5 does not",
+      "model": "claude-opus-4-5",
+      "tokens": 100000,
+      "pct": 50,
+      "want": "50%"
+    },
+    {
+      "why": "the boundary is 4.6",
+      "model": "claude-opus-4-6",
+      "tokens": 100000,
+      "pct": 10,
+      "want": "10%"
+    },
+    {
+      "why": "sonnet follows the same rule",
+      "model": "claude-sonnet-5",
+      "tokens": 100000,
+      "pct": 10,
+      "want": "10%"
+    },
+    {
+      "why": "fable is always big",
+      "model": "claude-fable-5",
+      "tokens": 250000,
+      "pct": 25,
+      "want": "25%"
+    },
+    {
+      "why": "haiku is always base",
+      "model": "claude-haiku-4-5",
+      "tokens": 20000,
+      "pct": 10,
+      "want": "10%"
+    },
+    {
+      "why": "an unknown family falls back to base",
+      "model": "claude-mystery-9",
+      "tokens": 20000,
+      "pct": 10,
+      "want": "10%"
+    },
+    {
+      "why": "no model at all falls back to base",
+      "model": "",
+      "tokens": 20000,
+      "pct": 10,
+      "want": "10%"
+    },
+    {
+      "why": "a non-numeric version part is zero, not a parsed prefix — strconv.Atoi rejects it",
+      "model": "claude-opus-4x-9",
+      "tokens": 20000,
+      "pct": 10,
+      "want": "10%"
+    },
+    {
+      "why": "a negative reading clamps to zero rather than rendering a negative fill",
+      "model": "claude-opus-4-8",
+      "tokens": -5,
+      "pct": 0,
+      "want": "0%"
+    },
+    {
+      "why": "a full window",
+      "model": "claude-opus-4-5",
+      "tokens": 200000,
+      "pct": 100,
+      "want": "100%"
+    }
   ],
   "mode": [
-    { "why": "no mode reported", "raw": "", "want": "-" },
-    { "why": "the safe default is named, not left raw", "raw": "default", "want": "manual" },
-    { "why": "edits accepted automatically", "raw": "acceptEdits", "want": "accept" },
-    { "why": "plan", "raw": "plan", "want": "plan" },
-    { "why": "unattended", "raw": "auto", "want": "auto" },
-    { "why": "no permission checks at all", "raw": "bypassPermissions", "want": "bypass" },
-    { "why": "an unrecognised mode is surfaced raw — it must never read as the safe default (#304)", "raw": "someNewMode", "want": "someNewMode" }
+    {
+      "why": "no mode reported",
+      "raw": "",
+      "want": "-"
+    },
+    {
+      "why": "the safe default is named, not left raw",
+      "raw": "default",
+      "want": "manual"
+    },
+    {
+      "why": "edits accepted automatically",
+      "raw": "acceptEdits",
+      "want": "accept"
+    },
+    {
+      "why": "plan",
+      "raw": "plan",
+      "want": "plan"
+    },
+    {
+      "why": "unattended",
+      "raw": "auto",
+      "want": "auto"
+    },
+    {
+      "why": "no permission checks at all",
+      "raw": "bypassPermissions",
+      "want": "bypass"
+    },
+    {
+      "why": "an unrecognised mode is surfaced raw — it must never read as the safe default (#304)",
+      "raw": "someNewMode",
+      "want": "someNewMode"
+    }
   ]
 }
