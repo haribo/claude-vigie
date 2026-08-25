@@ -12,7 +12,6 @@ import (
 
 	"github.com/haribo/claude-vigie/internal/api"
 	"github.com/haribo/claude-vigie/internal/clock"
-	"github.com/haribo/claude-vigie/internal/status"
 	"github.com/haribo/claude-vigie/internal/version"
 )
 
@@ -1226,7 +1225,7 @@ func lessBy(a, b api.SessionView, key sortKey) bool {
 		return totalTokens(a) > totalTokens(b)
 	case sortStatus:
 		// status.Rank is an index: lower is higher in the table.
-		if ra, rb := statusRank(a.Status), statusRank(b.Status); ra != rb {
+		if ra, rb := a.Rank, b.Rank; ra != rb {
 			return ra < rb
 		}
 		return a.LastSeenAt > b.LastSeenAt // tie-break: most recent first
@@ -1241,15 +1240,6 @@ func lessBy(a, b api.SessionView, key sortKey) bool {
 		return a.LastSeenAt > b.LastSeenAt
 	}
 }
-
-// statusRank orders statuses for the status sort, lower first, from the one list
-// that also decides which statuses exist (docs/design/session-list.md § 2.1).
-//
-// It used to name five of the nine and send the rest to a default of 0, which —
-// because this comparison was "higher wins" — sorted `compacting`, `thinking`,
-// `error` and `stale` *below* `ended`. A session hitting an API error ranked under
-// one that was over (#464).
-func statusRank(s string) int { return status.Rank(s) }
 
 // fuzzyMatch reports whether the runes of pattern appear in order in text
 // (case-insensitive subsequence match).

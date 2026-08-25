@@ -104,7 +104,7 @@ func TestCallTakesTheDoingCell(t *testing.T) {
 // are deductions, so it jumps first — oldest call first within the calls (#389).
 func TestNextAttentionPrefersACall(t *testing.T) {
 	sessions := []api.SessionView{
-		{ID: "waiting-old", Status: "waiting", StatusChangedAt: "2026-08-12T09:00:00Z"},
+		{ID: "waiting-old", Status: "waiting", Attention: true, StatusChangedAt: "2026-08-12T09:00:00Z"},
 		{ID: "called-late", Status: "idle", CallAt: "2026-08-12T11:00:00Z"},
 		{ID: "called-early", Status: "idle", CallAt: "2026-08-12T10:00:00Z"},
 	}

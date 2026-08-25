@@ -161,7 +161,7 @@ const COLS = [
     cell: (s) => `<td>${sparkSVG(s.samples)}</td>` },
   { key: "rc", label: "RC", cmp: (a, b) => (a.remote_control === b.remote_control ? 0 : a.remote_control ? -1 : 1),
     cell: (s) => `<td>${s.remote_control ? '<span class="rc-on" title="Remote control on">◉</span>' : '<span class="rc-off" title="Remote control off">○</span>'}</td>` },
-  { key: "status", label: "Status", cmp: (a, b) => rank(a.status) - rank(b.status),
+  { key: "status", label: "Status", cmp: (a, b) => rank(a) - rank(b),
     cell: (s) => { const st = STATUSES.includes(s.status) ? s.status : "idle"; return `<td><span class="pill st-${st}${hasCall(s) ? " call" : ""}"><span class="dot"></span>${st}</span></td>`; } },
   // An unrecognised mode is surfaced raw, never relabelled "manual": a new mode
   // must not read as the safe default (#304).

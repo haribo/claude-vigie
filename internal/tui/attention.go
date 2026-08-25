@@ -6,17 +6,20 @@ import (
 	"sort"
 
 	"github.com/haribo/claude-vigie/internal/api"
-	"github.com/haribo/claude-vigie/internal/status"
 )
 
-// attentionStatuses are the states that call for the operator — the session is
-// blocked and needs a human: it is waiting on input, it errored, or a tool hung
+// isAttention reports whether a session's state calls for the operator — it is
+// blocked and needs a human: waiting on input, errored, or hung on a tool
 // (stalled, #256).
-// The set itself lives in internal/status, so the TUI and the GNOME indicator
-// cannot disagree about when the operator should be interrupted (#466).
-func isAttentionStatus(s string) bool { return status.NeedsAttention(s) }
-
-func isAttention(s string) bool { return isAttentionStatus(s) }
+//
+// The daemon decides it (ADR-0011, #617). The set used to live in
+// internal/status precisely so the TUI and the GNOME indicator could not
+// disagree, and it was still hand-copied into both JavaScript clients; deriving
+// it once removes the copies rather than checking them.
+//
+// A raised call is not part of it — it is not a status but rides alongside one
+// (ADR-0010) — so callers that must weigh both read CallAt too.
+func isAttention(s api.SessionView) bool { return s.Attention }
 
 // nextAttention returns the id of the session that has been waiting on the
 // operator longest — the oldest by StatusChangedAt among the attention states —
@@ -40,7 +43,7 @@ func nextAttention(sessions []api.SessionView) string {
 
 	var q []api.SessionView
 	for _, s := range sessions {
-		if isAttention(s.Status) {
+		if isAttention(s) {
 			q = append(q, s)
 		}
 	}
@@ -70,7 +73,7 @@ func (m model) withNotifiedTransitions(next []api.SessionView) model {
 			case known && calling && !prevCall[s.ID]:
 				// A raised call is exactly what this notification is for (#260).
 				notifyFn(sessionName(s), "calling you")
-			case prev[s.ID] == "working" && isAttention(s.Status):
+			case prev[s.ID] == "working" && isAttention(s):
 				notifyFn(sessionName(s), s.Status)
 			}
 		}

@@ -8,6 +8,7 @@ import (
 
 	"github.com/haribo/claude-vigie/internal/api"
 	"github.com/haribo/claude-vigie/internal/modelinfo"
+	"github.com/haribo/claude-vigie/internal/status"
 	"github.com/haribo/claude-vigie/internal/store"
 )
 
@@ -124,15 +125,20 @@ func watchedMachines(ctx context.Context, r metaReader, sessions []store.Session
 }
 
 func toView(s store.Session, samples []int64, now time.Time, machineWatched bool) api.SessionView {
-	status := s.Status
+	// The effective status, which is not always the stored one — and is what every
+	// derived field below must read. Naming it `status` shadowed the package of the
+	// same name and hid that: Attention and Rank taken from s.Status would have
+	// ranked a session by a status the client is never shown, leaving a stale
+	// session sorted among the working ones (#617).
+	effective := s.Status
 	if s.Status != "ended" && reportStale(s.ReportedAt, now) {
 		// No fresh report. A watched machine's watcher would have kept a live
 		// session fresh, so a stale one there is genuinely gone → ended. On an
 		// unwatched machine "no news" means "unobserved", not "dead" → stale (#285).
 		if machineWatched {
-			status = "ended"
+			effective = "ended"
 		} else {
-			status = "stale"
+			effective = "stale"
 		}
 	}
 	return api.SessionView{
@@ -145,10 +151,12 @@ func toView(s store.Session, samples []int64, now time.Time, machineWatched bool
 		Model:          s.Model,
 		Effort:         s.Effort,
 		ContextTokens:  contextView(s.ContextTokens, s.ContextKnown),
+		Attention:      status.NeedsAttention(effective),
+		Rank:           status.Rank(effective),
 		ContextWindow:  modelinfo.Window(s.Model),
 		ContextPct:     contextPctView(s.ContextTokens, s.ContextKnown, s.Model),
 		PermissionMode: s.PermissionMode,
-		Status:         status,
+		Status:         effective,
 		LastTool:       s.LastTool,
 		Usage: api.Usage{
 			InputTokens:         s.Usage.InputTokens,

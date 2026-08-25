@@ -141,13 +141,13 @@ export function colHidden(hidden, key, mandatory) { return !mandatory.has(key) &
 // `undefined` for `compacting` and the comparator returned `NaN`. A NaN
 // comparator does not order badly, it stops ordering: the table came out with an
 // `ended` session first (#464).
-export const RANK_ORDER = ["stalled", "working", "thinking", "compacting", "waiting", "idle", "error", "stale", "ended"];
-
-// rank places an unknown status last, never first: a status this build has never
-// heard of is the one we can say least about.
-export function rank(status) {
-  const i = RANK_ORDER.indexOf(status);
-  return i < 0 ? RANK_ORDER.length : i;
+// rank is where a status sorts, lower first. The daemon sends it (ADR-0011,
+// #617): the order used to be transcribed here and into the GNOME indicator, and
+// #464 is what that cost — four statuses nobody had ranked produced a NaN
+// comparator, which does not sort badly, it stops sorting.
+export function rank(session) {
+  const r = session == null ? null : session.rank;
+  return typeof r === "number" ? r : Number.MAX_SAFE_INTEGER;
 }
 
 // shortId is the first eight characters of a session id, the fallback the table
@@ -318,15 +318,17 @@ export function groupSessions(list, mode) {
 //
 // The dashboard used to decide for itself, and dropped `error`: a session stuck
 // on a 529 was drawn like any working one (#538).
-export const ATTENTION = ["waiting", "error", "stalled"];
-
 // needsAttention covers both reasons to interrupt: a status that means the
 // session is blocked, and a call the session raised for itself (ADR-0010). The
 // call is not a status — it rides alongside one — so anything deciding whether to
 // interrupt has to look at both.
+//
+// The status half is the daemon's answer since ADR-0011 (#617). The list used to
+// be transcribed here, and the dashboard dropped `error` from its copy: a session
+// stuck on a 529 was drawn like any working one (#538).
 export function needsAttention(session) {
   if (!session) return false;
-  return hasCall(session) || ATTENTION.includes(session.status);
+  return hasCall(session) || Boolean(session.attention);
 }
 
 export function attentionCount(sessions) {

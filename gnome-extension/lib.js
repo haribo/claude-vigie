@@ -29,15 +29,17 @@ export function basename(path) {
 // human. Kept identical to internal/status.Attention — a Go test reads this
 // literal and fails on drift, because an indicator that disagrees with the TUI
 // about when to interrupt you is worse than no indicator (#466).
-export const ATTENTION = ["waiting", "error", "stalled"];
-
 // needsAttention covers both reasons to interrupt: a status that means the
 // session is blocked, and a call the session raised for itself (ADR-0010). The
 // call is not a status — it rides alongside one — so anything deciding whether to
 // interrupt has to look at both.
+//
+// The status half is the daemon's answer since ADR-0011 (#617). This indicator
+// used to carry its own copy of the list, and an indicator that disagrees with
+// the TUI about when to interrupt you is worse than no indicator (#466).
 export function needsAttention(session) {
   if (!session) return false;
-  return Boolean(session.call_at) || ATTENTION.includes(session.status);
+  return Boolean(session.call_at) || Boolean(session.attention);
 }
 
 // attentionReason says why, for the notification body. A raised call outranks the

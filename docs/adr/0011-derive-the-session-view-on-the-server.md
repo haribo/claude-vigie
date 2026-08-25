@@ -62,6 +62,19 @@ the server would mean shipping every keystroke to it. They stay duplicated — a
 every one of them gets a case list in `test/fixtures/`, read by both suites, on
 the pattern already used for three of them.
 
+**A third category, found while applying the second (#617): what depends on the
+passing of time stays client-side.** A session's context fill does not change on
+its own; a watcher's freshness does — it decays with nothing happening at all. A
+verdict computed by the daemon is frozen at the moment it is sent, and the
+dashboard refetches that endpoint once a minute against a threshold of fifteen
+seconds, so a watcher that died would read as live for up to a minute. Computed
+from the timestamp by the client, it decays correctly between requests and needs
+no round trip. Time belongs to whoever is displaying, and a derived value that is
+a function of *now* has to be derived there.
+
+Such a value takes the second half's treatment, not the first: it stays where it
+is and earns a shared case list.
+
 **The scrapes are deleted by whichever half covers them.** A constant array that
 survives as client-side data becomes a generated fixture; one that moves to the
 server stops existing twice. `jsArrayFromFile` having no callers left is the
@@ -108,7 +121,8 @@ them:
   labels, then the operator-dependent fixtures — so no single change carries the
   whole surface.
 - Any new client-side derivation must first be reconciled with this ADR: it either
-  belongs on the server, or it is operator-dependent and arrives with its fixture.
+  belongs on the server, or it is operator-dependent or time-dependent and arrives
+  with its fixture.
 
 ## References
 

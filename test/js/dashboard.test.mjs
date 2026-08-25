@@ -10,7 +10,7 @@ import { readFile } from "node:fs/promises";
 import {
   esc, dash, trim, hasCall, detailText, apiErrorLabel, humanTokens, relAge, relResetHint,
   shortModel, projectName, totalTokens, sparkSVG, migrateKeys, fullColOrder, colHidden, rank,
-  adoptLegacyKey, ATTENTION, needsAttention, attentionCount, streamIsSilent, SILENCE_MS,
+  adoptLegacyKey, needsAttention, attentionCount, streamIsSilent, SILENCE_MS,
   fuzzyMatch, sessionHaystack, sessionName, shortId, matchesFilter,
   GROUP_MODES, groupKeyOf, groupSessions, IDLE_PRESETS_MS, idleLabel, hiddenByIdle,
   contextCell, contextKnown, contextPct, modeLabel, migrateV1Columns, V1_COLUMN_KEYS,
@@ -169,20 +169,29 @@ test("lib.js exports every name app.js imports from it", async () => {
 // statuses, so `RANK["compacting"]` was undefined and the comparator returned
 // NaN — which does not order badly, it stops ordering: an `ended` session came
 // out first (#464).
-test("rank places every status, most active first", () => {
-  const order = ["stalled", "working", "thinking", "compacting", "waiting", "idle", "error", "stale", "ended"];
-  order.forEach((s, i) => assert.equal(rank(s), i, `${s} is out of place`));
+test("rank reads the rank the daemon sent", () => {
+  // Which status sorts where is no longer decided here (ADR-0011, #617); it is
+  // proved once, in Go, where it is produced. What is left to get wrong on this
+  // side is failing to read the answer.
+  assert.equal(rank({ status: "stalled", rank: 0 }), 0);
+  assert.equal(rank({ status: "ended", rank: 8 }), 8);
 });
 
-test("an unknown status sorts last, never first", () => {
-  assert.ok(rank("quantum") > rank("ended"),
-    "a status this build has never heard of must not head the table");
-  assert.ok(Number.isFinite(rank("quantum")), "an unknown status must still compare");
+test("a session with no rank sorts last, never first", () => {
+  assert.ok(rank({ status: "quantum" }) > rank({ status: "ended", rank: 8 }),
+    "a session this build cannot place must not head the table");
+  assert.ok(Number.isFinite(rank({ status: "quantum" })), "an unrankable session must still compare");
+  assert.ok(Number.isFinite(rank(null)), "so must a missing one");
 });
 
 test("the comparator orders instead of returning NaN", () => {
-  const cmp = (a, b) => rank(a.status) - rank(b.status);
-  const rows = ["ended", "compacting", "working", "stale", "quantum", "stalled"].map((status) => ({ status }));
+  // #464: four statuses nobody had ranked produced a NaN comparator, and a NaN
+  // comparator does not sort badly — it stops sorting. The rank arrives from the
+  // daemon now, and a row arriving without one must still compare.
+  const cmp = (a, b) => rank(a) - rank(b);
+  const ranks = { stalled: 0, working: 1, compacting: 3, stale: 7, ended: 8 };
+  const rows = ["ended", "compacting", "working", "stale", "quantum", "stalled"]
+    .map((status) => (status in ranks ? { status, rank: ranks[status] } : { status }));
   assert.deepEqual([...rows].sort(cmp).map((r) => r.status),
     ["stalled", "working", "compacting", "stale", "ended", "quantum"]);
   for (const a of rows) {
@@ -249,34 +258,36 @@ test("an empty stored value is carried over, not dropped", () => {
 // indicator — one list, consulted rather than reimplemented — and left the
 // dashboard out. `TestDashboardSharesTheAttentionSet` pins the list to
 // internal/status.Attention; these pin what the dashboard does with it.
-test("needsAttention covers every attention status and a raised call", () => {
-  for (const status of ATTENTION) {
-    assert.equal(needsAttention({ status }), true, `${status} must call the operator`);
-  }
-  assert.equal(needsAttention({ status: "error" }), true,
-    "an API error is an attention status — this is the one the dashboard dropped");
-  // A call rides alongside a status rather than being one (ADR-0010).
+test("needsAttention honours the daemon's verdict and adds a raised call", () => {
+  // Which statuses are blocking is no longer this file's business: the daemon
+  // decides and sends `attention` (ADR-0011, #617), so there is no second list to
+  // drop `error` from, which is what #538 was. What is still the dashboard's own
+  // is the combination — a call rides alongside a status rather than being one
+  // (ADR-0010), so both have to be looked at.
+  assert.equal(needsAttention({ status: "waiting", attention: true }), true);
+  assert.equal(needsAttention({ status: "working", attention: false }), false);
   assert.equal(needsAttention({ status: "working", call_at: "2026-08-16T10:00:00Z" }), true);
   assert.equal(needsAttention({ status: "idle", call_at: "2026-08-16T10:00:00Z" }), true);
 });
 
 test("needsAttention leaves a session that needs nobody alone", () => {
   for (const status of ["working", "thinking", "compacting", "idle", "stale", "ended"]) {
-    assert.equal(needsAttention({ status }), false, `${status} must not interrupt`);
+    assert.equal(needsAttention({ status, attention: false }), false, `${status} must not interrupt`);
   }
-  assert.equal(needsAttention({ status: "waiting", call_at: "" }), true, "an empty call is not a call, the status still is");
+  assert.equal(needsAttention({ status: "waiting", attention: true, call_at: "" }), true,
+    "an empty call is not a call, the status still is");
   assert.equal(needsAttention(null), false);
   assert.equal(needsAttention(undefined), false);
 });
 
 test("attentionCount counts every reason to interrupt, not just waiting", () => {
   const sessions = [
-    { id: "a", status: "waiting" },
-    { id: "b", status: "error" },
-    { id: "c", status: "stalled" },
-    { id: "d", status: "working", call_at: "2026-08-16T10:00:00Z" },
-    { id: "e", status: "working" },
-    { id: "f", status: "idle" },
+    { id: "a", status: "waiting", attention: true },
+    { id: "b", status: "error", attention: true },
+    { id: "c", status: "stalled", attention: true },
+    { id: "d", status: "working", attention: false, call_at: "2026-08-16T10:00:00Z" },
+    { id: "e", status: "working", attention: false },
+    { id: "f", status: "idle", attention: false },
   ];
   assert.equal(attentionCount(sessions), 4, "the badge must not count `waiting` alone");
   assert.equal(attentionCount([]), 0);
