@@ -208,45 +208,25 @@ export function matchesFilter(s, filter) {
   return fuzzyMatch(filter, sessionHaystack(s));
 }
 
-// modelVersion splits a short model name ("opus-4-8") into family and versions —
-// the twin of internal/tui/context.go. The strict numeric test matters: Go's
-// strconv.Atoi rejects "4x" and yields 0, where parseInt would happily return 4
-// and silently move a model into the wrong context window.
-export function modelVersion(short) {
-  const parts = String(short == null ? "" : short).split("-");
-  const num = (p) => (/^[+-]?\d+$/.test(p == null ? "" : p) ? Number(p) : 0);
-  return { family: parts[0] || "", major: num(parts[1]), minor: num(parts[2]) };
-}
-
-// contextWindow is how many tokens the model's context holds. Kept identical to
-// internal/tui/context.go; a shared fixture checks both against the same cases.
-export function contextWindow(model) {
-  const BIG = 1000000, BASE = 200000;
-  const { family, major, minor } = modelVersion(shortModel(model));
-  if (family === "fable") return BIG;
-  if (family === "opus" || family === "sonnet") return (major > 4 || (major === 4 && minor >= 6)) ? BIG : BASE;
-  return BASE;
-}
-
 // contextKnown separates "no reading at all" from "a reading that happens to be
 // zero". The daemon keeps them apart on purpose — `contextView` returns a nil
 // pointer for the first — and collapsing them here would rebuild the defect #367
 // fixed on the server.
-export function contextKnown(s) { return s != null && s.context_tokens != null; }
+//
+// Both fields are required and neither is taken as proof of the other: the daemon
+// sets them together, and a render path is the wrong place to trust an invariant
+// it cannot enforce.
+export function contextKnown(s) { return s != null && s.context_tokens != null && s.context_pct != null; }
 
-export function contextPct(s) {
-  if (!contextKnown(s) || s.context_tokens <= 0) return 0;
-  return (s.context_tokens / contextWindow(s.model)) * 100;
-}
+// contextPct is how full the context window is. The daemon derives it (ADR-0011)
+// — window table and rounding included — so this reads a number rather than
+// recomputing one. It used to hold a transcription of internal/tui/context.go,
+// and with it a rounding that disagreed with Go's on an exact .5.
+export function contextPct(s) { return contextKnown(s) ? s.context_pct : 0; }
 
 // contextCell is the CTX column: a dash when unknown, a percentage otherwise —
 // including `0%` for a session known to have just been cleared.
-//
-// Go formats with %.0f, which rounds half to even, while Math.round rounds half
-// up. They part company only on an exact .5, which a token count over a window of
-// 200 000 or 1 000 000 does not produce in practice; the shared fixture stays off
-// that boundary rather than pretending it does not exist.
-export function contextCell(s) { return contextKnown(s) ? `${Math.round(contextPct(s))}%` : "-"; }
+export function contextCell(s) { return contextKnown(s) ? `${s.context_pct}%` : "-"; }
 
 // PERMISSION_MODES is the #303 taxonomy, raw value to label. An unrecognised
 // non-empty value is shown as it came rather than relabelled: a new mode must

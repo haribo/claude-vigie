@@ -448,8 +448,10 @@ test("contextCell agrees with the shared fixture the Go side reads", async () =>
   const { context } = JSON.parse(raw);
   assert.ok(context.length > 0, "the fixture has no context cases");
   for (const c of context) {
-    const s = { model: c.model, context_tokens: c.tokens };
-    assert.equal(contextCell(s), c.want, `model=${c.model} tokens=${c.tokens} — ${c.why}`);
+    // The daemon derives `pct` from the model and the reading (ADR-0011); this
+    // side is asked only what it renders from the answer.
+    const s = { model: c.model, context_tokens: c.tokens, context_pct: c.pct };
+    assert.equal(contextCell(s), c.want, `pct=${c.pct} — ${c.why}`);
   }
 });
 
@@ -463,11 +465,14 @@ test("unknown and known-to-be-zero are different states", () => {
   // The daemon returns a nil pointer for the first and a 0 for the second, on
   // purpose (#367). Collapsing them here would rebuild the defect it fixed.
   assert.equal(contextKnown({ model: "claude-opus-4-8" }), false);
-  assert.equal(contextKnown({ model: "claude-opus-4-8", context_tokens: null }), false);
-  assert.equal(contextKnown({ model: "claude-opus-4-8", context_tokens: 0 }), true);
+  assert.equal(contextKnown({ model: "claude-opus-4-8", context_tokens: null, context_pct: null }), false);
+  assert.equal(contextKnown({ model: "claude-opus-4-8", context_tokens: 0, context_pct: 0 }), true);
   assert.equal(contextCell({ model: "claude-opus-4-8" }), "-");
-  assert.equal(contextCell({ model: "claude-opus-4-8", context_tokens: 0 }), "0%");
+  assert.equal(contextCell({ model: "claude-opus-4-8", context_tokens: 0, context_pct: 0 }), "0%");
   assert.equal(contextPct({ model: "claude-opus-4-8" }), 0, "an unknown reading still sorts as zero");
+  // Half an invariant is not the invariant: one field without the other renders a
+  // dash rather than "undefined%".
+  assert.equal(contextCell({ context_tokens: 100000 }), "-");
 });
 
 // #550. A saved layout is live state: renaming four keys without carrying it over

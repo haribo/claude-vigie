@@ -20,6 +20,7 @@ type columnFixture struct {
 		Why    string `json:"why"`
 		Model  string `json:"model"`
 		Tokens *int64 `json:"tokens"` // nil is "no reading at all", which is not zero (#367)
+		Pct    *int   `json:"pct"`    // the daemon's derived reading; nil exactly when Tokens is
 		Want   string `json:"want"`
 	} `json:"context"`
 	Mode []struct {
@@ -47,9 +48,12 @@ func loadColumnFixture(t *testing.T) columnFixture {
 
 func TestContextCellAgreesWithTheSharedFixture(t *testing.T) {
 	for _, c := range loadColumnFixture(t).Context {
-		s := api.SessionView{Model: c.Model, ContextTokens: c.Tokens}
+		// The daemon derives Pct from the model and the reading (ADR-0011); this
+		// layer is asked only what it renders from the answer, which is exactly the
+		// half the dashboard still holds a copy of.
+		s := api.SessionView{Model: c.Model, ContextTokens: c.Tokens, ContextPct: c.Pct}
 		if got := contextCell(s); got != c.Want {
-			t.Errorf("contextCell(model=%q, tokens=%v) = %q, want %q — %s", c.Model, c.Tokens, got, c.Want, c.Why)
+			t.Errorf("contextCell(pct=%v) = %q, want %q — %s", c.Pct, got, c.Want, c.Why)
 		}
 	}
 }
