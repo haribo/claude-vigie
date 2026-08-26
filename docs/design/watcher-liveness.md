@@ -192,3 +192,9 @@ state of each", not "can I trust this screen".
 - **The fleet verdict** — a fleet where one machine of three has gone silent
   raises the alarm and names it; a hooks-only machine beside live ones does not;
   a fleet with no live watcher at all does. This is the regression test for #599.
+- **Both clients, one case list** — § 5 and § 6 are implemented twice on purpose
+  (ADR-0011's third category: the verdict is a function of *now*, so it decays
+  where it is displayed). `test/fixtures/watcher-cases.json` is that list, read by
+  `internal/tui` and by `test/js`, alarm text included. A test also holds the
+  property the duplication buys: the alarm appears as the clock advances, with no
+  new answer from the daemon (#623).

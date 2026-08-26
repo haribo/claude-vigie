@@ -362,3 +362,98 @@ export function streamIsSilent(lastHeardAt, now, limitMs = SILENCE_MS) {
   if (!lastHeardAt) return false;
   return now - lastHeardAt > limitMs;
 }
+
+// --- Watcher liveness -------------------------------------------------------
+//
+// The one rule ADR-0011 leaves deliberately duplicated: a watcher's freshness is
+// a function of *now*, so it decays with nothing happening, and a verdict the
+// daemon computed would be frozen at the moment it was sent. This endpoint is
+// refetched once a minute against a fifteen-second threshold — a dead watcher
+// would read as live for up to a minute, on the indicator whose whole job is to
+// say the board cannot be trusted (#617, #623).
+//
+// Duplicated, not unchecked: `test/fixtures/watcher-cases.json` holds the case
+// list, and internal/tui proves the same cases. Specified in
+// docs/design/watcher-liveness.md § 5 and § 6.
+
+export const WATCHER_STALE_MS = 15000;
+export const WATCHER_REPORTING = "reporting";
+export const WATCHER_SILENT = "silent";
+export const WATCHER_UNREADABLE = "unreadable";
+
+// RFC3339, as Go's time.Parse accepts it. Date.parse alone is far more lenient —
+// it takes "2026-08-25" happily, where Go rejects it — and a browser quietly
+// accepting what the terminal refuses is the disagreement the shared fixture
+// exists to catch.
+const RFC3339 = /^\d{4}-\d{2}-\d{2}[Tt]\d{2}:\d{2}:\d{2}(\.\d+)?([Zz]|[+-]\d{2}:\d{2})$/;
+
+// readWatcher turns one recorded heartbeat into a verdict. An unreadable
+// timestamp is its own answer, neither health nor silence: the indicator says
+// whether the screen can be trusted, and an answer that cannot be read answers
+// that with no — but the fault is in what vigie recorded, not on that machine.
+export function readWatcher(seen, nowMs) {
+  if (!seen) return WATCHER_SILENT;
+  if (!RFC3339.test(seen)) return WATCHER_UNREADABLE;
+  const t = Date.parse(seen);
+  if (Number.isNaN(t)) return WATCHER_UNREADABLE;
+  return nowMs - t > WATCHER_STALE_MS ? WATCHER_SILENT : WATCHER_REPORTING;
+}
+
+export function watcherAlarm(verdict) { return verdict !== WATCHER_REPORTING; }
+
+// fleetWatchers counts the machines known and names those that beat and then
+// stopped, split by cause. A machine with no recorded heartbeat is reporting
+// through hooks alone — a deployment choice, not a fault — so it is counted and
+// never listed.
+//
+// Names are sorted so the alarm text is stable. Go sorts by bytes and JavaScript
+// by UTF-16 code units; the two part company only outside ASCII, which a hostname
+// is not.
+export function fleetWatchers(machines, nowMs) {
+  const silent = [], unreadable = [];
+  const entries = Object.entries(machines || {});
+  for (const [name, seen] of entries) {
+    if (!seen) continue; // never beat: hooks-only, by choice
+    const v = readWatcher(seen, nowMs);
+    if (v === WATCHER_SILENT) silent.push(name);
+    else if (v === WATCHER_UNREADABLE) unreadable.push(name);
+  }
+  return { known: entries.length, silent: silent.sort(), unreadable: unreadable.sort() };
+}
+
+// fleetAlarm reports whether the statuses on screen may be frozen anywhere in the
+// fleet. It is true with no names in one case: nothing beating at all — no
+// watcher was ever started — where no single machine qualifies as having stopped
+// yet nothing is refreshing anything.
+export function fleetAlarm(machines, nowMs) {
+  const { known, silent, unreadable } = fleetWatchers(machines, nowMs);
+  if (silent.length || unreadable.length) return { alarm: true, known, silent, unreadable };
+  for (const seen of Object.values(machines || {})) {
+    if (readWatcher(seen, nowMs) === WATCHER_REPORTING) {
+      return { alarm: false, known, silent: [], unreadable: [] };
+    }
+  }
+  return { alarm: true, known, silent: [], unreadable: [] };
+}
+
+// fleetAlarmDetail is the indicator's text: how much of the fleet is affected and
+// which machines, so the operator does not have to open another tab to learn
+// where to go.
+export function fleetAlarmDetail(known, silent, unreadable) {
+  const names = [...silent, ...unreadable].sort();
+  if (!names.length) return "not reporting · statuses may be frozen";
+  const what = silent.length === 0 ? "unreadable heartbeat" : "not reporting";
+  return `${names.length} of ${known} ${what} (${names.join(", ")})`;
+}
+
+// watcherCell is a machine's own verdict as the Machines card shows it: the word
+// and the class. "time?" is a heartbeat vigie recorded and cannot read — a fault
+// on this side, not on that machine — and saying which keeps the alarm from
+// sending the operator to the wrong host (watcher-liveness.md § 5).
+//
+// It is here rather than inline in the card so it can be proved: the card itself
+// is built inside app.js, which the live harness cannot reach.
+export function watcherCell(verdict) {
+  if (verdict === WATCHER_UNREADABLE) return { cls: "w-bad", text: "time?" };
+  return watcherAlarm(verdict) ? { cls: "w-bad", text: "none" } : { cls: "w-ok", text: "live" };
+}
