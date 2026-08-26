@@ -11,6 +11,7 @@ import {
   esc, dash, trim, hasCall, detailText, apiErrorLabel, humanTokens, relAge, relResetHint,
   shortModel, projectName, totalTokens, sparkSVG, migrateKeys, fullColOrder, colHidden, rank,
   adoptLegacyKey, needsAttention, attentionCount, streamIsSilent, SILENCE_MS,
+  readWatcher, fleetAlarm, fleetAlarmDetail, watcherCell,
   fuzzyMatch, sessionHaystack, sessionName, shortId, matchesFilter,
   GROUP_MODES, groupKeyOf, groupSessions, IDLE_PRESETS_MS, idleLabel, hiddenByIdle,
   contextCell, contextKnown, contextPct, modeLabel, migrateV1Columns, V1_COLUMN_KEYS,
@@ -531,4 +532,43 @@ test("detailText puts a call first, then an API error, then the activity", () =>
   assert.equal(detailText({ status: "error", api_error_status: 503, detail: "Bash" }), "503");
   assert.equal(detailText({ status: "error", detail: "Bash" }), "Bash");
   assert.equal(detailText({ status: "working", api_error_status: 529, detail: "Bash" }), "Bash");
+});
+
+// The watcher verdict is duplicated on purpose — it is a function of *now*, so it
+// decays between fetches and must be derived where it is displayed (ADR-0011's
+// third category, #617). Duplicated, not unchecked: this reads the same case list
+// internal/tui/watcher_shared_test.go reads, and the two must agree case for
+// case, including the exact alarm text (#623).
+test("readWatcher agrees with the shared fixture the Go side reads", async () => {
+  const raw = await readFile(new URL("../fixtures/watcher-cases.json", import.meta.url), "utf8");
+  const { verdict } = JSON.parse(raw);
+  assert.ok(verdict.length > 0, "the fixture has no verdict cases");
+  for (const c of verdict) {
+    assert.equal(readWatcher(c.seen, Date.parse(c.now)), c.want, `seen=${c.seen} — ${c.why}`);
+  }
+});
+
+test("the fleet alarm agrees with the shared fixture, text included", async () => {
+  const raw = await readFile(new URL("../fixtures/watcher-cases.json", import.meta.url), "utf8");
+  const { fleet } = JSON.parse(raw);
+  assert.ok(fleet.length > 0, "the fixture has no fleet cases");
+  for (const c of fleet) {
+    const r = fleetAlarm(c.machines, Date.parse(c.now));
+    assert.equal(r.alarm, c.alarm, `${JSON.stringify(c.machines)} — ${c.why}`);
+    const detail = r.alarm ? fleetAlarmDetail(r.known, r.silent, r.unreadable) : "reporting";
+    assert.equal(detail, c.detail, `${JSON.stringify(c.machines)} — ${c.why}`);
+  }
+});
+
+test("a machine card names which failure it is showing", () => {
+  // The two alarms send the operator to different places: a watcher that stopped
+  // is on that machine, a heartbeat that will not parse is on this side.
+  assert.deepEqual(watcherCell(readWatcher("2026-08-26T12:00:00Z", Date.parse("2026-08-26T12:00:02Z"))),
+    { cls: "w-ok", text: "live" });
+  assert.deepEqual(watcherCell(readWatcher("2026-08-26T11:00:00Z", Date.parse("2026-08-26T12:00:02Z"))),
+    { cls: "w-bad", text: "none" });
+  assert.deepEqual(watcherCell(readWatcher("", Date.parse("2026-08-26T12:00:02Z"))),
+    { cls: "w-bad", text: "none" });
+  assert.deepEqual(watcherCell(readWatcher("not-a-time", Date.parse("2026-08-26T12:00:02Z"))),
+    { cls: "w-bad", text: "time?" });
 });

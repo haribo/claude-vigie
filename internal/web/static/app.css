@@ -218,6 +218,13 @@ td.dim { color: var(--muted); } td.faint { color: var(--faint); }
 .plat .dot { width: 8px; height: 8px; border-radius: 50%; background: currentColor; }
 .plat.ok { color: var(--working); } .plat.warn { color: var(--waiting); } .plat.bad { color: var(--error); }
 
+/* The fleet watcher indicator, beside the platform one. Only ever shown when it
+   has something to say, so it carries the alarm colour alone. */
+.watch { display: inline-flex; align-items: center; gap: 7px; font-weight: 600; color: var(--error); }
+.watch .dot { width: 8px; height: 8px; border-radius: 50%; background: currentColor; }
+.mach-foot .w-ok { color: var(--working); }
+.mach-foot .w-bad { color: var(--error); }
+
 /* ---------- token gate ---------- */
 .gate { position: fixed; inset: 0; z-index: 10; display: flex; align-items: center; justify-content: center; padding: 20px; background: color-mix(in srgb, var(--bg) 82%, transparent); backdrop-filter: blur(4px); }
 .gate-card { width: 100%; max-width: 380px; display: flex; flex-direction: column; align-items: center; gap: 12px; text-align: center; background: var(--surface); border: 1px solid var(--border); border-radius: 16px; box-shadow: var(--shadow); padding: 28px 26px; }

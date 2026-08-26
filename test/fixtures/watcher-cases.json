@@ -1,0 +1,58 @@
+{
+  "_comment": [
+    "Shared cases for the watcher-liveness rule (#623), specified in",
+    "docs/design/watcher-liveness.md § 5 and § 6.",
+    "Two implementations exist on purpose: the verdict is a function of *now*, so it",
+    "decays between fetches and has to be derived where it is displayed — the third",
+    "category of ADR-0011. Neither copy is trusted; both are proved against this list,",
+    "by internal/tui/watcher_shared_test.go and test/js/dashboard.test.mjs.",
+    "Timestamps are RFC3339 and parsed strictly on both sides: Go's time.Parse rejects",
+    "a date without a time, and Date.parse would happily accept one, which is the kind",
+    "of silent disagreement this file exists to catch."
+  ],
+  "verdict": [
+    { "why": "a beat two seconds ago is live", "seen": "2026-08-25T12:00:00Z", "now": "2026-08-25T12:00:02Z", "want": "reporting" },
+    { "why": "the threshold itself still counts as live", "seen": "2026-08-25T12:00:00Z", "now": "2026-08-25T12:00:15Z", "want": "reporting" },
+    { "why": "one second past it does not", "seen": "2026-08-25T12:00:00Z", "now": "2026-08-25T12:00:16Z", "want": "silent" },
+    { "why": "no heartbeat recorded at all", "seen": "", "now": "2026-08-25T12:00:00Z", "want": "silent" },
+    { "why": "a timestamp that will not parse is its own verdict, not silence", "seen": "not-a-time", "now": "2026-08-25T12:00:00Z", "want": "unreadable" },
+    { "why": "a date with no time is not RFC3339 — Go rejects it and so must the browser", "seen": "2026-08-25", "now": "2026-08-25T12:00:00Z", "want": "unreadable" },
+    { "why": "a beat in the future is not stale; only elapsed time makes it so", "seen": "2026-08-25T12:00:30Z", "now": "2026-08-25T12:00:00Z", "want": "reporting" }
+  ],
+  "fleet": [
+    {
+      "why": "one machine of three stopped: an alarm that names it",
+      "machines": { "orion": "2026-08-25T11:59:00Z", "box": "2026-08-25T12:00:00Z", "nova": "2026-08-25T12:00:00Z" },
+      "now": "2026-08-25T12:00:02Z", "alarm": true, "detail": "1 of 3 not reporting (orion)"
+    },
+    {
+      "why": "two stopped are both named, in a stable order",
+      "machines": { "orion": "2026-08-25T11:59:00Z", "box": "2026-08-25T11:59:00Z", "nova": "2026-08-25T12:00:00Z" },
+      "now": "2026-08-25T12:00:02Z", "alarm": true, "detail": "2 of 3 not reporting (box, orion)"
+    },
+    {
+      "why": "a machine that never beat is reporting on hooks alone, which is a choice",
+      "machines": { "hooks-only": "", "box": "2026-08-25T12:00:00Z" },
+      "now": "2026-08-25T12:00:02Z", "alarm": false, "detail": "reporting"
+    },
+    {
+      "why": "but a fleet with nothing beating at all is still an alarm",
+      "machines": { "hooks-only": "", "other": "" },
+      "now": "2026-08-25T12:00:02Z", "alarm": true, "detail": "not reporting · statuses may be frozen"
+    },
+    {
+      "why": "an unreadable heartbeat names its own cause, not the machine's",
+      "machines": { "orion": "not-a-time", "box": "2026-08-25T12:00:00Z" },
+      "now": "2026-08-25T12:00:02Z", "alarm": true, "detail": "1 of 2 unreadable heartbeat (orion)"
+    },
+    {
+      "why": "mixed causes read as the broader one, and every name is listed",
+      "machines": { "orion": "not-a-time", "box": "2026-08-25T11:59:00Z", "nova": "2026-08-25T12:00:00Z" },
+      "now": "2026-08-25T12:00:02Z", "alarm": true, "detail": "2 of 3 not reporting (box, orion)"
+    },
+    {
+      "why": "an empty fleet has nothing beating, which is the same alarm",
+      "machines": {}, "now": "2026-08-25T12:00:02Z", "alarm": true, "detail": "not reporting · statuses may be frozen"
+    }
+  ]
+}

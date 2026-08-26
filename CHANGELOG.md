@@ -23,6 +23,11 @@ file is the single source of truth, not a second narrative.
 
 ### Fixed
 
+- The web dashboard says when a watcher has stopped reporting: the bottom bar
+  raises the alarm and names the machines, and each machine card shows its own
+  state. Until now the browser showed frozen statuses as if they were current,
+  and only the terminal knew better (#623).
+
 - The watcher warning covers every machine instead of the freshest one, and names
   the ones that stopped. A watcher dying on one host used to leave the indicator
   green for as long as any other machine kept reporting, while that host's

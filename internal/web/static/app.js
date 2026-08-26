@@ -9,6 +9,7 @@ import {
   esc, dash, trim, hasCall, detailText, humanTokens, ageSec, relAge, relResetHint,
   shortModel, projectName, totalTokens, sparkSVG, migrateKeys, fullColOrder, colHidden, rank,
   adoptLegacyKey, needsAttention, attentionCount, streamIsSilent, REFRESH_MS,
+  readWatcher, fleetAlarm, fleetAlarmDetail, watcherCell,
   sessionName, matchesFilter, GROUP_MODES, groupSessions, contextKnown, contextPct, contextCell, modeLabel, migrateV1Columns,
   IDLE_PRESETS_MS, idleLabel, hiddenByIdle,
 } from "./lib.js";
@@ -320,11 +321,17 @@ function renderMachines() {
     const brk = STATUSES.filter((k) => a[k]).map((k) => `<span class="b st-${k}"><span class="dot"></span>${a[k]} <small>${k}</small></span>`).join("");
     const wv = watcher && watcher.versions && watcher.versions[a.name];
     const wver = wv && wv.version ? wv.version : "—";
+    // Each machine's own verdict, beside the version it already showed. "⚠ time?"
+    // is a heartbeat vigie recorded and cannot read — a fault on this side, not on
+    // that machine — and saying which keeps the alarm from sending the operator to
+    // the wrong host (watcher-liveness.md § 5).
+    const seen = (watcher && watcher.machines) ? watcher.machines[a.name] : undefined;
+    const { cls: wcls, text: wtxt } = watcherCell(readWatcher(seen === undefined ? "" : seen, Date.now()));
     return `<div class="mach">
       <div class="mach-head"><span class="nm">${esc(a.name)}</span><span class="u">${esc(a.user)}</span></div>
       <div class="mach-row"><span class="big">${a.n}<small>${a.n === 1 ? "session" : "sessions"}</small></span></div>
       <div class="mach-brk">${brk}</div>
-      <div class="mach-foot"><span>output <b>${humanTokens(a.out)}</b></span><span>watcher <b>${esc(wver)}</b></span><span>last seen <b>${relAge(a.seen)}</b></span></div>
+      <div class="mach-foot"><span>output <b>${humanTokens(a.out)}</b></span><span>watcher <b class="${wcls}">${wtxt}</b> <small>${esc(wver)}</small></span><span>last seen <b>${relAge(a.seen)}</b></span></div>
     </div>`;
   }).join("");
   $("tab-machines").innerHTML = sessions.length ? `<div class="mach-grid">${cards}</div>` : '<div class="empty">No machines reporting.</div>';
@@ -438,9 +445,25 @@ function renderBottom() {
   // the exception will appear — and only beside the table it describes (#548).
   const n = (activeTab === "sessions" && !detailId) ? sessions.length - preferenceVisible().length : 0;
   const hiddenHtml = n > 0 ? `<span class="hiddenn"><span class="lbl">hidden</span> ${n}</span>` : "";
-  const html = `<div class="gauges">${g("5h", u.five_hour_pct, u.five_hour_reset)}${g("7d", u.seven_day_pct, u.seven_day_reset)}</div><span class="push"></span>${hiddenHtml}${platHtml}`;
+  const html = `<div class="gauges">${g("5h", u.five_hour_pct, u.five_hour_reset)}${g("7d", u.seven_day_pct, u.seven_day_reset)}</div><span class="push"></span>${hiddenHtml}${watcherHtml()}${platHtml}`;
   if (!paint("botbar", html)) return;
   $("botbar").querySelectorAll("i[data-w]").forEach((i) => { i.style.width = i.dataset.w + "%"; });
+}
+
+// watcherHtml is the fleet's watcher indicator, beside the platform one: the
+// dashboard's standing fleet-level state, which is where the TUI keeps the same
+// answer. Silent while every watcher reports — a permanent green trains the eye
+// to skip the place where the exception appears (sessions-chrome.md § 2) — and it
+// names the machines when it speaks, so the operator does not have to open the
+// Machines tab to learn where to go (#623).
+//
+// It says nothing at all before the first answer arrives: "not reported yet" is
+// not the same as "not reporting", and only one of them is an alarm.
+function watcherHtml() {
+  if (!watcher || !watcher.machines) return "";
+  const r = fleetAlarm(watcher.machines, Date.now());
+  if (!r.alarm) return "";
+  return `<span class="watch bad"><span class="dot"></span>watcher ${esc(fleetAlarmDetail(r.known, r.silent, r.unreadable))}</span>`;
 }
 
 // ---------- detail ----------
