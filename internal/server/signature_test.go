@@ -28,14 +28,31 @@ import (
 // decision instead of letting it be forgotten.
 
 // signatureExcluded are the view fields deliberately outside the signature, with
-// why. They are excluded because they change on *every* report, so including them
-// would publish an event per report and defeat the point of having a signature at
-// all — the clients would be back to polling, over SSE.
+// why. There are two grounds, and only two:
+//
+//   - the field changes on *every* report, so including it would publish an event
+//     per report and defeat the point of having a signature at all — the clients
+//     would be back to polling, over SSE;
+//   - the field is *derived* from fields the signature already covers, so it
+//     cannot change unless one of them does, and covering it again adds length
+//     without adding a single event.
+//
+// Anything else is a field whose change would never reach an open dashboard.
 var signatureExcluded = map[string]string{
 	"LastSeenAt": "moves on every report; an event per report is what the signature exists to avoid",
 	"Samples":    "a rolling window recomputed per read, not session state",
 	"StartedAt":  "immutable after creation; a change is impossible",
 	"EndedAt":    "always accompanied by a Status change, which is covered",
+	// Derived by the daemon since ADR-0011 (#616, #617), from inputs already covered.
+	"ContextWindow": "derived from Model, which is covered — it cannot change without it",
+	"ContextPct":    "derived from Model and the context reading, all covered — it cannot change without one of them",
+	// These two derive from the *effective* status, not the stored one: it turns
+	// stale on its own when reports stop, is evaluated at read time, and is
+	// already outside the signature by that design — clients learn of it by
+	// asking again, not by an event. Covering the derivations would not change
+	// that, only lengthen the string.
+	"Attention": "derived from the effective status, which is evaluated at read time and outside the signature by design",
+	"Rank":      "derived from the effective status, which is evaluated at read time and outside the signature by design",
 }
 
 // fieldsCovered lists what the signature reads, by view field name. Kept beside

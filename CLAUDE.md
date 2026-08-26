@@ -24,6 +24,10 @@ Rules must be concise. One rule per line when possible.
 - Quality over satisfaction — push back on over-engineering, incoherence, and unjustified additions, including when user-proposed
 - Critique constructively: acknowledge what is sound first, cite established standards (RFC, WCAG, NN/G, language idioms) rather than personal preference, propose the correction — never mere opposition, never a strawman of the user's position
 - The user decides in the end: challenge until the decision, then execute it in full. If a debate cycles past 3 iterations on the same axis without converging, propose to decide rather than continue
+- Never carry real-world context from outside this repository into what it publishes: another project's name or details, or the author's identity, handle or accounts. This repository may name itself; it may not name what sits next to it. Git metadata — remote URL, commit authorship — is out of scope; the rule covers written content: docs, code, comments, examples, commit messages, issues
+- When an example needs a project, invent one, with an obviously fictitious and banal name (`acme`, `example-app`). Do not reproduce the identifying structure either — directory layout, service names, domain vocabulary. A placeholder that resembles the original protects nothing
+- Before touching anything on a non-trivial task, explain the problem simply and concisely — with an example when an example is what makes it clear. What is validated is that explanation, not the issue or the request that prompted it. Build after
+- Exempt: trivial changes (typo, formatting, dependency bump). Friction that buys nothing is how a rule gets routed around
 
 ## Git
 
@@ -42,12 +46,15 @@ Rules must be concise. One rule per line when possible.
 
 ## Implementing an issue
 
-- No issue is trusted — not one written a year ago, not one written an hour ago, not one you wrote yourself. #476 described code written the day before and its central claim was still false
+- No issue is trusted — not one written a year ago, not one written an hour ago, not one you wrote yourself. Age is not the criterion: an issue can describe code written the same day and still have a false central claim
 - Verify every claim in the files before acting, and cite `file:line` for each — "I read the code" is not verification, a citation the reader can re-open is
-- Say what you could not confirm, and record a claim that turns out false **in the issue itself** — a wrong claim dropped in silence is raised again six months later
+- Say what you could not confirm, and record a claim that turns out false in the issue itself — a wrong claim dropped in silence is raised again six months later
 - Check the issue is still current: close it with evidence if already delivered, post an audit comment if the architecture drifted under it
-- Then, before touching anything, explain the problem simply and concisely — an example when an example is what makes it clear. The user validates *that explanation*, not the issue. Build after
-- Exempt: trivial changes (typo, formatting, dep bump) — the same boundary that exempts them from needing an issue. Friction that buys nothing is how a rule gets routed around
+- Exempt: trivial changes (typo, formatting, dependency bump) — the same boundary that exempts them from needing an issue. Friction that buys nothing is how a rule gets routed around
+- That explanation runs in three beats — how it works today, why that has to change, how it gets fixed — and opens in the project's own vocabulary: what the person using it does, sees, or cannot do. Generic prose ("the user cannot validate") is not the functional level; naming what this project is actually about is. The test: could the reader decide without opening the repository?
+- Below that, the mechanism — how it really works — when it changes the decision: why the failure happens, or why the fix is this one rather than another. Not by default. The line against code: what would still be true after a reimplementation is mechanism, what would become false is code, and code belongs in the issue and the PR
+- A purely technical problem is explained technically, with no invented functional layer. Either way the mechanism earns its place: if it says nothing the first beat did not already imply, it is padding, not mechanism
+- "I don't understand" is never answered with more detail: the explanation was too close to the code, not too vague. Rewrite it further from the code, never nearer
 
 ## Code
 
@@ -65,3 +72,4 @@ Rules must be concise. One rule per line when possible.
 - That test stays as the regression test for this bug — reference the issue number in it, so a later reader knows what it guards and does not delete it as noise
 - Bug fixes must reproduce the failure from observed evidence (logs, network capture, repro steps); never invent the failure scenario from a hypothesis
 - A passing test can be measuring nothing: a race test passed 200/200 against the broken code (#512), and a colour test would have passed with no colour at all because the renderer disables it under test (#495). Prove red before trusting green
+- When you add or modify user-observable code, propose the corresponding test in the same response as the code change — a gate at push or review time is a backstop, not the discipline

@@ -77,6 +77,7 @@ the client never imports the server/store packages, so it never links them.
 | `internal/transcript` | client | Parses a session transcript, incrementally |
 | `internal/apiclient` | client | One authenticated GET against the daemon, shared by the TUI and the preflight |
 | `internal/status` | both | The session status vocabulary and its sort order |
+| `internal/modelinfo` | both | What a Claude model's name implies — today, its context window size (ADR-0011) |
 | `internal/install` | client | Merges the reporting hooks into Claude Code's settings |
 | `internal/presence` | client | Session→process mapping, read back through `/proc` |
 | `internal/compaction` | client | Compaction markers dropped by the `PreCompact` hook |
@@ -109,13 +110,43 @@ directly:
 
 | Call | Replace with |
 |------|--------------|
-| `time.Now()` | an injected `func() time.Time` (default `clock.Now`) |
+| `time.Now()`, `time.Since()`, `time.Until()` | an injected `func() time.Time` (default `clock.Now`); `clock.Since`/`clock.Until` at the presentation edge |
 | `os.Getenv()` | `internal/config` (the env-reading layer) |
-| `http.DefaultClient` | a client with a timeout (`http.DefaultClient` has none) |
+| `http.DefaultClient` | a client with a timeout (`http.DefaultClient` has none) — a package-level one, **not** injected; see below |
 
 Enforced by `forbidigo` in `.golangci.yml`. The seams are excepted: `internal/clock`
 defines the wall clock, `internal/config` and `internal/daemon` (the composition
 root) read env, and tests use the real ones.
+
+**All three clock names, not `time.Now` alone.** `time.Since(t)` *is*
+`time.Now().Sub(t)`, so a rule naming one of them enforces spelling rather than
+the property it wants. It banned one for months while three call sites used the
+other two — two of them deciding rather than rendering, and one comparing a
+`clock.Now()` operand against a `time.Since()` one, which a substituted clock
+would have made meaningless (#601).
+
+A struct that already carries an injected clock has no excuse to reach past it:
+`watcherStale` was a method on the one struct in the TUI that holds one, and it
+read the wall clock instead — with a test that built its fixtures from
+`time.Now()` and so agreed with the mistake by construction.
+
+**The HTTP client is the exception to "inject", deliberately.** The rule above
+asks for injection and the first two rows get it; the third does not, and saying
+so is the point of this paragraph — an intro promising more than its own table
+delivers is how a rule stops being read.
+
+The client is stateless, one configuration serves the whole binary, and the
+packages that hold it (`apiclient`, `client`, `report`, `tui`, `watch`) expose
+free functions rather than structs — `post(cfg, req)`, `getJSON(cfg, path, out)`.
+Injecting would mean a constructor per package or a parameter on every signature
+and every call site, for a dependency nobody varies in production. `var
+httpClient` is a package-level **var**, so a test substitutes it, which is what
+the seam is for.
+
+What that costs, stated rather than hidden: a test that swaps the client mutates
+process state, so it cannot run in parallel with another test in the same
+package. Injection would fix that. It has not been worth the refactor; if it ever
+is, this paragraph is what has to change with it.
 
 ## Error handling
 

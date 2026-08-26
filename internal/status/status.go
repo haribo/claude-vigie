@@ -9,6 +9,23 @@
 // gauge, the TUI sort, the web dashboard, the GNOME extension), each incomplete in
 // a different way and none of them checked. Adding `compacting` (#342) reached two
 // of the four, and nothing noticed for two releases (#421, #422, #423).
+//
+// Two of those copies are gone. Since ADR-0011 (#617) the daemon derives a
+// session's rank and whether it needs the operator, and every client renders the
+// answer — so `Order` and `Attention` have one consumer each, not three. The tests
+// that used to read those arrays back out of the JavaScript sources went with
+// them: there is nothing left for two copies to disagree about.
+//
+// What they used to guard is worth keeping in view, because it is what a new copy
+// would cost again. #464: four statuses nobody had ranked produced a NaN
+// comparator in the dashboard, which does not sort badly — it stops sorting.
+// #466: the GNOME indicator disagreed with the TUI about when to interrupt the
+// operator. #538: the dashboard had dropped `error` from its own attention list,
+// so a session stuck on a 529 carried no mark at all.
+//
+// `All` is still read by the dashboard and the indicator for styling and
+// grouping, and those two scrapes remain until #618 and #619 remove their subject
+// too.
 package status
 
 // All is every status a session can hold, in the order the design document lists

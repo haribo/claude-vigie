@@ -184,12 +184,16 @@ func (m model) watcherRow() stateRow {
 	switch {
 	case !m.gotWatcher:
 		return stateRow{"watcher", levelUnknown, "unknown · not reported yet"}
-	case m.watcherStale():
-		// No watcher means no status is being refreshed: every status on screen may
-		// be a frozen one, which is the definition of red here.
-		return stateRow{"watcher", levelBroken, "not reporting · statuses may be frozen"}
 	default:
-		return stateRow{"watcher", levelOK, "reporting"}
+		// Red covers the whole fleet, not its freshest machine: a watcher that
+		// stopped anywhere leaves that machine's statuses frozen, and the detail
+		// names it so the operator does not have to open the Machines tab to find
+		// out where (docs/design/watcher-liveness.md § 6, #599).
+		alarm, known, silent, unreadable := fleetAlarm(m.watcherMachines, m.now())
+		if !alarm {
+			return stateRow{"watcher", levelOK, "reporting"}
+		}
+		return stateRow{"watcher", levelBroken, fleetAlarmDetail(known, silent, unreadable)}
 	}
 }
 

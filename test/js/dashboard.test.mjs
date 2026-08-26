@@ -10,7 +10,8 @@ import { readFile } from "node:fs/promises";
 import {
   esc, dash, trim, hasCall, detailText, apiErrorLabel, humanTokens, relAge, relResetHint,
   shortModel, projectName, totalTokens, sparkSVG, migrateKeys, fullColOrder, colHidden, rank,
-  adoptLegacyKey, ATTENTION, needsAttention, attentionCount, streamIsSilent, SILENCE_MS,
+  adoptLegacyKey, needsAttention, attentionCount, streamIsSilent, SILENCE_MS,
+  readWatcher, fleetAlarm, fleetAlarmDetail, watcherCell,
   fuzzyMatch, sessionHaystack, sessionName, shortId, matchesFilter,
   GROUP_MODES, groupKeyOf, groupSessions, IDLE_PRESETS_MS, idleLabel, hiddenByIdle,
   contextCell, contextKnown, contextPct, modeLabel, migrateV1Columns, V1_COLUMN_KEYS,
@@ -169,20 +170,29 @@ test("lib.js exports every name app.js imports from it", async () => {
 // statuses, so `RANK["compacting"]` was undefined and the comparator returned
 // NaN — which does not order badly, it stops ordering: an `ended` session came
 // out first (#464).
-test("rank places every status, most active first", () => {
-  const order = ["stalled", "working", "thinking", "compacting", "waiting", "idle", "error", "stale", "ended"];
-  order.forEach((s, i) => assert.equal(rank(s), i, `${s} is out of place`));
+test("rank reads the rank the daemon sent", () => {
+  // Which status sorts where is no longer decided here (ADR-0011, #617); it is
+  // proved once, in Go, where it is produced. What is left to get wrong on this
+  // side is failing to read the answer.
+  assert.equal(rank({ status: "stalled", rank: 0 }), 0);
+  assert.equal(rank({ status: "ended", rank: 8 }), 8);
 });
 
-test("an unknown status sorts last, never first", () => {
-  assert.ok(rank("quantum") > rank("ended"),
-    "a status this build has never heard of must not head the table");
-  assert.ok(Number.isFinite(rank("quantum")), "an unknown status must still compare");
+test("a session with no rank sorts last, never first", () => {
+  assert.ok(rank({ status: "quantum" }) > rank({ status: "ended", rank: 8 }),
+    "a session this build cannot place must not head the table");
+  assert.ok(Number.isFinite(rank({ status: "quantum" })), "an unrankable session must still compare");
+  assert.ok(Number.isFinite(rank(null)), "so must a missing one");
 });
 
 test("the comparator orders instead of returning NaN", () => {
-  const cmp = (a, b) => rank(a.status) - rank(b.status);
-  const rows = ["ended", "compacting", "working", "stale", "quantum", "stalled"].map((status) => ({ status }));
+  // #464: four statuses nobody had ranked produced a NaN comparator, and a NaN
+  // comparator does not sort badly — it stops sorting. The rank arrives from the
+  // daemon now, and a row arriving without one must still compare.
+  const cmp = (a, b) => rank(a) - rank(b);
+  const ranks = { stalled: 0, working: 1, compacting: 3, stale: 7, ended: 8 };
+  const rows = ["ended", "compacting", "working", "stale", "quantum", "stalled"]
+    .map((status) => (status in ranks ? { status, rank: ranks[status] } : { status }));
   assert.deepEqual([...rows].sort(cmp).map((r) => r.status),
     ["stalled", "working", "compacting", "stale", "ended", "quantum"]);
   for (const a of rows) {
@@ -249,34 +259,36 @@ test("an empty stored value is carried over, not dropped", () => {
 // indicator — one list, consulted rather than reimplemented — and left the
 // dashboard out. `TestDashboardSharesTheAttentionSet` pins the list to
 // internal/status.Attention; these pin what the dashboard does with it.
-test("needsAttention covers every attention status and a raised call", () => {
-  for (const status of ATTENTION) {
-    assert.equal(needsAttention({ status }), true, `${status} must call the operator`);
-  }
-  assert.equal(needsAttention({ status: "error" }), true,
-    "an API error is an attention status — this is the one the dashboard dropped");
-  // A call rides alongside a status rather than being one (ADR-0010).
+test("needsAttention honours the daemon's verdict and adds a raised call", () => {
+  // Which statuses are blocking is no longer this file's business: the daemon
+  // decides and sends `attention` (ADR-0011, #617), so there is no second list to
+  // drop `error` from, which is what #538 was. What is still the dashboard's own
+  // is the combination — a call rides alongside a status rather than being one
+  // (ADR-0010), so both have to be looked at.
+  assert.equal(needsAttention({ status: "waiting", attention: true }), true);
+  assert.equal(needsAttention({ status: "working", attention: false }), false);
   assert.equal(needsAttention({ status: "working", call_at: "2026-08-16T10:00:00Z" }), true);
   assert.equal(needsAttention({ status: "idle", call_at: "2026-08-16T10:00:00Z" }), true);
 });
 
 test("needsAttention leaves a session that needs nobody alone", () => {
   for (const status of ["working", "thinking", "compacting", "idle", "stale", "ended"]) {
-    assert.equal(needsAttention({ status }), false, `${status} must not interrupt`);
+    assert.equal(needsAttention({ status, attention: false }), false, `${status} must not interrupt`);
   }
-  assert.equal(needsAttention({ status: "waiting", call_at: "" }), true, "an empty call is not a call, the status still is");
+  assert.equal(needsAttention({ status: "waiting", attention: true, call_at: "" }), true,
+    "an empty call is not a call, the status still is");
   assert.equal(needsAttention(null), false);
   assert.equal(needsAttention(undefined), false);
 });
 
 test("attentionCount counts every reason to interrupt, not just waiting", () => {
   const sessions = [
-    { id: "a", status: "waiting" },
-    { id: "b", status: "error" },
-    { id: "c", status: "stalled" },
-    { id: "d", status: "working", call_at: "2026-08-16T10:00:00Z" },
-    { id: "e", status: "working" },
-    { id: "f", status: "idle" },
+    { id: "a", status: "waiting", attention: true },
+    { id: "b", status: "error", attention: true },
+    { id: "c", status: "stalled", attention: true },
+    { id: "d", status: "working", attention: false, call_at: "2026-08-16T10:00:00Z" },
+    { id: "e", status: "working", attention: false },
+    { id: "f", status: "idle", attention: false },
   ];
   assert.equal(attentionCount(sessions), 4, "the badge must not count `waiting` alone");
   assert.equal(attentionCount([]), 0);
@@ -448,8 +460,10 @@ test("contextCell agrees with the shared fixture the Go side reads", async () =>
   const { context } = JSON.parse(raw);
   assert.ok(context.length > 0, "the fixture has no context cases");
   for (const c of context) {
-    const s = { model: c.model, context_tokens: c.tokens };
-    assert.equal(contextCell(s), c.want, `model=${c.model} tokens=${c.tokens} — ${c.why}`);
+    // The daemon derives `pct` from the model and the reading (ADR-0011); this
+    // side is asked only what it renders from the answer.
+    const s = { model: c.model, context_tokens: c.tokens, context_pct: c.pct };
+    assert.equal(contextCell(s), c.want, `pct=${c.pct} — ${c.why}`);
   }
 });
 
@@ -463,11 +477,14 @@ test("unknown and known-to-be-zero are different states", () => {
   // The daemon returns a nil pointer for the first and a 0 for the second, on
   // purpose (#367). Collapsing them here would rebuild the defect it fixed.
   assert.equal(contextKnown({ model: "claude-opus-4-8" }), false);
-  assert.equal(contextKnown({ model: "claude-opus-4-8", context_tokens: null }), false);
-  assert.equal(contextKnown({ model: "claude-opus-4-8", context_tokens: 0 }), true);
+  assert.equal(contextKnown({ model: "claude-opus-4-8", context_tokens: null, context_pct: null }), false);
+  assert.equal(contextKnown({ model: "claude-opus-4-8", context_tokens: 0, context_pct: 0 }), true);
   assert.equal(contextCell({ model: "claude-opus-4-8" }), "-");
-  assert.equal(contextCell({ model: "claude-opus-4-8", context_tokens: 0 }), "0%");
+  assert.equal(contextCell({ model: "claude-opus-4-8", context_tokens: 0, context_pct: 0 }), "0%");
   assert.equal(contextPct({ model: "claude-opus-4-8" }), 0, "an unknown reading still sorts as zero");
+  // Half an invariant is not the invariant: one field without the other renders a
+  // dash rather than "undefined%".
+  assert.equal(contextCell({ context_tokens: 100000 }), "-");
 });
 
 // #550. A saved layout is live state: renaming four keys without carrying it over
@@ -515,4 +532,43 @@ test("detailText puts a call first, then an API error, then the activity", () =>
   assert.equal(detailText({ status: "error", api_error_status: 503, detail: "Bash" }), "503");
   assert.equal(detailText({ status: "error", detail: "Bash" }), "Bash");
   assert.equal(detailText({ status: "working", api_error_status: 529, detail: "Bash" }), "Bash");
+});
+
+// The watcher verdict is duplicated on purpose — it is a function of *now*, so it
+// decays between fetches and must be derived where it is displayed (ADR-0011's
+// third category, #617). Duplicated, not unchecked: this reads the same case list
+// internal/tui/watcher_shared_test.go reads, and the two must agree case for
+// case, including the exact alarm text (#623).
+test("readWatcher agrees with the shared fixture the Go side reads", async () => {
+  const raw = await readFile(new URL("../fixtures/watcher-cases.json", import.meta.url), "utf8");
+  const { verdict } = JSON.parse(raw);
+  assert.ok(verdict.length > 0, "the fixture has no verdict cases");
+  for (const c of verdict) {
+    assert.equal(readWatcher(c.seen, Date.parse(c.now)), c.want, `seen=${c.seen} — ${c.why}`);
+  }
+});
+
+test("the fleet alarm agrees with the shared fixture, text included", async () => {
+  const raw = await readFile(new URL("../fixtures/watcher-cases.json", import.meta.url), "utf8");
+  const { fleet } = JSON.parse(raw);
+  assert.ok(fleet.length > 0, "the fixture has no fleet cases");
+  for (const c of fleet) {
+    const r = fleetAlarm(c.machines, Date.parse(c.now));
+    assert.equal(r.alarm, c.alarm, `${JSON.stringify(c.machines)} — ${c.why}`);
+    const detail = r.alarm ? fleetAlarmDetail(r.known, r.silent, r.unreadable) : "reporting";
+    assert.equal(detail, c.detail, `${JSON.stringify(c.machines)} — ${c.why}`);
+  }
+});
+
+test("a machine card names which failure it is showing", () => {
+  // The two alarms send the operator to different places: a watcher that stopped
+  // is on that machine, a heartbeat that will not parse is on this side.
+  assert.deepEqual(watcherCell(readWatcher("2026-08-26T12:00:00Z", Date.parse("2026-08-26T12:00:02Z"))),
+    { cls: "w-ok", text: "live" });
+  assert.deepEqual(watcherCell(readWatcher("2026-08-26T11:00:00Z", Date.parse("2026-08-26T12:00:02Z"))),
+    { cls: "w-bad", text: "none" });
+  assert.deepEqual(watcherCell(readWatcher("", Date.parse("2026-08-26T12:00:02Z"))),
+    { cls: "w-bad", text: "none" });
+  assert.deepEqual(watcherCell(readWatcher("not-a-time", Date.parse("2026-08-26T12:00:02Z"))),
+    { cls: "w-bad", text: "time?" });
 });

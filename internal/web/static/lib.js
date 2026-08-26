@@ -141,13 +141,13 @@ export function colHidden(hidden, key, mandatory) { return !mandatory.has(key) &
 // `undefined` for `compacting` and the comparator returned `NaN`. A NaN
 // comparator does not order badly, it stops ordering: the table came out with an
 // `ended` session first (#464).
-export const RANK_ORDER = ["stalled", "working", "thinking", "compacting", "waiting", "idle", "error", "stale", "ended"];
-
-// rank places an unknown status last, never first: a status this build has never
-// heard of is the one we can say least about.
-export function rank(status) {
-  const i = RANK_ORDER.indexOf(status);
-  return i < 0 ? RANK_ORDER.length : i;
+// rank is where a status sorts, lower first. The daemon sends it (ADR-0011,
+// #617): the order used to be transcribed here and into the GNOME indicator, and
+// #464 is what that cost — four statuses nobody had ranked produced a NaN
+// comparator, which does not sort badly, it stops sorting.
+export function rank(session) {
+  const r = session == null ? null : session.rank;
+  return typeof r === "number" ? r : Number.MAX_SAFE_INTEGER;
 }
 
 // shortId is the first eight characters of a session id, the fallback the table
@@ -208,45 +208,25 @@ export function matchesFilter(s, filter) {
   return fuzzyMatch(filter, sessionHaystack(s));
 }
 
-// modelVersion splits a short model name ("opus-4-8") into family and versions —
-// the twin of internal/tui/context.go. The strict numeric test matters: Go's
-// strconv.Atoi rejects "4x" and yields 0, where parseInt would happily return 4
-// and silently move a model into the wrong context window.
-export function modelVersion(short) {
-  const parts = String(short == null ? "" : short).split("-");
-  const num = (p) => (/^[+-]?\d+$/.test(p == null ? "" : p) ? Number(p) : 0);
-  return { family: parts[0] || "", major: num(parts[1]), minor: num(parts[2]) };
-}
-
-// contextWindow is how many tokens the model's context holds. Kept identical to
-// internal/tui/context.go; a shared fixture checks both against the same cases.
-export function contextWindow(model) {
-  const BIG = 1000000, BASE = 200000;
-  const { family, major, minor } = modelVersion(shortModel(model));
-  if (family === "fable") return BIG;
-  if (family === "opus" || family === "sonnet") return (major > 4 || (major === 4 && minor >= 6)) ? BIG : BASE;
-  return BASE;
-}
-
 // contextKnown separates "no reading at all" from "a reading that happens to be
 // zero". The daemon keeps them apart on purpose — `contextView` returns a nil
 // pointer for the first — and collapsing them here would rebuild the defect #367
 // fixed on the server.
-export function contextKnown(s) { return s != null && s.context_tokens != null; }
+//
+// Both fields are required and neither is taken as proof of the other: the daemon
+// sets them together, and a render path is the wrong place to trust an invariant
+// it cannot enforce.
+export function contextKnown(s) { return s != null && s.context_tokens != null && s.context_pct != null; }
 
-export function contextPct(s) {
-  if (!contextKnown(s) || s.context_tokens <= 0) return 0;
-  return (s.context_tokens / contextWindow(s.model)) * 100;
-}
+// contextPct is how full the context window is. The daemon derives it (ADR-0011)
+// — window table and rounding included — so this reads a number rather than
+// recomputing one. It used to hold a transcription of internal/tui/context.go,
+// and with it a rounding that disagreed with Go's on an exact .5.
+export function contextPct(s) { return contextKnown(s) ? s.context_pct : 0; }
 
 // contextCell is the CTX column: a dash when unknown, a percentage otherwise —
 // including `0%` for a session known to have just been cleared.
-//
-// Go formats with %.0f, which rounds half to even, while Math.round rounds half
-// up. They part company only on an exact .5, which a token count over a window of
-// 200 000 or 1 000 000 does not produce in practice; the shared fixture stays off
-// that boundary rather than pretending it does not exist.
-export function contextCell(s) { return contextKnown(s) ? `${Math.round(contextPct(s))}%` : "-"; }
+export function contextCell(s) { return contextKnown(s) ? `${s.context_pct}%` : "-"; }
 
 // PERMISSION_MODES is the #303 taxonomy, raw value to label. An unrecognised
 // non-empty value is shown as it came rather than relabelled: a new mode must
@@ -338,15 +318,17 @@ export function groupSessions(list, mode) {
 //
 // The dashboard used to decide for itself, and dropped `error`: a session stuck
 // on a 529 was drawn like any working one (#538).
-export const ATTENTION = ["waiting", "error", "stalled"];
-
 // needsAttention covers both reasons to interrupt: a status that means the
 // session is blocked, and a call the session raised for itself (ADR-0010). The
 // call is not a status — it rides alongside one — so anything deciding whether to
 // interrupt has to look at both.
+//
+// The status half is the daemon's answer since ADR-0011 (#617). The list used to
+// be transcribed here, and the dashboard dropped `error` from its copy: a session
+// stuck on a 529 was drawn like any working one (#538).
 export function needsAttention(session) {
   if (!session) return false;
-  return hasCall(session) || ATTENTION.includes(session.status);
+  return hasCall(session) || Boolean(session.attention);
 }
 
 export function attentionCount(sessions) {
@@ -379,4 +361,99 @@ export const SILENCE_MS = 30000;
 export function streamIsSilent(lastHeardAt, now, limitMs = SILENCE_MS) {
   if (!lastHeardAt) return false;
   return now - lastHeardAt > limitMs;
+}
+
+// --- Watcher liveness -------------------------------------------------------
+//
+// The one rule ADR-0011 leaves deliberately duplicated: a watcher's freshness is
+// a function of *now*, so it decays with nothing happening, and a verdict the
+// daemon computed would be frozen at the moment it was sent. This endpoint is
+// refetched once a minute against a fifteen-second threshold — a dead watcher
+// would read as live for up to a minute, on the indicator whose whole job is to
+// say the board cannot be trusted (#617, #623).
+//
+// Duplicated, not unchecked: `test/fixtures/watcher-cases.json` holds the case
+// list, and internal/tui proves the same cases. Specified in
+// docs/design/watcher-liveness.md § 5 and § 6.
+
+export const WATCHER_STALE_MS = 15000;
+export const WATCHER_REPORTING = "reporting";
+export const WATCHER_SILENT = "silent";
+export const WATCHER_UNREADABLE = "unreadable";
+
+// RFC3339, as Go's time.Parse accepts it. Date.parse alone is far more lenient —
+// it takes "2026-08-25" happily, where Go rejects it — and a browser quietly
+// accepting what the terminal refuses is the disagreement the shared fixture
+// exists to catch.
+const RFC3339 = /^\d{4}-\d{2}-\d{2}[Tt]\d{2}:\d{2}:\d{2}(\.\d+)?([Zz]|[+-]\d{2}:\d{2})$/;
+
+// readWatcher turns one recorded heartbeat into a verdict. An unreadable
+// timestamp is its own answer, neither health nor silence: the indicator says
+// whether the screen can be trusted, and an answer that cannot be read answers
+// that with no — but the fault is in what vigie recorded, not on that machine.
+export function readWatcher(seen, nowMs) {
+  if (!seen) return WATCHER_SILENT;
+  if (!RFC3339.test(seen)) return WATCHER_UNREADABLE;
+  const t = Date.parse(seen);
+  if (Number.isNaN(t)) return WATCHER_UNREADABLE;
+  return nowMs - t > WATCHER_STALE_MS ? WATCHER_SILENT : WATCHER_REPORTING;
+}
+
+export function watcherAlarm(verdict) { return verdict !== WATCHER_REPORTING; }
+
+// fleetWatchers counts the machines known and names those that beat and then
+// stopped, split by cause. A machine with no recorded heartbeat is reporting
+// through hooks alone — a deployment choice, not a fault — so it is counted and
+// never listed.
+//
+// Names are sorted so the alarm text is stable. Go sorts by bytes and JavaScript
+// by UTF-16 code units; the two part company only outside ASCII, which a hostname
+// is not.
+export function fleetWatchers(machines, nowMs) {
+  const silent = [], unreadable = [];
+  const entries = Object.entries(machines || {});
+  for (const [name, seen] of entries) {
+    if (!seen) continue; // never beat: hooks-only, by choice
+    const v = readWatcher(seen, nowMs);
+    if (v === WATCHER_SILENT) silent.push(name);
+    else if (v === WATCHER_UNREADABLE) unreadable.push(name);
+  }
+  return { known: entries.length, silent: silent.sort(), unreadable: unreadable.sort() };
+}
+
+// fleetAlarm reports whether the statuses on screen may be frozen anywhere in the
+// fleet. It is true with no names in one case: nothing beating at all — no
+// watcher was ever started — where no single machine qualifies as having stopped
+// yet nothing is refreshing anything.
+export function fleetAlarm(machines, nowMs) {
+  const { known, silent, unreadable } = fleetWatchers(machines, nowMs);
+  if (silent.length || unreadable.length) return { alarm: true, known, silent, unreadable };
+  for (const seen of Object.values(machines || {})) {
+    if (readWatcher(seen, nowMs) === WATCHER_REPORTING) {
+      return { alarm: false, known, silent: [], unreadable: [] };
+    }
+  }
+  return { alarm: true, known, silent: [], unreadable: [] };
+}
+
+// fleetAlarmDetail is the indicator's text: how much of the fleet is affected and
+// which machines, so the operator does not have to open another tab to learn
+// where to go.
+export function fleetAlarmDetail(known, silent, unreadable) {
+  const names = [...silent, ...unreadable].sort();
+  if (!names.length) return "not reporting · statuses may be frozen";
+  const what = silent.length === 0 ? "unreadable heartbeat" : "not reporting";
+  return `${names.length} of ${known} ${what} (${names.join(", ")})`;
+}
+
+// watcherCell is a machine's own verdict as the Machines card shows it: the word
+// and the class. "time?" is a heartbeat vigie recorded and cannot read — a fault
+// on this side, not on that machine — and saying which keeps the alarm from
+// sending the operator to the wrong host (watcher-liveness.md § 5).
+//
+// It is here rather than inline in the card so it can be proved: the card itself
+// is built inside app.js, which the live harness cannot reach.
+export function watcherCell(verdict) {
+  if (verdict === WATCHER_UNREADABLE) return { cls: "w-bad", text: "time?" };
+  return watcherAlarm(verdict) ? { cls: "w-bad", text: "none" } : { cls: "w-ok", text: "live" };
 }

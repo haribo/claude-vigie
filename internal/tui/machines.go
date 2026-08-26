@@ -9,7 +9,6 @@ import (
 	"github.com/charmbracelet/lipgloss"
 
 	"github.com/haribo/claude-vigie/internal/api"
-	"github.com/haribo/claude-vigie/internal/clock"
 	"github.com/haribo/claude-vigie/internal/status"
 )
 
@@ -78,11 +77,16 @@ func versionCell(v api.VersionInfo) string {
 // maps each machine to the RFC3339 time of its last watch report, so machines
 // running on hooks alone are flagged (#284); versions carries each watcher's
 // build so a drifted watcher is visible (#356).
-func renderMachines(sessions []api.SessionView, watcherSeen map[string]string, versions map[string]api.VersionInfo, width int) string {
+// renderMachines draws the Machines tab. now comes from the caller rather than
+// the package clock: it dates the relative SEEN ages, and since #600 it also
+// decides the WATCH verdict — a verdict the state pill reaches from the model's
+// injected clock, so reading a second clock here left one rule answered against
+// two time sources, and the ordinary "the watcher went silent" case could not be
+// asserted on both indicators at once (#609).
+func renderMachines(sessions []api.SessionView, watcherSeen map[string]string, versions map[string]api.VersionInfo, width int, now time.Time) string {
 	if len(sessions) == 0 {
 		return dimStyle.Render("no sessions yet")
 	}
-	now := clock.Now() // presentation: relative "SEEN" ages
 
 	var b strings.Builder
 	// The overview table has no column-drop of its own; clamp each row to width so
@@ -94,8 +98,8 @@ func renderMachines(sessions []api.SessionView, watcherSeen map[string]string, v
 	b.WriteString(rule(width) + "\n")
 	var noWatcher []string
 	for _, a := range aggregateMachines(sessions) {
-		fresh := watcherFresh(watcherSeen[a.name], now)
-		if !fresh {
+		verdict := readWatcher(watcherSeen[a.name], now)
+		if verdict.alarm() {
 			noWatcher = append(noWatcher, a.name)
 		}
 		b.WriteString(clampWidth("  "+
@@ -108,7 +112,7 @@ func renderMachines(sessions []api.SessionView, watcherSeen map[string]string, v
 			padLeft(humanizeTokens(a.out), 10)+"   "+
 			userStyle.Render(pad(orDash(a.user), 12))+
 			dimStyle.Render(padLeft(relativeAge(a.lastSeen, now), 6))+"   "+
-			watchCell(fresh)+"   "+
+			watchCell(verdict)+"   "+
 			dimStyle.Render(pad(versionCell(versions[a.name]), 12))+
 			otherStatuses(a.byStatus), width) + "\n")
 	}
@@ -160,26 +164,20 @@ func otherStatuses(byStatus map[string]int) string {
 	return "   " + strings.Join(parts, "  ")
 }
 
-// watcherFresh reports whether a machine's last watch report is recent enough to
-// trust its statuses. Empty or unparseable → stale (#284).
-func watcherFresh(seen string, now time.Time) bool {
-	if seen == "" {
-		return false
-	}
-	t, err := time.Parse(time.RFC3339, seen)
-	if err != nil {
-		return false
-	}
-	return now.Sub(t) <= watcherStaleAfter
-}
-
-// watchCell renders the per-machine watcher indicator: green "● live" when a
-// fresh watcher reports, amber "⚠ none" otherwise.
-func watchCell(fresh bool) string {
-	if fresh {
+// watchCell renders the per-machine watcher indicator: green "● live" when the
+// watcher is reporting, amber otherwise — naming which alarm it is, because the
+// two send the operator to different places. "⚠ none" is a watcher that stopped;
+// "⚠ time?" is a heartbeat vigie recorded and cannot read, which is a fault on
+// this side and not on that machine (docs/design/watcher-liveness.md § 5).
+func watchCell(v watcherVerdict) string {
+	switch v {
+	case watcherReporting:
 		return watchLiveStyle.Render(pad("● live", 8))
+	case watcherUnreadable:
+		return warnStyle.Render(pad("⚠ time?", 8))
+	default:
+		return warnStyle.Render(pad("⚠ none", 8))
 	}
-	return warnStyle.Render(pad("⚠ none", 8))
 }
 
 // countCell renders a status count right-aligned to w, dimmed when zero, else

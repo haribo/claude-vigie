@@ -123,6 +123,7 @@ linters:
             - "**/internal/clock/**"
             - "**/internal/compaction/**"
             - "**/internal/config/**"
+            - "**/internal/modelinfo/**"
             - "**/internal/status/**"
             - "**/internal/transcript/**"
             - "**/internal/version/**"
@@ -144,8 +145,13 @@ linters:
     # the composition edge; tests use the real ones freely).
     forbidigo:
       forbid:
-        - pattern: ^time\.Now$
-          msg: inject a clock (func() time.Time, default clock.Now) — see docs/code.md
+        # All three read the same hidden global — time.Since(t) is
+        # time.Now().Sub(t) — so banning one name and leaving its two aliases
+        # open enforced spelling rather than the property. Three call sites went
+        # through the gap, two of them deciding rather than rendering, and one
+        # comparing a clock.Now() operand against a time.Since() one (#601).
+        - pattern: ^time\.(Now|Since|Until)$
+          msg: inject a clock (func() time.Time, default clock.Now), or clock.Since/clock.Until at the presentation edge — see docs/code.md
         - pattern: ^os\.Getenv$
           msg: read env through internal/config, not business logic — see docs/code.md
         - pattern: ^http\.DefaultClient$

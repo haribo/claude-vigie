@@ -9,6 +9,37 @@ file is the single source of truth, not a second narrative.
 
 ## [Unreleased]
 
+## [0.7.1] - 2026-08-26
+
+### Changed
+
+- Which sessions need you, and the order they sort in, are decided by the server
+  rather than by each screen. The terminal, the browser and the GNOME indicator
+  can no longer disagree about when to interrupt you — a new status reaches all
+  three at once (#617).
+
+- The context fill is computed by the server rather than by each client, so a new
+  Claude model is taught to one place instead of two. The terminal and the browser
+  now show the same percentage because it is the same number, not because two
+  calculations agree (#616).
+
+### Fixed
+
+- The web dashboard says when a watcher has stopped reporting: the bottom bar
+  raises the alarm and names the machines, and each machine card shows its own
+  state. Until now the browser showed frozen statuses as if they were current,
+  and only the terminal knew better (#623).
+
+- The watcher warning covers every machine instead of the freshest one, and names
+  the ones that stopped. A watcher dying on one host used to leave the indicator
+  green for as long as any other machine kept reporting, while that host's
+  sessions sat frozen on screen (#599).
+
+- An unreadable watcher heartbeat now raises the alarm on both screens, instead
+  of reading as healthy at the top of the TUI while the Machines tab called the
+  watcher missing. Each says which fault it is, so it never sends you to the
+  wrong machine (#600).
+
 ## [0.7.0] - 2026-08-20
 
 ### Added
@@ -439,7 +470,8 @@ across machines — it reads and reports session state; it never drives a sessio
 - The API binds `127.0.0.1` by default; every `/api/*` route is behind a
   constant-time shared-token check; request bodies are size-capped.
 
-[Unreleased]: https://github.com/haribo/claude-vigie/compare/v0.7.0...HEAD
+[Unreleased]: https://github.com/haribo/claude-vigie/compare/v0.7.1...HEAD
+[0.7.1]: https://github.com/haribo/claude-vigie/compare/v0.7.0...v0.7.1
 [0.7.0]: https://github.com/haribo/claude-vigie/compare/v0.6.0...v0.7.0
 [0.6.0]: https://github.com/haribo/claude-vigie/compare/v0.5.0...v0.6.0
 [0.5.0]: https://github.com/haribo/claude-vigie/compare/v0.4.1...v0.5.0

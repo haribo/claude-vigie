@@ -8,6 +8,7 @@ import (
 	"github.com/charmbracelet/lipgloss"
 
 	"github.com/haribo/claude-vigie/internal/api"
+	"github.com/haribo/claude-vigie/internal/clock"
 )
 
 // usageStrip is the bottom line — subscription usage plus the platform health
@@ -78,7 +79,7 @@ func resetIn(rfc string) string {
 	if err != nil {
 		return ""
 	}
-	if d := time.Until(t); d > 0 {
+	if d := clock.Until(t); d > 0 {
 		return humanizeDuration(d)
 	}
 	return "now"

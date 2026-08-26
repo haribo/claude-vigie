@@ -30,7 +30,7 @@ const flush = async (n = 8) => { for (let i = 0; i < n; i++) await new Promise((
 // harness replaces the browser surface app.js touches. Timers are recorded
 // rather than scheduled, so a test fires them when it means to and no test waits
 // on a real clock.
-function harness({ token = "t0k3n", sessions = [], group = null, idle = null, showEnded = null } = {}) {
+function harness({ token = "t0k3n", sessions = [], group = null, idle = null, showEnded = null, watcher = null } = {}) {
   const h = {
     now: 1_000_000,
     fetches: [],          // every path app.js requested, in order
@@ -114,6 +114,7 @@ function harness({ token = "t0k3n", sessions = [], group = null, idle = null, sh
       h.stream = makeStream();
       return { ok: true, status: 200, body: { getReader: () => h.stream.reader } };
     }
+    if (path === "/api/watcher") return { ok: true, status: 200, json: async () => (watcher || {}) };
     return { ok: true, status: 200, json: async () => (path === "/api/sessions" ? h.sessions : {}) };
   };
 
@@ -490,7 +491,7 @@ test("hidden N moves to the bottom bar, and only shows when something is hidden"
 const FLEET_C = [{
   id: "a", title: "api", user: "nico", machine: "m", project_dir: "/h/gateway",
   status: "working", model: "claude-opus-4-5", permission_mode: "plan",
-  context_tokens: 100000, last_seen_at: "2026-08-17T11:59:00Z",
+  context_tokens: 100000, context_pct: 50, last_seen_at: "2026-08-17T11:59:00Z",
   usage: { input_tokens: 10, output_tokens: 5000, cache_read_tokens: 85 },
 }];
 
@@ -499,13 +500,13 @@ test("the four columns the dashboard was missing now render", async () => {
   await h.boot();
   const html = h.lastTable();
   assert.match(html, />nico</, "user");
-  assert.match(html, />50%</, "ctx — 100k of opus-4-5's 200k window");
+  assert.match(html, />50%</, "ctx — the percentage the daemon derived (ADR-0011)");
   assert.match(html, />5k</, "out, on its own rather than only inside the total");
   assert.match(html, />plan</, "mode");
 });
 
 test("an unknown context reading is a dash, not a zero", async () => {
-  const h = harness({ sessions: [{ ...FLEET_C[0], context_tokens: null }] });
+  const h = harness({ sessions: [{ ...FLEET_C[0], context_tokens: null, context_pct: null }] });
   await h.boot();
   assert.match(h.lastTable(), /class="num faint">-</, "no reading at all must not read as an empty window");
 });
@@ -528,4 +529,48 @@ test("a layout saved before the rename survives it", async () => {
   assert.deepEqual(saved.hidden, ["branch"], "and the hidden one stayed hidden");
   assert.equal(store.has("vigie_columns"), false, "the old key is removed, so the remap cannot run twice");
   assert.ok(!h.lastTable().includes("Branch"), "the hidden column is still hidden after the migration");
+});
+
+// The dashboard fetched /api/watcher and read only the version string out of it,
+// so a machine whose watcher died went on showing frozen statuses with nothing
+// saying so — the defect #599 fixed in the terminal, still standing in the
+// browser (#623).
+const AT_WATCH = Date.parse("2026-08-26T12:00:00Z");
+const watcherAt = (offsets) => ({
+  machines: Object.fromEntries(Object.entries(offsets).map(
+    ([name, ms]) => [name, ms === null ? "" : new Date(AT_WATCH - ms).toISOString().replace(/\.\d+Z$/, "Z")])),
+  versions: {},
+});
+
+test("a watcher that stopped raises the alarm and is named", async () => {
+  const h = harness({ sessions: FLEET_C, watcher: watcherAt({ orion: 60_000, box: 2_000, nova: 2_000 }) });
+  h.now = AT_WATCH;
+  await h.boot();
+  assert.match(h.lastBot(), /1 of 3 not reporting \(orion\)/,
+    "the bottom bar must name the machine whose statuses are frozen");
+});
+
+test("a healthy fleet says nothing about watchers", async () => {
+  const h = harness({ sessions: FLEET_C, watcher: watcherAt({ box: 2_000, nova: 2_000 }) });
+  h.now = AT_WATCH;
+  await h.boot();
+  assert.ok(!h.lastBot().includes("watcher"),
+    "a permanent green trains the eye to skip the place where the exception appears");
+});
+
+// The reason the rule is not computed by the daemon (ADR-0011's third category,
+// #617): the verdict is a function of *now*, so it has to decay here. The server
+// is asked nothing between these two assertions — only the clock moves.
+test("the alarm appears as time passes, with no new answer from the server", async () => {
+  const h = harness({ sessions: FLEET_C, watcher: watcherAt({ orion: 2_000, box: 2_000 }) });
+  h.now = AT_WATCH;
+  await h.boot();
+  assert.ok(!h.lastBot().includes("watcher"), "both watchers are fresh at boot");
+
+  const asked = h.count("/api/watcher");
+  h.now += 30_000; // past the 15 s threshold, without refetching anything
+  await h.tick();
+  assert.equal(h.count("/api/watcher"), asked, "this must not depend on asking the server again");
+  assert.match(h.lastBot(), /2 of 2 not reporting \(box, orion\)/,
+    "a verdict the daemon had computed would still read as live here");
 });

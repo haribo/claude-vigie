@@ -12,7 +12,6 @@ import (
 
 	"github.com/haribo/claude-vigie/internal/api"
 	"github.com/haribo/claude-vigie/internal/clock"
-	"github.com/haribo/claude-vigie/internal/status"
 	"github.com/haribo/claude-vigie/internal/version"
 )
 
@@ -122,8 +121,7 @@ type model struct {
 	sessions        []api.SessionView
 	usage           api.UsageReport
 	platform        api.PlatformStatus
-	daemonVersion   api.VersionInfo // the server's build, fetched once (#341)
-	watcherSeen     string
+	daemonVersion   api.VersionInfo            // the server's build, fetched once (#341)
 	watcherMachines map[string]string          // per-machine last watch report, RFC3339 (#284)
 	watcherVersions map[string]api.VersionInfo // per-machine watcher build (#356)
 	gotWatcher      bool
@@ -183,21 +181,12 @@ func (m model) now() time.Time {
 	return m.clock()
 }
 
-// watcherStaleAfter is how long the server may go without a watch report before
-// the TUI warns that statuses may be stale.
-const watcherStaleAfter = 15 * time.Second
-
-// watcherStale reports whether no watch report has reached the server recently
-// (so the watcher is likely down and statuses are frozen).
+// watcherStale reports whether the statuses on screen may be frozen anywhere in
+// the fleet — a watcher that beat and stopped, or none beating at all. The rule
+// itself lives in watcher.go, so every indicator answers from one place.
 func (m model) watcherStale() bool {
-	if m.watcherSeen == "" {
-		return true
-	}
-	t, err := time.Parse(time.RFC3339, m.watcherSeen)
-	if err != nil {
-		return false // unknown format: don't cry wolf
-	}
-	return time.Since(t) > watcherStaleAfter
+	alarm, _, _, _ := fleetAlarm(m.watcherMachines, m.now())
+	return alarm
 }
 
 type sessionsMsg struct {
@@ -228,7 +217,6 @@ type eventMsg struct{}
 type connMsg struct{ live bool }
 
 type watcherMsg struct {
-	seen     string
 	machines map[string]string
 	versions map[string]api.VersionInfo
 	err      error
@@ -330,7 +318,7 @@ func (m model) watcherCmd() tea.Cmd {
 	}
 	return func() tea.Msg {
 		s, err := m.fetchWatcher()
-		return watcherMsg{seen: s.LastSeen, machines: s.Machines, versions: s.Versions, err: err}
+		return watcherMsg{machines: s.Machines, versions: s.Versions, err: err}
 	}
 }
 
@@ -505,7 +493,6 @@ func (m model) applyDataMsg(msg tea.Msg) model {
 	case watcherMsg:
 		m.markRefresh(srcWatcher, msg.err)
 		if msg.err == nil {
-			m.watcherSeen = msg.seen
 			m.watcherMachines = msg.machines
 			m.watcherVersions = msg.versions
 			m.gotWatcher = true
@@ -774,7 +761,7 @@ func (m model) View() string {
 		b.WriteString(m.renderStats())
 	case tabMachines:
 		b.WriteString(m.staleNote(srcWatcher))
-		b.WriteString(renderMachines(m.sessions, m.watcherMachines, m.watcherVersions, m.width))
+		b.WriteString(renderMachines(m.sessions, m.watcherMachines, m.watcherVersions, m.width, m.now()))
 	case tabSettings:
 		b.WriteString(m.renderSettings())
 	}
@@ -1238,7 +1225,7 @@ func lessBy(a, b api.SessionView, key sortKey) bool {
 		return totalTokens(a) > totalTokens(b)
 	case sortStatus:
 		// status.Rank is an index: lower is higher in the table.
-		if ra, rb := statusRank(a.Status), statusRank(b.Status); ra != rb {
+		if ra, rb := a.Rank, b.Rank; ra != rb {
 			return ra < rb
 		}
 		return a.LastSeenAt > b.LastSeenAt // tie-break: most recent first
@@ -1253,15 +1240,6 @@ func lessBy(a, b api.SessionView, key sortKey) bool {
 		return a.LastSeenAt > b.LastSeenAt
 	}
 }
-
-// statusRank orders statuses for the status sort, lower first, from the one list
-// that also decides which statuses exist (docs/design/session-list.md § 2.1).
-//
-// It used to name five of the nine and send the rest to a default of 0, which —
-// because this comparison was "higher wins" — sorted `compacting`, `thinking`,
-// `error` and `stale` *below* `ended`. A session hitting an API error ranked under
-// one that was over (#464).
-func statusRank(s string) int { return status.Rank(s) }
 
 // fuzzyMatch reports whether the runes of pattern appear in order in text
 // (case-insensitive subsequence match).

@@ -42,10 +42,10 @@ func TestWatcherStale(t *testing.T) {
 		{"never seen", "", true},
 		{"recent", time.Now().Add(-2 * time.Second).UTC().Format(time.RFC3339), false},
 		{"old", time.Now().Add(-time.Minute).UTC().Format(time.RFC3339), true},
-		{"unparseable is not stale", "not-a-time", false},
+		{"unparseable is stale", "not-a-time", true},
 	}
 	for _, c := range cases {
-		m := model{watcherSeen: c.seen}
+		m := model{watcherMachines: map[string]string{"orion": c.seen}}
 		if got := m.watcherStale(); got != c.want {
 			t.Errorf("%s: watcherStale = %v, want %v", c.name, got, c.want)
 		}

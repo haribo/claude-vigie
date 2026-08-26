@@ -21,9 +21,11 @@ var errFetch = errors.New("server unreachable")
 // real ones.
 func stubModel() model {
 	return model{
-		fetch:         func() ([]api.SessionView, error) { return []api.SessionView{{ID: "s1", Status: "working"}}, nil },
-		fetchUsage:    func() (api.UsageReport, error) { return api.UsageReport{FiveHourPct: 47}, nil },
-		fetchWatcher:  func() (api.WatcherStatus, error) { return api.WatcherStatus{LastSeen: "2026-08-14T10:00:00Z"}, nil },
+		fetch:      func() ([]api.SessionView, error) { return []api.SessionView{{ID: "s1", Status: "working"}}, nil },
+		fetchUsage: func() (api.UsageReport, error) { return api.UsageReport{FiveHourPct: 47}, nil },
+		fetchWatcher: func() (api.WatcherStatus, error) {
+			return api.WatcherStatus{Machines: map[string]string{"orion": "2026-08-14T10:00:00Z"}}, nil
+		},
 		fetchSettings: func() (api.Settings, error) { return api.Settings{SessionRetention: "48h"}, nil },
 		fetchStats:    func() (api.StatsResponse, error) { return api.StatsResponse{SessionCount: 3}, nil },
 		fetchPlatform: func() (api.PlatformStatus, error) { return api.PlatformStatus{Indicator: "none"}, nil },
@@ -62,7 +64,7 @@ func TestEachCommandCarriesItsOwnAnswer(t *testing.T) {
 	if msg, ok := m.settingsCmd()().(settingsMsg); !ok || msg.retention != "48h" {
 		t.Errorf("settingsCmd produced %#v", msg)
 	}
-	if msg, ok := m.watcherCmd()().(watcherMsg); !ok || msg.seen != "2026-08-14T10:00:00Z" {
+	if msg, ok := m.watcherCmd()().(watcherMsg); !ok || msg.machines["orion"] != "2026-08-14T10:00:00Z" {
 		t.Errorf("watcherCmd produced %#v", msg)
 	}
 }

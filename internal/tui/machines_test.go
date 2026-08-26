@@ -30,29 +30,30 @@ func TestRenderMachines(t *testing.T) {
 		{Machine: "orion", Status: "working", User: "ada", Usage: api.Usage{OutputTokens: 2000000}, LastSeenAt: "2026-07-29T10:00:00Z"},
 		{Machine: "orion", Status: "idle", User: "ada", Usage: api.Usage{OutputTokens: 1000000}, LastSeenAt: "2026-07-29T10:01:00Z"},
 		{Machine: "box", Status: "waiting", User: "bob", Usage: api.Usage{OutputTokens: 500000}, LastSeenAt: "2026-07-29T09:00:00Z"},
-	}, nil, nil, 100)
+	}, nil, nil, 100, time.Now())
 	for _, want := range []string{"MACHINE", "orion", "box", "ada", "3.0M"} {
 		if !strings.Contains(out, want) {
 			t.Errorf("machines view missing %q:\n%s", want, out)
 		}
 	}
-	if e := renderMachines(nil, nil, nil, 100); !strings.Contains(e, "no sessions") {
+	if e := renderMachines(nil, nil, nil, 100, time.Now()); !strings.Contains(e, "no sessions") {
 		t.Errorf("empty machines missing placeholder: %q", e)
 	}
 }
 
 func TestWatcherFresh(t *testing.T) {
 	now := time.Date(2026, 8, 3, 12, 0, 0, 0, time.UTC)
-	if !watcherFresh(now.Add(-5*time.Second).Format(time.RFC3339), now) {
+	fresh := func(seen string) bool { return readWatcher(seen, now) == watcherReporting }
+	if !fresh(now.Add(-5 * time.Second).Format(time.RFC3339)) {
 		t.Error("a recent heartbeat should be fresh")
 	}
-	if watcherFresh(now.Add(-60*time.Second).Format(time.RFC3339), now) {
+	if fresh(now.Add(-60 * time.Second).Format(time.RFC3339)) {
 		t.Error("an old heartbeat should be stale")
 	}
-	if watcherFresh("", now) {
+	if fresh("") {
 		t.Error("an empty heartbeat should be stale")
 	}
-	if watcherFresh("not-a-time", now) {
+	if fresh("not-a-time") {
 		t.Error("an unparseable heartbeat should be stale")
 	}
 }
@@ -62,7 +63,7 @@ func TestRenderMachinesFlagsMissingWatcher(t *testing.T) {
 	out := renderMachines([]api.SessionView{
 		{Machine: "watched", Status: "working", LastSeenAt: "2026-07-29T10:00:00Z"},
 		{Machine: "hooks-only", Status: "working", LastSeenAt: "2026-07-29T10:00:00Z"},
-	}, map[string]string{"watched": fresh /* "hooks-only" absent → no watcher */}, nil, 120)
+	}, map[string]string{"watched": fresh /* "hooks-only" absent → no watcher */}, nil, 120, time.Now())
 
 	if !strings.Contains(out, "WATCH") {
 		t.Errorf("missing WATCH column header:\n%s", out)
@@ -85,7 +86,7 @@ func TestRenderMachinesHealthyFleetNoBanner(t *testing.T) {
 	fresh := time.Now().Add(-2 * time.Second).UTC().Format(time.RFC3339)
 	out := renderMachines(
 		[]api.SessionView{{Machine: "m1", Status: "working", LastSeenAt: "2026-07-29T10:00:00Z"}},
-		map[string]string{"m1": fresh}, nil, 120)
+		map[string]string{"m1": fresh}, nil, 120, time.Now())
 	if strings.Contains(out, "no watcher") {
 		t.Errorf("a healthy fleet should show no banner:\n%s", out)
 	}
@@ -105,7 +106,7 @@ func TestRenderMachinesShowsVersion(t *testing.T) {
 		},
 		map[string]string{"m1": fresh},
 		map[string]api.VersionInfo{"m1": {Version: "0.3.0", Commit: "abc1234"}},
-		140)
+		140, time.Now())
 	if !strings.Contains(out, "VERSION") {
 		t.Errorf("missing VERSION column header:\n%s", out)
 	}

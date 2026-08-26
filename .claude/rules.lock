@@ -18,9 +18,25 @@ hash = "aabd778ef08e"
 adopted = "2026-08-04"
 hash = "9a65081d690c"
 
+[rules.cross-project-leak]
+adopted = "2026-08-22"
+hash = "b3dd83c2356d"
+
 [rules.design-first]
 adopted = "2026-08-04"
 hash = "6d93ba90db46"
+
+[rules.explain-before-build]
+adopted = "2026-08-22"
+hash = "89a4715cca28"
+
+[rules.functional-first]
+adopted = "2026-08-22"
+hash = "95964a8a6256"
+
+[rules.issue-not-trusted]
+adopted = "2026-08-22"
+hash = "88cb9b037eff"
 
 [rules.measurable-defect]
 adopted = "2026-08-04"
@@ -34,10 +50,10 @@ hash = "78dc260ec367"
 adopted = "2026-08-04"
 hash = "da1ad3af8e04"
 
-[rules.stale-issue-audit]
-adopted = "2026-08-04"
-hash = "fca725ad312a"
-
 [rules.testing-guard]
 adopted = "2026-08-04"
 hash = "a09e99c6385f"
+
+[rules.tests-with-the-change]
+adopted = "2026-08-22"
+hash = "f9b8b747acfb"

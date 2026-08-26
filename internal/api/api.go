@@ -73,9 +73,28 @@ type SessionView struct {
 	// ContextTokens is the real prompt size of the latest request (#279). nil when
 	// vigie has no reading (rendered "-"); a non-nil value is known, including a
 	// known 0 for a just-cleared session shown as 0% (#367).
-	ContextTokens   *int64  `json:"context_tokens,omitempty"`
-	PermissionMode  string  `json:"permission_mode,omitempty"` // default/acceptEdits/plan/auto/bypassPermissions (#304)
-	Status          string  `json:"status"`
+	ContextTokens *int64 `json:"context_tokens,omitempty"`
+	// ContextWindow is the model's window in tokens, and ContextPct how full it
+	// is, rounded — both derived by the daemon so no client owns a copy of the
+	// model table or of the rounding (ADR-0011, #616). ContextPct is nil exactly
+	// when ContextTokens is: a session with a known reading of 0 carries a
+	// pointer to 0, which #367 exists to keep distinct from "no reading".
+	ContextWindow  int64  `json:"context_window,omitempty"`
+	ContextPct     *int   `json:"context_pct,omitempty"`
+	PermissionMode string `json:"permission_mode,omitempty"` // default/acceptEdits/plan/auto/bypassPermissions (#304)
+	Status         string `json:"status"`
+	// Attention is whether this session's *status* means it is blocked and needs a
+	// human, and Rank where that status sorts. Both are derived by the daemon so
+	// the vocabulary lives in one place (ADR-0011, #617): it used to be hand-copied
+	// into the TUI, the dashboard and the GNOME indicator, and adding `compacting`
+	// reached two of them (#421, #422, #423).
+	//
+	// Attention deliberately excludes a raised call. A call is not a status — it
+	// rides alongside one (ADR-0010) — and clients that must consider both already
+	// hold CallAt. Folding them together here would lose the distinction the TUI's
+	// jump-to-next depends on, where a call outranks an inferred state.
+	Attention       bool    `json:"attention"`
+	Rank            int     `json:"rank"`
 	LastTool        string  `json:"last_tool,omitempty"`
 	Usage           Usage   `json:"usage"`
 	StartedAt       string  `json:"started_at"`

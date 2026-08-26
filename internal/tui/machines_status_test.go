@@ -3,6 +3,7 @@ package tui
 import (
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/haribo/claude-vigie/internal/api"
 	"github.com/haribo/claude-vigie/internal/status"
@@ -36,7 +37,7 @@ func oneOfEachStatus() []api.SessionView {
 func TestNoStatusIsCountedButInvisible(t *testing.T) {
 	sessions := oneOfEachStatus()
 	out := renderMachines(sessions, map[string]string{"orion": "2026-08-16T12:00:00Z"},
-		map[string]api.VersionInfo{}, 300)
+		map[string]api.VersionInfo{}, 300, time.Now())
 
 	for _, st := range status.All {
 		if columnStatuses[st] {
@@ -96,7 +97,7 @@ func TestAFleetWithinTheColumnsAddsNothing(t *testing.T) {
 	out := renderMachines([]api.SessionView{
 		{ID: "a", Machine: "orion", Status: "working"},
 		{ID: "b", Machine: "orion", Status: "idle"},
-	}, map[string]string{"orion": "2026-08-16T12:00:00Z"}, map[string]api.VersionInfo{}, 200)
+	}, map[string]string{"orion": "2026-08-16T12:00:00Z"}, map[string]api.VersionInfo{}, 200, time.Now())
 
 	// The machine's own row, not the no-watcher banner below it — whose prose
 	// legitimately contains the word "stale".
