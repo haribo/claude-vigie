@@ -28,6 +28,13 @@ file is the single source of truth, not a second narrative.
 - The Stats tab's ranking names an untitled session by its short id, as the
   sessions table does, instead of printing the whole 36-character one (#630).
 
+### Security
+
+- The daemon refuses a session report whose timestamp is not a real instant, and
+  the terminal never prints one unchecked. A crafted report could act on the
+  operator's terminal — set its window title — when they opened that session's
+  detail panel (#629).
+
 ## [0.7.1] - 2026-08-26
 
 ### Changed
