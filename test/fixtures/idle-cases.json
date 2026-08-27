@@ -14,7 +14,9 @@
   "presets_seconds": [0, 900, 1800, 3600, 10800, 21600],
   "cases": [
     { "why": "a threshold of zero is off — nothing is ever hidden by it", "now": "2026-08-27T12:00:00Z", "seen": "2026-08-01T00:00:00Z", "after_seconds": 0, "hidden": false },
-    { "why": "quieter than the threshold, so hidden", "now": "2026-08-27T12:00:00Z", "seen": "2026-08-27T11:00:00Z", "after_seconds": 900, "hidden": true },
+    { "why": "quieter than the threshold, so hidden", "now": "2026-08-27T12:00:00Z", "seen": "2026-08-27T11:00:00Z", "after_seconds": 900, "status": "idle", "hidden": true },
+    { "why": "a `working` session whose reports stopped is hidden too — the clock is last_seen_at, not the status", "now": "2026-08-27T12:00:00Z", "seen": "2026-08-27T11:00:00Z", "after_seconds": 900, "status": "working", "hidden": true },
+    { "why": "and a recent `ended` one is not hidden by this rule, which is not the hide-ended preference", "now": "2026-08-27T12:05:00Z", "seen": "2026-08-27T12:00:00Z", "after_seconds": 900, "status": "ended", "hidden": false },
     { "why": "exactly at the threshold is still shown — the comparison is strict", "now": "2026-08-27T12:15:00Z", "seen": "2026-08-27T12:00:00Z", "after_seconds": 900, "hidden": false },
     { "why": "one second past it is hidden", "now": "2026-08-27T12:15:01Z", "seen": "2026-08-27T12:00:00Z", "after_seconds": 900, "hidden": true },
     { "why": "recent enough to stay", "now": "2026-08-27T12:05:00Z", "seen": "2026-08-27T12:00:00Z", "after_seconds": 900, "hidden": false },

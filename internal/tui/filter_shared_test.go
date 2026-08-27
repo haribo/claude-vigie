@@ -1,8 +1,6 @@
 package tui
 
 import (
-	"encoding/json"
-	"os"
 	"testing"
 
 	"github.com/haribo/claude-vigie/internal/api"
@@ -33,16 +31,9 @@ type fuzzyCase struct {
 
 func loadFuzzyCases(t *testing.T) []fuzzyCase {
 	t.Helper()
-	b, err := os.ReadFile("../../test/fixtures/fuzzy-cases.json")
-	if err != nil {
-		t.Fatalf("reading the shared fixture: %v", err)
-	}
-	var doc struct {
+	doc := loadFixture[struct {
 		Cases []fuzzyCase `json:"cases"`
-	}
-	if err := json.Unmarshal(b, &doc); err != nil {
-		t.Fatalf("parsing the shared fixture: %v", err)
-	}
+	}](t, "fuzzy-cases.json")
 	if len(doc.Cases) == 0 {
 		t.Fatal("the shared fixture has no cases — the extraction is broken, not the code")
 	}

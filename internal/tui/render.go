@@ -479,9 +479,10 @@ func totalTokens(s api.SessionView) int64 {
 // The arithmetic is integer on purpose. Dividing into a float and rounding the
 // result rounds *twice*: 1150/1000 is 1.14999…, which the multiply by ten pulls
 // back up to exactly 11.5, which then rounds to 1.2 — while JavaScript, reading
-// the same double, answers 1.1. Every count ending in 50 diverged that way, four
-// thousand values in the first three million. A float that is never formed cannot
-// be rounded twice, and both languages compute the same integer.
+// the same double, answers 1.1. 4004 of the first three million counts diverged
+// that way, all of them ending in 50 (though not every count ending in 50 did:
+// only those whose quotient falls just under the half). A float that is never
+// formed cannot be rounded twice, and both languages compute the same integer.
 //
 // One decimal is always kept, `1.0k` and not `1k`: this column is aligned on a
 // character grid, and a width that changes with the value breaks the column.
@@ -498,8 +499,12 @@ func humanizeTokens(n int64) string {
 
 // oneDecimal renders n/unit to one decimal place, the half rounded away from
 // zero. `unit/20` is half of one tenth of a unit — the half being rounded — and
-// `unit/10` is a tenth, so the whole thing is one integer division and no
-// multiplication, which also keeps it clear of overflow near int64's ceiling.
+// `unit/10` is a tenth, so the whole thing is one integer division.
+//
+// The addition overflows within 50000 of int64's ceiling and prints nonsense
+// there. Not guarded: a session would have to report nine quintillion tokens, and
+// a branch on every render to describe an impossible number is worse than the
+// sentence you are reading.
 func oneDecimal(n, unit int64) string {
 	t := (n + unit/20) / (unit / 10)
 	return fmt.Sprintf("%d.%d", t/10, t%10)

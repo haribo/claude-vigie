@@ -33,8 +33,9 @@ export function detailText(s) {
 //
 // Integer arithmetic, matching the Go side character for character in intent: a
 // float divide followed by a rounding rounds twice, and the two languages land on
-// different sides of it. 1150 tokens read `1.2k` in the terminal and `1.1k` here
-// for exactly that reason, and so did every count ending in 50.
+// different sides of it. That is not what shipped — it is what the first attempt at
+// aligning the two did, and it would have made 1150 tokens read `1.2k` in the
+// terminal and `1.1k` here, on 4004 counts in the first three million.
 //
 // The decimal is always kept — `1.0k`, not `1k` — because the terminal column is
 // aligned on a character grid and a width that changes with the value breaks it.

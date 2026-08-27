@@ -1,8 +1,6 @@
 package tui
 
 import (
-	"encoding/json"
-	"os"
 	"testing"
 	"time"
 )
@@ -30,14 +28,7 @@ type watcherFixture struct {
 
 func loadWatcherFixture(t *testing.T) watcherFixture {
 	t.Helper()
-	b, err := os.ReadFile("../../test/fixtures/watcher-cases.json")
-	if err != nil {
-		t.Fatalf("reading the shared fixture: %v", err)
-	}
-	var f watcherFixture
-	if err := json.Unmarshal(b, &f); err != nil {
-		t.Fatalf("parsing the shared fixture: %v", err)
-	}
+	f := loadFixture[watcherFixture](t, "watcher-cases.json")
 	if len(f.Verdict) == 0 || len(f.Fleet) == 0 {
 		t.Fatal("the shared fixture is missing a section — the extraction is broken, not the code")
 	}

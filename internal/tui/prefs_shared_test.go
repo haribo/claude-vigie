@@ -22,6 +22,7 @@ type idleFixture struct {
 		Now          string `json:"now"`
 		Seen         string `json:"seen"`
 		AfterSeconds int64  `json:"after_seconds"`
+		Status       string `json:"status"`
 		Hidden       bool   `json:"hidden"`
 	} `json:"cases"`
 }
@@ -54,7 +55,11 @@ func TestIdleHidingAgreesWithTheSharedFixture(t *testing.T) {
 			t.Fatalf("the fixture's `now` is not a timestamp: %q", c.Now)
 		}
 		p := prefs{idleHideAfter: time.Duration(c.AfterSeconds) * time.Second}
-		hidden := !p.visible(api.SessionView{Status: "idle", LastSeenAt: c.Seen}, now)
+		status := c.Status
+		if status == "" {
+			status = "idle"
+		}
+		hidden := !p.visible(api.SessionView{Status: status, LastSeenAt: c.Seen}, now)
 		if hidden != c.Hidden {
 			t.Errorf("hidden(seen=%q, after=%ds) = %v, want %v — %s",
 				c.Seen, c.AfterSeconds, hidden, c.Hidden, c.Why)

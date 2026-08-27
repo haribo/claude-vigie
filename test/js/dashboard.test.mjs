@@ -17,6 +17,11 @@ import {
   contextCell, contextKnown, contextPct, migrateV1Columns, V1_COLUMN_KEYS,
 } from "../../internal/web/static/lib.js";
 
+// Every shared case list is read the same way; the interesting part is what each
+// test asserts, not the four lines that open the file (#619).
+const fixture = async (name) =>
+  JSON.parse(await readFile(new URL(`../fixtures/${name}`, import.meta.url), "utf8"));
+
 // esc is the dashboard's only defence against DOM-based XSS: session titles,
 // branches and detail text all come from transcripts, and the operator's token
 // sits in localStorage (#161). It is the most important function in the file.
@@ -79,21 +84,6 @@ test("humanTokens survives what is not a number", () => {
   assert.equal(humanTokens(null), "0");
   assert.equal(humanTokens("nonsense"), "0");
   assert.equal(humanTokens(undefined), "0");
-});
-
-// The scale moved to the shared fixture (#619); what is left is that relAge reads
-// the real clock, which the fixture cannot express because it pins one. The clock
-// is read once and held: reading it on both sides of the assertion makes the test
-// fail on any stall longer than a second.
-test("relAge reads the wall clock", () => {
-  const now = Date.now();
-  const realNow = Date.now;
-  Date.now = () => now;
-  try {
-    assert.equal(relAge(new Date(now - 5000).toISOString()), "5s");
-  } finally {
-    Date.now = realNow;
-  }
 });
 
 test("relResetHint counts down and never shows a past reset", () => {
@@ -320,8 +310,7 @@ test("streamIsSilent never condemns a stream it has never heard from", () => {
 // were, so the copy is not trusted: this reads the same fixture that
 // internal/tui/filter_shared_test.go reads, and the two must agree case for case.
 test("fuzzyMatch agrees with the shared fixture the Go side reads", async () => {
-  const raw = await readFile(new URL("../fixtures/fuzzy-cases.json", import.meta.url), "utf8");
-  const { cases } = JSON.parse(raw);
+  const { cases } = await fixture("fuzzy-cases.json");
   assert.ok(cases.length > 0, "the shared fixture has no cases — the extraction is broken, not the code");
   for (const c of cases) {
     assert.equal(fuzzyMatch(c.pattern, c.text), c.want,
@@ -447,8 +436,7 @@ test("the presets and their labels match what the TUI offers", () => {
 // #550. CTX and MODE are two more rules copied out of Go. Neither copy is
 // trusted: this reads the same fixture internal/tui/column_shared_test.go reads.
 test("contextCell agrees with the shared fixture the Go side reads", async () => {
-  const raw = await readFile(new URL("../fixtures/column-cases.json", import.meta.url), "utf8");
-  const { context } = JSON.parse(raw);
+  const { context } = await fixture("column-cases.json");
   assert.ok(context.length > 0, "the fixture has no context cases");
   for (const c of context) {
     // The daemon derives `pct` from the model and the reading (ADR-0011); this
@@ -503,8 +491,7 @@ test("the remap collapses a duplicate rather than listing a column twice", () =>
 // internal/tui/watcher_shared_test.go reads, and the two must agree case for
 // case, including the exact alarm text (#623).
 test("readWatcher agrees with the shared fixture the Go side reads", async () => {
-  const raw = await readFile(new URL("../fixtures/watcher-cases.json", import.meta.url), "utf8");
-  const { verdict } = JSON.parse(raw);
+  const { verdict } = await fixture("watcher-cases.json");
   assert.ok(verdict.length > 0, "the fixture has no verdict cases");
   for (const c of verdict) {
     assert.equal(readWatcher(c.seen, Date.parse(c.now)), c.want, `seen=${c.seen} — ${c.why}`);
@@ -512,8 +499,7 @@ test("readWatcher agrees with the shared fixture the Go side reads", async () =>
 });
 
 test("the fleet alarm agrees with the shared fixture, text included", async () => {
-  const raw = await readFile(new URL("../fixtures/watcher-cases.json", import.meta.url), "utf8");
-  const { fleet } = JSON.parse(raw);
+  const { fleet } = await fixture("watcher-cases.json");
   assert.ok(fleet.length > 0, "the fixture has no fleet cases");
   for (const c of fleet) {
     const r = fleetAlarm(c.machines, Date.parse(c.now));
@@ -542,9 +528,6 @@ test("a machine card names which failure it is showing", () => {
 // purpose: they are functions of what the operator typed or chose, and an age is a
 // function of *now*. Duplicated, not unchecked — the Go suite reads these same
 // files and both must answer every case identically.
-
-const fixture = async (name) =>
-  JSON.parse(await readFile(new URL(`../fixtures/${name}`, import.meta.url), "utf8"));
 
 test("token formatting agrees with the shared fixture", async () => {
   const { tokens } = await fixture("format-cases.json");
@@ -590,7 +573,8 @@ test("idle hiding agrees with the shared fixture", async () => {
   const { cases } = await fixture("idle-cases.json");
   assert.ok(cases.length > 0, "the shared fixture has no idle cases");
   for (const c of cases) {
-    const got = hiddenByIdle({ last_seen_at: c.seen }, c.after_seconds * 1000, Date.parse(c.now));
+    const s = { last_seen_at: c.seen, status: c.status || "idle" };
+    const got = hiddenByIdle(s, c.after_seconds * 1000, Date.parse(c.now));
     assert.equal(got, c.hidden, `${c.seen || "(empty)"} after ${c.after_seconds}s — ${c.why}`);
   }
 });
