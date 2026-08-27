@@ -150,3 +150,19 @@ func TestPreflightWatcherStaleLocalLiveness(t *testing.T) {
 		t.Errorf("no local watcher + stale heartbeat: got %v, want a 'not running' error", err)
 	}
 }
+
+// #635. The preflight names two builds in errors printed straight to the
+// terminal, before the alt-screen and outside the model that cleans everything
+// the TUI draws. One of them is what a watcher reported about itself.
+func TestAHostileWatcherBuildDoesNotReachTheTerminal(t *testing.T) {
+	const evil = "1.0.0\x1b]0;pwned\x07"
+	err := watcherBuildError(api.WatcherStatus{
+		Versions: map[string]api.VersionInfo{"m": {Version: evil}},
+	}, "m")
+	if err == nil {
+		t.Fatal("a drifted watcher build must be refused")
+	}
+	if strings.ContainsAny(err.Error(), "\x1b\r") {
+		t.Errorf("the error printed to the terminal carries a control character: %q", err)
+	}
+}

@@ -12,6 +12,7 @@ import (
 	"github.com/haribo/claude-vigie/internal/config"
 	"github.com/haribo/claude-vigie/internal/install"
 	"github.com/haribo/claude-vigie/internal/presence"
+	"github.com/haribo/claude-vigie/internal/tui"
 	"github.com/haribo/claude-vigie/internal/version"
 )
 
@@ -29,8 +30,11 @@ func preflight(cfg *config.Config) error {
 	}
 	local := api.VersionInfo{Version: version.Version, Commit: version.Commit}
 	if !versionsMatch(local, daemon) {
+		// The daemon's build is named in an error printed straight to the terminal,
+		// before the alt-screen and outside the model that cleans everything else
+		// (#635). It arrives over the network like any other string.
 		return fmt.Errorf("version drift — this vigie is %s, the daemon is %s; upgrade the older side to match",
-			describeVersion(local), describeVersion(daemon))
+			describeVersion(local), describeVersion(tui.SanitizeVersion(daemon)))
 	}
 	return preflightWatcher(cfg)
 }
@@ -63,12 +67,22 @@ func preflightWatcher(cfg *config.Config) error {
 		}
 		return fmt.Errorf("this machine has vigie hooks but its watcher is not running — start it (`vigie watch`, or restart the vigie-watch service)")
 	}
+	return watcherBuildError(ws, cfg.Machine)
+}
+
+// watcherBuildError refuses a machine whose watcher runs a different build from
+// this binary, naming both. Split out of the preflight so the message can be
+// tested without a server: it is printed straight to the terminal, before the
+// alt-screen, and it quotes a string the watcher chose for itself — so it is
+// cleaned first (#635).
+func watcherBuildError(ws api.WatcherStatus, machine string) error {
 	local := api.VersionInfo{Version: version.Version, Commit: version.Commit}
-	if wv := ws.Versions[cfg.Machine]; !versionsMatch(local, wv) {
-		return fmt.Errorf("this machine's watcher is %s but the tui is %s — restart the vigie-watch service to match",
-			describeVersion(wv), describeVersion(local))
+	wv := tui.SanitizeVersion(ws.Versions[machine])
+	if versionsMatch(local, wv) {
+		return nil
 	}
-	return nil
+	return fmt.Errorf("this machine's watcher is %s but the tui is %s — restart the vigie-watch service to match",
+		describeVersion(wv), describeVersion(local))
 }
 
 // localWatcherRunning reports whether a watcher process for this binary is alive

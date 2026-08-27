@@ -166,3 +166,49 @@ func TestAControlSequenceInATimestampNeverReachesTheScreen(t *testing.T) {
 		}
 	}
 }
+
+// #635. The MACHINES tab printed a watcher's reported build, and the STATS tab the
+// session, machine and model of its ranking, exactly as the reports sent them. The
+// guards above prove the cleaning functions; this proves they are wired, by driving
+// the model the way the fetchers do and reading what each surface draws.
+//
+// Two shapes, because they reach the screen by different routes. A hostile *value*
+// under a machine that has sessions reaches the MACHINES column; a hostile machine
+// *name* reaches the fleet alarm in the state modal, which names the machines whose
+// watcher stopped. A test carrying only the first would stay green with the
+// sanitizer unwired, because a poisoned key matches no session and renders nothing.
+func TestControlSequencesNeverReachTheMachinesOrStatsTabs(t *testing.T) {
+	m := stubModel()
+	m.width, m.height = 200, 40
+	m = m.applySessions(sessionsMsg{gen: 1, sessions: []api.SessionView{
+		{ID: "a", Name: "a", Machine: "m", Status: "working"},
+	}})
+
+	// A build reported for the machine the session runs on, and a second machine
+	// whose name is hostile and whose watcher went silent long ago.
+	upd, _ := m.Update(watcherMsg{status: api.WatcherStatus{
+		LastSeen: evil,
+		Machines: map[string]string{
+			"m":          "2026-08-27T12:00:00Z",
+			"box" + evil: "2020-01-01T00:00:00Z",
+		},
+		Versions: map[string]api.VersionInfo{"m": {Version: evil, Commit: evil}},
+	}})
+	upd, _ = upd.(model).Update(statsMsg{stats: api.StatsResponse{
+		Daily:       []api.DailyStat{{Day: "2026-08-27", Model: evil, OutputTokens: 10, WorkingSeconds: 60}},
+		TopSessions: []api.TopSession{{Name: evil, Machine: evil, Model: evil, Status: "idle"}},
+	}})
+	upd, _ = upd.(model).Update(versionMsg{v: api.VersionInfo{Version: evil, Commit: evil}})
+	m = upd.(model)
+
+	for _, tb := range []tab{tabSessions, tabMachines, tabStats, tabSettings} {
+		m.tab = tb
+		if view := m.View(); strings.ContainsAny(view, "\x1b\r") {
+			t.Errorf("a control character reached the screen on tab %d:\n%q", tb, view)
+		}
+	}
+	m.tab, m.showState = tabSessions, true
+	if view := m.View(); strings.ContainsAny(view, "\x1b\r") {
+		t.Errorf("a control character reached the state modal:\n%q", view)
+	}
+}

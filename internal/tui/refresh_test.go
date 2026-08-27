@@ -64,7 +64,7 @@ func TestEachCommandCarriesItsOwnAnswer(t *testing.T) {
 	if msg, ok := m.settingsCmd()().(settingsMsg); !ok || msg.retention != "48h" {
 		t.Errorf("settingsCmd produced %#v", msg)
 	}
-	if msg, ok := m.watcherCmd()().(watcherMsg); !ok || msg.machines["orion"] != "2026-08-14T10:00:00Z" {
+	if msg, ok := m.watcherCmd()().(watcherMsg); !ok || msg.status.Machines["orion"] != "2026-08-14T10:00:00Z" {
 		t.Errorf("watcherCmd produced %#v", msg)
 	}
 }
