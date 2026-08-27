@@ -23,14 +23,6 @@ func TestEveryStringFieldOfTheSessionViewIsSanitized(t *testing.T) {
 		// Refused on ingest unless it is one of the known statuses
 		// (rejectReport, internal/server/report.go).
 		"Status": "closed vocabulary, validated by the daemon",
-		// Timestamps are NOT validated on ingest and NOT sanitized, and the detail
-		// panel renders three of them raw. That is a live hole of the #540 class,
-		// filed separately rather than widened into this change (#629).
-		"StartedAt":       "unvalidated timestamp — #629",
-		"LastSeenAt":      "unvalidated timestamp — #629",
-		"EndedAt":         "unvalidated timestamp — #629",
-		"StatusChangedAt": "unvalidated timestamp — #629",
-		"CallAt":          "unvalidated timestamp — #629",
 	}
 
 	const hostile = "title\x1b]52;c;cGF5bG9hZA==\x07"

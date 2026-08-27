@@ -129,3 +129,40 @@ func TestTheSessionIdKeepsItsReadableTextAndLength(t *testing.T) {
 		t.Errorf("id length changed: %d runes, want %d", len([]rune(got)), len([]rune(evilID)))
 	}
 }
+
+// #629. The five timestamps were the fields nobody thought of — #540 again, one
+// field further along. A report carries one `timestamp` and the daemon copies it
+// into all five; three of them the detail panel prints exactly as they came, so a
+// report whose timestamp was an OSC 0 sequence set the title of the operator's
+// terminal window the moment they opened that session.
+//
+// The daemon now refuses such a report (rejectReport, internal/server/report.go).
+// This asserts the second half: the model is clean even when the daemon's check
+// did not run, because the invariant sanitize.go states is about this model and
+// not about a promise made across a network.
+const evilStamp = "\x1b]0;pwned\x07"
+
+func TestAControlSequenceInATimestampNeverReachesTheScreen(t *testing.T) {
+	m := stubModel()
+	m.width, m.height = 200, 40
+	m = m.applySessions(sessionsMsg{gen: 1, sessions: []api.SessionView{{
+		ID: "a", Name: "a", Machine: "m", Status: "working",
+		StartedAt: evilStamp, LastSeenAt: evilStamp, EndedAt: evilStamp,
+		StatusChangedAt: evilStamp, CallAt: evilStamp,
+	}}})
+
+	got := m.sessions[0]
+	for label, v := range map[string]string{
+		"StartedAt": got.StartedAt, "LastSeenAt": got.LastSeenAt, "EndedAt": got.EndedAt,
+		"StatusChangedAt": got.StatusChangedAt, "CallAt": got.CallAt,
+	} {
+		if strings.ContainsAny(v, "\x1b\r") {
+			t.Errorf("the stored %s still carries a control character: %q", label, v)
+		}
+	}
+	for _, view := range []string{m.View(), renderDetail(got)} {
+		if strings.ContainsAny(view, "\x1b\r") {
+			t.Errorf("a control character reached the screen:\n%q", view)
+		}
+	}
+}
