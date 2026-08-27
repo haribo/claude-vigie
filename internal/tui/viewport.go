@@ -127,3 +127,14 @@ func lineCount(s string) int {
 	}
 	return strings.Count(s, "\n") + 1
 }
+
+func clamp(v, n int) int {
+	switch {
+	case n <= 0, v < 0:
+		return 0
+	case v >= n:
+		return n - 1
+	default:
+		return v
+	}
+}
