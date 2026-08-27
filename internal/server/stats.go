@@ -62,12 +62,11 @@ func topSessions(sessions []store.Session) []api.TopSession {
 	}
 	out := make([]api.TopSession, 0, len(sorted))
 	for _, ss := range sorted {
-		name := ss.Title
-		if name == "" {
-			name = ss.ID
-		}
 		out = append(out, api.TopSession{
-			Name:         name,
+			// nameView, not `title || full id`: the ranking and the sessions table
+			// must call one session by one name, and a 36-character id beside a
+			// machine and a token count is not what the operator recognizes (#630).
+			Name:         nameView(ss.Title, ss.ID),
 			Machine:      ss.Machine,
 			Model:        ss.Model,
 			Status:       ss.Status,

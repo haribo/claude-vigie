@@ -62,13 +62,25 @@ type Usage struct {
 
 // SessionView is a session as returned by /api/sessions.
 type SessionView struct {
-	ID         string `json:"id"`
-	Title      string `json:"title,omitempty"`
+	ID    string `json:"id"`
+	Title string `json:"title,omitempty"`
+	// Name is what the session is called on screen: its title, or the first eight
+	// characters of its id when it has none. Derived by the daemon so the three
+	// clients cannot disagree (ADR-0011, #618) — and they did: the TUI and the
+	// dashboard fell back to the short id while the GNOME indicator fell back to
+	// the project directory, so one untitled session had two names depending on
+	// where the operator looked.
+	Name       string `json:"name"`
 	User       string `json:"user,omitempty"`
 	Machine    string `json:"machine"`
 	ProjectDir string `json:"project_dir"`
-	GitBranch  string `json:"git_branch,omitempty"`
-	Model      string `json:"model,omitempty"`
+	// Project is the final segment of ProjectDir, or "-" when there is none.
+	Project   string `json:"project"`
+	GitBranch string `json:"git_branch,omitempty"`
+	Model     string `json:"model,omitempty"`
+	// ModelShort is Model without its vendor prefix (modelinfo.Short), the compact
+	// form a narrow column shows.
+	ModelShort string `json:"model_short,omitempty"`
 	Effort     string `json:"effort,omitempty"` // reasoning effort of the last assistant turn
 	// ContextTokens is the real prompt size of the latest request (#279). nil when
 	// vigie has no reading (rendered "-"); a non-nil value is known, including a
@@ -82,7 +94,14 @@ type SessionView struct {
 	ContextWindow  int64  `json:"context_window,omitempty"`
 	ContextPct     *int   `json:"context_pct,omitempty"`
 	PermissionMode string `json:"permission_mode,omitempty"` // default/acceptEdits/plan/auto/bypassPermissions (#304)
-	Status         string `json:"status"`
+	// ModeLabel and ModeDetail spell PermissionMode out: the short form for a table
+	// cell ("accept"), the long one for a detail panel ("accept — auto-accepts
+	// edits"). An unrecognized non-empty mode is carried through as it came, never
+	// relabelled — a new mode must not read as the safe default (#304). Color is
+	// not here: it is rendering, and each client owns its palette.
+	ModeLabel  string `json:"mode_label"`
+	ModeDetail string `json:"mode_detail"`
+	Status     string `json:"status"`
 	// Attention is whether this session's *status* means it is blocked and needs a
 	// human, and Rank where that status sorts. Both are derived by the daemon so
 	// the vocabulary lives in one place (ADR-0011, #617): it used to be hand-copied
@@ -93,17 +112,24 @@ type SessionView struct {
 	// rides alongside one (ADR-0010) — and clients that must consider both already
 	// hold CallAt. Folding them together here would lose the distinction the TUI's
 	// jump-to-next depends on, where a call outranks an inferred state.
-	Attention       bool    `json:"attention"`
-	Rank            int     `json:"rank"`
-	LastTool        string  `json:"last_tool,omitempty"`
-	Usage           Usage   `json:"usage"`
-	StartedAt       string  `json:"started_at"`
-	LastSeenAt      string  `json:"last_seen_at"`
-	EndedAt         string  `json:"ended_at,omitempty"`
-	RemoteControl   bool    `json:"remote_control"`
-	RemoteURL       string  `json:"remote_url,omitempty"`        // /rc resume URL while remote control is active
-	APIErrorStatus  int     `json:"api_error_status,omitempty"`  // HTTP code when Status == "error", else 0
-	Detail          string  `json:"detail,omitempty"`            // contextual detail of the current state (#393)
+	Attention      bool   `json:"attention"`
+	Rank           int    `json:"rank"`
+	LastTool       string `json:"last_tool,omitempty"`
+	Usage          Usage  `json:"usage"`
+	StartedAt      string `json:"started_at"`
+	LastSeenAt     string `json:"last_seen_at"`
+	EndedAt        string `json:"ended_at,omitempty"`
+	RemoteControl  bool   `json:"remote_control"`
+	RemoteURL      string `json:"remote_url,omitempty"`       // /rc resume URL while remote control is active
+	APIErrorStatus int    `json:"api_error_status,omitempty"` // HTTP code when Status == "error", else 0
+	Detail         string `json:"detail,omitempty"`           // contextual detail of the current state (#393)
+	// DetailText is what the DETAIL cell shows, in precedence order: a raised call
+	// first (it is why the row is animated), then the API error code when the
+	// status is `error` (once the API answers 529 the last tool is of no interest,
+	// #584), then Detail, then a dash. The precedence is derived here rather than
+	// persisted into Detail, which is cleared on a status change and would become a
+	// second source of truth for what APIErrorStatus already holds.
+	DetailText      string  `json:"detail_text"`
 	StatusChangedAt string  `json:"status_changed_at,omitempty"` // RFC3339, when Status last changed
 	Samples         []int64 `json:"samples,omitempty"`           // recent output-token samples, oldest first
 	// CallAt/CallMessage carry a call the session raised for the operator
@@ -202,7 +228,7 @@ type DailyStat struct {
 
 // TopSession is a session ranked by output tokens for the stats view.
 type TopSession struct {
-	Name         string `json:"name"` // title if set, else the session id (a hash)
+	Name         string `json:"name"` // as the session view names it: title, else the short id (#630)
 	Machine      string `json:"machine"`
 	Model        string `json:"model"`
 	Status       string `json:"status"`

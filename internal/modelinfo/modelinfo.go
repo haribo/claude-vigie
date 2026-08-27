@@ -24,7 +24,7 @@ const (
 // carry 1M, as does Fable 5 and anything above; Haiku, older models and anything
 // unrecognized carry 200K. Maintained by hand.
 func Window(model string) int64 {
-	family, major, minor := version(short(model))
+	family, major, minor := version(Short(model))
 	switch family {
 	case "fable":
 		return bigWindow
@@ -38,8 +38,13 @@ func Window(model string) int64 {
 	}
 }
 
-// short drops the vendor prefix: "claude-opus-4-8" → "opus-4-8".
-func short(m string) string { return strings.TrimPrefix(m, "claude-") }
+// Short drops the vendor prefix: "claude-opus-4-8" → "opus-4-8". It is what a
+// client displays when the full name does not fit, and it is exported because the
+// rule had three homes: this file, `shortModel` in the TUI, and `shortModel` in
+// the dashboard's lib.js (#618). The daemon puts it on the session view; the TUI
+// still calls it directly for the Stats tab, whose rows are models rather than
+// sessions and so carry no view to derive.
+func Short(m string) string { return strings.TrimPrefix(m, "claude-") }
 
 // version splits a short model name ("opus-4-8", "sonnet-5") into its family and
 // major/minor version; missing or non-numeric parts are 0.

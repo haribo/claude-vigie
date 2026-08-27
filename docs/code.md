@@ -77,7 +77,7 @@ the client never imports the server/store packages, so it never links them.
 | `internal/transcript` | client | Parses a session transcript, incrementally |
 | `internal/apiclient` | client | One authenticated GET against the daemon, shared by the TUI and the preflight |
 | `internal/status` | both | The session status vocabulary and its sort order |
-| `internal/modelinfo` | both | What a Claude model's name implies — today, its context window size (ADR-0011) |
+| `internal/modelinfo` | both | What a Claude model's name implies — its context window size, and its short display form (ADR-0011) |
 | `internal/install` | client | Merges the reporting hooks into Claude Code's settings |
 | `internal/presence` | client | Session→process mapping, read back through `/proc` |
 | `internal/compaction` | client | Compaction markers dropped by the `PreCompact` hook |
