@@ -531,3 +531,42 @@ test("a machine card names which failure it is showing", () => {
   assert.deepEqual(watcherCell(readWatcher("not-a-time", Date.parse("2026-08-26T12:00:02Z"))),
     { cls: "w-bad", text: "time?" });
 });
+
+// ── The shared case lists of ADR-0011's fourth family (#619) ─────────────────
+//
+// Grouping, idle hiding and the two figures each client formats are duplicated on
+// purpose: they are functions of what the operator typed or chose, and an age is a
+// function of *now*. Duplicated, not unchecked — the Go suite reads these same
+// files and both must answer every case identically.
+
+const fixture = async (name) =>
+  JSON.parse(await readFile(new URL(`../fixtures/${name}`, import.meta.url), "utf8"));
+
+test("the group modes agree with the shared fixture", async () => {
+  const { modes } = await fixture("group-cases.json");
+  assert.deepEqual(GROUP_MODES, modes,
+    "a mode renamed on one client and not the other resets an operator's saved grouping");
+});
+
+test("group keys agree with the shared fixture", async () => {
+  const { keys } = await fixture("group-cases.json");
+  assert.ok(keys.length > 0, "the shared fixture has no key cases");
+  for (const c of keys) {
+    assert.equal(groupKeyOf({ machine: c.machine, project: c.project }, c.mode), c.want, c.why);
+  }
+});
+
+test("the idle presets agree with the shared fixture", async () => {
+  const { presets_seconds } = await fixture("idle-cases.json");
+  assert.deepEqual(IDLE_PRESETS_MS, presets_seconds.map((s) => s * 1000),
+    "a step offered on one client and not the other leaves a stored threshold the other cannot represent");
+});
+
+test("idle hiding agrees with the shared fixture", async () => {
+  const { cases } = await fixture("idle-cases.json");
+  assert.ok(cases.length > 0, "the shared fixture has no idle cases");
+  for (const c of cases) {
+    const got = hiddenByIdle({ last_seen_at: c.seen }, c.after_seconds * 1000, Date.parse(c.now));
+    assert.equal(got, c.hidden, `${c.seen || "(empty)"} after ${c.after_seconds}s — ${c.why}`);
+  }
+});

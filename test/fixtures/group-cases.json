@@ -1,0 +1,39 @@
+{
+  "_comment": [
+    "Shared cases for how the sessions table groups (#546, #619).",
+    "Grouping stays client-side because the mode is what the operator chose, and",
+    "sending every choice to the daemon for a read-only board buys nothing (ADR-0011).",
+    "internal/tui/group_shared_test.go and test/js/dashboard.test.mjs read this file.",
+    "The `modes` list replaces a regex scrape: a Go test used to pull the GROUP_MODES",
+    "array out of lib.js with a regular expression. That checked a constant matched",
+    "and could say nothing about behaviour at a boundary, which is where the rules in",
+    "this repository have actually diverged. It was the last such scrape."
+  ],
+  "modes": ["off", "machine", "project"],
+  "keys": [
+    {
+      "why": "project groups on the daemon's `project`, so two machines that checked the same project out under different roots meet in one group (#618)",
+      "mode": "project", "machine": "orion-dev", "project": "api-gateway", "want": "api-gateway"
+    },
+    {
+      "why": "the same project under another root lands on the same key",
+      "mode": "project", "machine": "beta", "project": "api-gateway", "want": "api-gateway"
+    },
+    {
+      "why": "a session with no directory carries the daemon's dash and groups under it rather than under an empty key",
+      "mode": "project", "machine": "orion-dev", "project": "-", "want": "-"
+    },
+    {
+      "why": "machine groups on the machine",
+      "mode": "machine", "machine": "orion-dev", "project": "api-gateway", "want": "orion-dev"
+    },
+    {
+      "why": "an unnamed machine gives an empty key rather than a missing one",
+      "mode": "machine", "machine": "", "project": "api-gateway", "want": ""
+    },
+    {
+      "why": "with grouping off there is one group and no header, and the key falls back to the machine rather than to nothing",
+      "mode": "off", "machine": "orion-dev", "project": "api-gateway", "want": "orion-dev"
+    }
+  ]
+}

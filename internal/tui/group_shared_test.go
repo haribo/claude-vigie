@@ -1,71 +1,75 @@
 package tui
 
 import (
-	"os"
-	"regexp"
-	"strings"
 	"testing"
+
+	"github.com/haribo/claude-vigie/internal/api"
 )
 
-// #546. The dashboard groups the table too, and it has its own copy of the mode
-// names because the browser cannot import Go. A vocabulary copied per consumer is
-// what #421, #422 and #466 were, so this reads the shipped `lib.js` and fails on
-// any drift — the same guard `TestDashboardSharesTheAttentionSet` gives the
-// attention set, and #544 requires wherever the boundary is checkable.
+// #546. The dashboard groups the table too, and it has its own copy of the rule
+// because the browser cannot import Go. The mode names matter as much as the
+// behaviour: an operator's saved preference holds the *name* on both sides, so a
+// mode renamed on one client and not the other silently resets their grouping.
 //
-// It compares the *names*, in enum order, because those are what an operator's
-// saved preference holds on both sides: a mode renamed on one client and not the
-// other silently resets that operator's grouping.
+// This used to read the shipped `lib.js` with a regular expression. That checked a
+// constant array matched and could say nothing about what either side does at a
+// boundary, which is where this repository's rules have actually diverged (#619).
+// Both suites now read one case list instead, and it was the last such scrape:
+// `jsArrayFromFile` has no callers left, which is ADR-0011's measurable end state.
 
-// jsArrayFromFile extracts a `const NAME = ["a", "b"]` literal from a JavaScript
-// file. A local copy of the helper `internal/status` uses; the two test packages
-// do not share fixtures, and importing across `_test` packages to save eighteen
-// lines is a worse trade.
-func jsArrayFromFile(t *testing.T, path, name string) []string {
-	t.Helper()
-	b, err := os.ReadFile(path)
-	if err != nil {
-		t.Fatalf("reading %s: %v", path, err)
-	}
-	m := regexp.MustCompile(`const\s+` + name + `\s*=\s*\[([^\]]*)\]`).FindStringSubmatch(string(b))
-	if m == nil {
-		t.Fatalf("%s: no `const %s = [...]` found — was it renamed?", path, name)
-	}
-	var out []string
-	for _, raw := range strings.Split(m[1], ",") {
-		if v := strings.Trim(strings.TrimSpace(raw), `"'`); v != "" {
-			out = append(out, v)
-		}
-	}
-	return out
+type groupFixture struct {
+	Modes []string `json:"modes"`
+	Keys  []struct {
+		Why     string `json:"why"`
+		Mode    string `json:"mode"`
+		Machine string `json:"machine"`
+		Project string `json:"project"`
+		Want    string `json:"want"`
+	} `json:"keys"`
 }
 
-func TestDashboardSharesTheGroupModes(t *testing.T) {
-	var want []string
+func loadGroupFixture(t *testing.T) groupFixture {
+	t.Helper()
+	f := loadFixture[groupFixture](t, "group-cases.json")
+	if len(f.Modes) == 0 || len(f.Keys) == 0 {
+		t.Fatal("the shared fixture is missing a section — the extraction is broken, not the code")
+	}
+	return f
+}
+
+func TestTheGroupModesAgreeWithTheSharedFixture(t *testing.T) {
+	f := loadGroupFixture(t)
+	var got []string
 	for g := groupNone; g < groupByCount; g++ {
 		n, ok := groupNames[g]
 		if !ok {
 			t.Fatalf("groupNames has no name for mode %d — the enum and the map disagree", g)
 		}
-		want = append(want, n)
+		got = append(got, n)
 	}
-
-	got := jsArrayFromFile(t, "../../internal/web/static/lib.js", "GROUP_MODES")
-	if strings.Join(got, ",") != strings.Join(want, ",") {
-		t.Errorf("lib.js GROUP_MODES = %v, want %v (internal/tui.groupNames, in enum order)", got, want)
+	if len(got) != len(f.Modes) {
+		t.Fatalf("groupNames = %v, the shared fixture says %v", got, f.Modes)
+	}
+	for i, want := range f.Modes {
+		if got[i] != want {
+			t.Errorf("mode %d = %q, the shared fixture says %q — a renamed mode resets a saved preference", i, got[i], want)
+		}
 	}
 }
 
-// The project key is the last path segment, not the directory: two machines that
-// checked the same project out under different roots must land in one group.
-func TestGroupKeyUsesTheProjectName(t *testing.T) {
-	s := stubSessionForHaystack()
-	s.ProjectDir = "/home/ada/dev/api-gateway"
-	s.Project = "api-gateway" // as the daemon derives it (#618)
-	if got := groupKey(s, groupProject); got != "api-gateway" {
-		t.Errorf("project group key = %q, want the last segment", got)
+func TestGroupKeyAgreesWithTheSharedFixture(t *testing.T) {
+	byName := map[string]groupBy{}
+	for g := groupNone; g < groupByCount; g++ {
+		byName[groupNames[g]] = g
 	}
-	if got := groupKey(s, groupMachine); got != "orion-dev" {
-		t.Errorf("machine group key = %q", got)
+	for _, c := range loadGroupFixture(t).Keys {
+		mode, ok := byName[c.Mode]
+		if !ok {
+			t.Fatalf("the fixture names a mode %q this build does not have", c.Mode)
+		}
+		s := api.SessionView{Machine: c.Machine, Project: c.Project}
+		if got := groupKey(s, mode); got != c.Want {
+			t.Errorf("groupKey(%q) = %q, want %q — %s", c.Mode, got, c.Want, c.Why)
+		}
 	}
 }
