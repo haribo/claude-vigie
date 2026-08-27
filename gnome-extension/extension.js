@@ -17,7 +17,7 @@ import * as Main from 'resource:///org/gnome/shell/ui/main.js';
 import * as PanelMenu from 'resource:///org/gnome/shell/ui/panelMenu.js';
 import * as PopupMenu from 'resource:///org/gnome/shell/ui/popupMenu.js';
 
-import {groupOrder, basename, needsAttention, attentionReason, attentionIds} from './lib.js';
+import {groupOrder, needsAttention, attentionReason, attentionIds} from './lib.js';
 
 // Statuses, most-active first, with a display label. Kept identical to
 // docs/design/session-status.md § 1 and internal/status — a Go test reads this
@@ -159,7 +159,7 @@ class VigieIndicator extends PanelMenu.Button {
     // different things from the operator, and a notification that says only
     // "waiting for input" for all three is misleading.
     _notifyCalling(s) {
-        const name = s.title || basename(s.project_dir) || s.id;
+        const name = s.name || s.id;
         const context = [s.machine, s.git_branch].filter(Boolean).join(' · ');
         const who = context ? `${name} (${context})` : name;
         Main.notify('Claude Vigie', `${who} ${attentionReason(s)}`);
@@ -196,7 +196,7 @@ class VigieIndicator extends PanelMenu.Button {
     }
 
     _sessionItem(s) {
-        const name = s.title || basename(s.project_dir) || s.id;
+        const name = s.name || s.id;
         const context = [s.machine, s.git_branch].filter(Boolean).join(' · ');
         const item = new PopupMenu.PopupMenuItem(name, {reactive: false});
         if (context) {

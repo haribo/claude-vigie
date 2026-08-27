@@ -9,6 +9,21 @@ file is the single source of truth, not a second narrative.
 
 ## [Unreleased]
 
+### Changed
+
+- What a session is called, and how its permission mode and faults are spelled,
+  are decided by the server rather than by each screen. A rule now reaches the
+  terminal, the browser and the GNOME indicator at once (#618).
+
+### Fixed
+
+- The GNOME indicator names a session the way the terminal and the browser do.
+  One without a title showed as its project directory there and as its short id
+  everywhere else, so the same session had two names (#618).
+
+- The Stats tab's ranking names an untitled session by its short id, as the
+  sessions table does, instead of printing the whole 36-character one (#630).
+
 ## [0.7.1] - 2026-08-26
 
 ### Changed
