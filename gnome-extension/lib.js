@@ -18,13 +18,6 @@ export function groupOrder(sessions, statusOrder) {
     return [...statusOrder, ...unknown];
 }
 
-export function basename(path) {
-    if (!path)
-        return '';
-    const parts = path.replace(/\/+$/, '').split('/');
-    return parts[parts.length - 1] || path;
-}
-
 // The statuses that call for the operator: the session is blocked and needs a
 // human. Kept identical to internal/status.Attention — a Go test reads this
 // literal and fails on drift, because an indicator that disagrees with the TUI

@@ -520,7 +520,7 @@ func lessBy(a, b api.SessionView, key sortKey) bool {
 		}
 		return a.LastSeenAt > b.LastSeenAt // tie-break: most recent first
 	case sortName:
-		return strings.ToLower(sessionName(a)) < strings.ToLower(sessionName(b))
+		return strings.ToLower(a.Name) < strings.ToLower(b.Name)
 	case sortRC:
 		if a.RemoteControl != b.RemoteControl {
 			return a.RemoteControl // rc-active first
@@ -545,5 +545,5 @@ func fuzzyMatch(pattern, text string) bool {
 }
 
 func sessionHaystack(s api.SessionView) string {
-	return sessionName(s) + " " + s.Machine + " " + projectName(s.ProjectDir) + " " + s.GitBranch + " " + s.Status
+	return s.Name + " " + s.Machine + " " + s.Project + " " + s.GitBranch + " " + s.Status
 }

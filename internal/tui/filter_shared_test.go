@@ -69,11 +69,14 @@ func TestSessionHaystackShape(t *testing.T) {
 }
 
 // An untitled session is named by the first eight characters of its id, so that
-// is what the filter can reach — not the whole id.
+// is what the filter can reach — not the whole id. The eight-character cut is the
+// daemon's (nameView) and is proved there; what this guards is that the haystack
+// searches the *name* and never reaches past it into the raw id.
 func TestAnUntitledSessionIsSearchableByItsShortId(t *testing.T) {
 	s := stubSessionForHaystack()
 	s.Title = ""
 	s.ID = "abcdefghij-the-rest-is-unreachable"
+	s.Name = "abcdefgh"
 	got := sessionHaystack(s)
 	if want := "abcdefgh "; got[:len(want)] != want {
 		t.Errorf("haystack starts %q, want %q", got[:len(want)], want)
@@ -85,7 +88,10 @@ func TestAnUntitledSessionIsSearchableByItsShortId(t *testing.T) {
 
 func stubSessionForHaystack() api.SessionView {
 	return api.SessionView{
-		Title: "api-gateway", Machine: "orion-dev",
-		ProjectDir: "/home/ada/gateway", GitBranch: "main", Status: "working",
+		// Name and Project as the daemon derives them (ADR-0011, #618); the raw
+		// fields beside them are what it derived them from.
+		Title: "api-gateway", Name: "api-gateway", Machine: "orion-dev",
+		ProjectDir: "/home/ada/gateway", Project: "gateway",
+		GitBranch: "main", Status: "working",
 	}
 }

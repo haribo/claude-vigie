@@ -77,6 +77,16 @@ func sanitizeSessions(sessions []api.SessionView) []api.SessionView {
 		s.Detail = sanitizeText(s.Detail)
 		s.RemoteURL = sanitizeText(s.RemoteURL)
 		s.CallMessage = sanitizeText(s.CallMessage)
+		// The derived fields are not clean for being derived: the daemon builds them
+		// out of the same transcript-supplied text (ADR-0011, #618), and they are what
+		// the table now renders. Sanitizing only the raw halves would leave exactly
+		// the hole #540 closed, one field further along.
+		s.Name = sanitizeText(s.Name)
+		s.Project = sanitizeText(s.Project)
+		s.ModelShort = sanitizeText(s.ModelShort)
+		s.ModeLabel = sanitizeText(s.ModeLabel)
+		s.ModeDetail = sanitizeText(s.ModeDetail)
+		s.DetailText = sanitizeText(s.DetailText)
 		out[i] = s
 	}
 	return out

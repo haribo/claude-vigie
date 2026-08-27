@@ -72,9 +72,9 @@ func (m model) withNotifiedTransitions(next []api.SessionView) model {
 			switch {
 			case known && calling && !prevCall[s.ID]:
 				// A raised call is exactly what this notification is for (#260).
-				notifyFn(sessionName(s), "calling you")
+				notifyFn(s.Name, "calling you")
 			case prev[s.ID] == "working" && isAttention(s):
-				notifyFn(sessionName(s), s.Status)
+				notifyFn(s.Name, s.Status)
 			}
 		}
 		m.sess.prevStatus[s.ID] = s.Status

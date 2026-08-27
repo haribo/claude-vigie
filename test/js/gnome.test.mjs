@@ -8,7 +8,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
-import { groupOrder, basename, needsAttention, attentionReason, attentionIds } from "../../gnome-extension/lib.js";
+import { groupOrder, needsAttention, attentionReason, attentionIds } from "../../gnome-extension/lib.js";
 
 // The documented vocabulary, passed in explicitly. The list that ships is checked
 // against docs/design/session-status.md by a Go test (#423); what is checked here
@@ -42,13 +42,6 @@ test("even a truncated known list loses no session", () => {
   const short = ["working", "idle"];
   const got = groupOrder(S("working", "stalled", "idle"), short);
   assert.ok(got.includes("stalled"), `stalled was dropped: ${JSON.stringify(got)}`);
-});
-
-test("basename reduces a project path to its last segment", () => {
-  assert.equal(basename("/home/u/dev/api-gateway"), "api-gateway");
-  assert.equal(basename("/home/u/dev/api-gateway/"), "api-gateway");
-  assert.equal(basename(""), "");
-  assert.equal(basename(null), "");
 });
 
 // #466. The indicator exists so an operator who is not looking at the TUI still

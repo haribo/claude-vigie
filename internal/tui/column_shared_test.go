@@ -40,8 +40,11 @@ func loadColumnFixture(t *testing.T) columnFixture {
 	if err := json.Unmarshal(b, &f); err != nil {
 		t.Fatalf("parsing the shared fixture: %v", err)
 	}
-	if len(f.Context) == 0 || len(f.Mode) == 0 {
-		t.Fatal("the shared fixture is missing a section — the extraction is broken, not the code")
+	// Only the context half is read here: the mode labels moved to the daemon with
+	// the rest of the naming family, and internal/server/naming_test.go reads the
+	// mode section of this same fixture (ADR-0011, #618).
+	if len(f.Context) == 0 {
+		t.Fatal("the shared fixture has no context cases — the extraction is broken, not the code")
 	}
 	return f
 }
@@ -54,14 +57,6 @@ func TestContextCellAgreesWithTheSharedFixture(t *testing.T) {
 		s := api.SessionView{Model: c.Model, ContextTokens: c.Tokens, ContextPct: c.Pct}
 		if got := contextCell(s); got != c.Want {
 			t.Errorf("contextCell(pct=%v) = %q, want %q — %s", c.Pct, got, c.Want, c.Why)
-		}
-	}
-}
-
-func TestModeLabelAgreesWithTheSharedFixture(t *testing.T) {
-	for _, c := range loadColumnFixture(t).Mode {
-		if got, _ := permissionModeLabel(c.Raw); got != c.Want {
-			t.Errorf("permissionModeLabel(%q) = %q, want %q — %s", c.Raw, got, c.Want, c.Why)
 		}
 	}
 }
