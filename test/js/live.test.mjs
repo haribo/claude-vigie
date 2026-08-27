@@ -286,9 +286,9 @@ test("with ended sessions shown, the transition is visible as a row", async () =
 // reach the table — because that is the half a port gets wrong while every unit
 // test stays green.
 const FLEET3 = [
-  { id: "a", title: "api-gateway", machine: "minet-dev", project_dir: "/h/gateway", status: "working", usage: {} },
-  { id: "b", title: "web-app", machine: "minet-dev", project_dir: "/h/web", status: "idle", usage: {} },
-  { id: "c", title: "data-pipe", machine: "beta", project_dir: "/h/pipe", status: "idle", remote_control: true, usage: {} },
+  { id: "a", title: "api-gateway", name: "api-gateway", machine: "minet-dev", project_dir: "/h/gateway", project: "gateway", status: "working", usage: {} },
+  { id: "b", title: "web-app", name: "web-app", machine: "minet-dev", project_dir: "/h/web", project: "web", status: "idle", usage: {} },
+  { id: "c", title: "data-pipe", name: "data-pipe", machine: "beta", project_dir: "/h/pipe", project: "pipe", status: "idle", remote_control: true, usage: {} },
 ];
 
 test("typing in the filter narrows the table", async () => {
@@ -348,9 +348,9 @@ test("the refresh tick does not clear the filter", async () => {
 // covered in dashboard.test.mjs and pinned against the Go enum in
 // internal/tui/group_shared_test.go.
 const FLEET_G = [
-  { id: "a", title: "api", machine: "minet-dev", project_dir: "/h/gateway", status: "working", usage: { output_tokens: 1000 } },
-  { id: "b", title: "web", machine: "minet-dev", project_dir: "/h/web", status: "idle", usage: { output_tokens: 500 } },
-  { id: "c", title: "pipe", machine: "beta", project_dir: "/h/web", status: "idle", usage: { output_tokens: 200 } },
+  { id: "a", title: "api", name: "api", machine: "minet-dev", project_dir: "/h/gateway", project: "gateway", status: "working", usage: { output_tokens: 1000 } },
+  { id: "b", title: "web", name: "web", machine: "minet-dev", project_dir: "/h/web", project: "web", status: "idle", usage: { output_tokens: 500 } },
+  { id: "c", title: "pipe", name: "pipe", machine: "beta", project_dir: "/h/web", project: "web", status: "idle", usage: { output_tokens: 200 } },
 ];
 
 test("choosing a group mode redraws the table with headers", async () => {
@@ -489,8 +489,10 @@ test("hidden N moves to the bottom bar, and only shows when something is hidden"
 // #550. The wiring: the four new columns must actually render, and a saved v1
 // layout must survive the rename rather than dropping columns.
 const FLEET_C = [{
-  id: "a", title: "api", user: "nico", machine: "m", project_dir: "/h/gateway",
-  status: "working", model: "claude-opus-4-5", permission_mode: "plan",
+  id: "a", title: "api", name: "api", user: "nico", machine: "m",
+  project_dir: "/h/gateway", project: "gateway",
+  status: "working", model: "claude-opus-4-5", model_short: "opus-4-5",
+  permission_mode: "plan", mode_label: "plan", mode_detail: "plan — awaiting plan approval",
   context_tokens: 100000, context_pct: 50, last_seen_at: "2026-08-17T11:59:00Z",
   usage: { input_tokens: 10, output_tokens: 5000, cache_read_tokens: 85 },
 }];

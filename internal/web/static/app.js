@@ -7,10 +7,10 @@
 
 import {
   esc, dash, trim, hasCall, detailText, humanTokens, ageSec, relAge, relResetHint,
-  shortModel, projectName, totalTokens, sparkSVG, migrateKeys, fullColOrder, colHidden, rank,
+  totalTokens, sparkSVG, migrateKeys, fullColOrder, colHidden, rank,
   adoptLegacyKey, needsAttention, attentionCount, streamIsSilent, REFRESH_MS,
   readWatcher, fleetAlarm, fleetAlarmDetail, watcherCell,
-  sessionName, matchesFilter, GROUP_MODES, groupSessions, contextKnown, contextPct, contextCell, modeLabel, migrateV1Columns,
+  matchesFilter, GROUP_MODES, groupSessions, contextKnown, contextPct, contextCell, migrateV1Columns,
   IDLE_PRESETS_MS, idleLabel, hiddenByIdle,
 } from "./lib.js";
 
@@ -131,21 +131,21 @@ const COLS = [
   // one affordance a pointer needs and a keyboard does not. A Go test compares the
   // two key sets and fails on drift (#550, #544).
   //
-  // sessionName, not `title || id`: an untitled session is named by the first
+  // s.name, not `title || id`: the daemon names the session (#618), and an untitled one by the first
   // eight characters of its id in the TUI, and the filter searches that name — a
   // column showing 36 characters of a key the filter cannot reach is a trap (#545).
-  { key: "name", label: "Session", cmp: (a, b) => sessionName(a).localeCompare(sessionName(b)),
-    cell: (s) => { const n = esc(sessionName(s)); return `<td class="name" title="${esc(s.title || s.id)}"><span class="nm">${n}</span></td>`; } },
+  { key: "name", label: "Session", cmp: (a, b) => (a.name || "").localeCompare(b.name || ""),
+    cell: (s) => { const n = esc(s.name || ""); return `<td class="name" title="${esc(s.title || s.id)}"><span class="nm">${n}</span></td>`; } },
   { key: "user", label: "User", cmp: (a, b) => (a.user || "").localeCompare(b.user || ""),
     cell: (s) => `<td class="${s.user ? "dim" : "faint"}">${esc(dash(s.user))}</td>` },
   { key: "machine", label: "Machine", cmp: (a, b) => a.machine.localeCompare(b.machine),
     cell: (s) => `<td class="dim">${esc(s.machine)}</td>` },
-  { key: "dir", label: "Dir", cmp: (a, b) => projectName(a.project_dir).localeCompare(projectName(b.project_dir)),
-    cell: (s) => { const p = esc(projectName(s.project_dir)); return `<td class="proj" title="${esc(s.project_dir || "")}">${p}</td>`; } },
+  { key: "dir", label: "Dir", cmp: (a, b) => (a.project || "").localeCompare(b.project || ""),
+    cell: (s) => { const p = esc(s.project || ""); return `<td class="proj" title="${esc(s.project_dir || "")}">${p}</td>`; } },
   { key: "branch", label: "Branch", cmp: (a, b) => (a.git_branch || "").localeCompare(b.git_branch || ""),
     cell: (s) => { const b = esc(dash(s.git_branch)); return `<td class="branch dim" title="${b}">${b}</td>`; } },
   { key: "model", label: "Model", cmp: (a, b) => (a.model || "").localeCompare(b.model || ""),
-    cell: (s) => `<td class="${s.model ? "dim" : "faint"}">${esc(dash(shortModel(s.model)))}</td>` },
+    cell: (s) => `<td class="${s.model ? "dim" : "faint"}">${esc(dash(s.model_short))}</td>` },
   { key: "effort", label: "Effort", cmp: (a, b) => (a.effort || "").localeCompare(b.effort || ""),
     cell: (s) => `<td class="${s.effort ? "dim" : "faint"}">${esc(dash(s.effort))}</td>` },
   // Unknown and known-to-be-zero are different states on screen, and the daemon
@@ -166,8 +166,8 @@ const COLS = [
     cell: (s) => { const st = STATUSES.includes(s.status) ? s.status : "idle"; return `<td><span class="pill st-${st}${hasCall(s) ? " call" : ""}"><span class="dot"></span>${st}</span></td>`; } },
   // An unrecognised mode is surfaced raw, never relabelled "manual": a new mode
   // must not read as the safe default (#304).
-  { key: "mode", label: "Mode", cmp: (a, b) => modeLabel(a.permission_mode).localeCompare(modeLabel(b.permission_mode)),
-    cell: (s) => `<td class="${s.permission_mode ? "mode-" + esc(modeLabel(s.permission_mode)) : "faint"}">${esc(modeLabel(s.permission_mode))}</td>` },
+  { key: "mode", label: "Mode", cmp: (a, b) => (a.mode_label || "").localeCompare(b.mode_label || ""),
+    cell: (s) => `<td class="${s.permission_mode ? "mode-" + esc(s.mode_label) : "faint"}">${esc(s.mode_label || "")}</td>` },
   { key: "detail", label: "Detail", nosort: true,
     cell: (s) => { const d = detailText(s); const cls = hasCall(s) ? "detail call" : (s.status === "waiting" ? "detail wait" : "detail"); return `<td class="${cls}" title="${d}">${d}</td>`; } },
   // A gesture, not content: a keyboard opens the detail with Enter on the row, a
@@ -477,7 +477,7 @@ function openDetail(id) {
   const ctx = [
     field("Session id", esc(s.id), "mut"), field("User", esc(dash(s.user)), "mut"), field("Machine", esc(s.machine)),
     field("Directory", esc(dash(s.project_dir)), "mut"), field("Branch", s.git_branch ? esc(s.git_branch) : "—"),
-    field("Model", esc(dash(shortModel(s.model))), s.model ? "" : "mut"), field("Effort", esc(dash(s.effort)), s.effort ? "" : "mut"),
+    field("Model", esc(dash(s.model_short)), s.model ? "" : "mut"), field("Effort", esc(dash(s.effort)), s.effort ? "" : "mut"),
     field("Detail", detailText(s), hasCall(s) ? "call" : (waiting ? "wait" : "mut")),
     field("Remote control", s.remote_control ? "on ◉" : "off ○", "mut"),
     s.remote_url ? field("Remote", `<a href="${esc(s.remote_url)}" target="_blank" rel="noopener noreferrer">${esc(s.remote_url)}</a>`) : "",
@@ -487,8 +487,8 @@ function openDetail(id) {
   const spark = (s.samples && s.samples.length) ? sparkSVG(s.samples, 300, 46) : '<span class="faint">no recent activity</span>';
   $("view-detail").innerHTML = `
     <button class="back" id="back">‹ sessions</button>
-    <div class="d-hero st-${st}"><div class="h-main"><h1>${esc(s.title || s.id)}</h1>
-      <div class="h-sub">${esc(s.machine)} · ${esc(projectName(s.project_dir))}${s.git_branch ? " · " + esc(s.git_branch) : ""}</div>
+    <div class="d-hero st-${st}"><div class="h-main"><h1>${esc(s.name || s.id)}</h1>
+      <div class="h-sub">${esc(s.machine)} · ${esc(s.project || "")}${s.git_branch ? " · " + esc(s.git_branch) : ""}</div>
       <div class="h-facts">
         <div class="fact"><span class="k">Tokens</span><span class="v">${humanTokens(totalTokens(u))}</span></div>
         <div class="fact"><span class="k">Output</span><span class="v">${humanTokens(u.output_tokens)}</span></div>

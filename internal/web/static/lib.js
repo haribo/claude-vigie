@@ -19,28 +19,13 @@ export const trim = (x) => x.toFixed(1).replace(/\.0$/, "");
 // optional, and a call with none is still a call.
 export function hasCall(s) { return Boolean(s && s.call_at); }
 
-// apiErrorLabel names the common Claude API error codes. The TUI has the same
-// list (internal/tui/render.go) and the two must agree: they are one vocabulary
-// with two implementations, and architecture.md binds the dashboard to the TUI
-// on content. test/fixtures/api-error-labels.json is that agreement, read by
-// both test suites (#584).
-export function apiErrorLabel(code) {
-  switch (Number(code)) {
-    case 429: return "429 Rate limited";
-    case 500: return "500 Internal server error";
-    case 529: return "529 Overloaded";
-    default: return String(code);
-  }
-}
-
-// detailText is the Detail cell's content. A raised call takes it, because it is
-// the reason the row is pulsing and it outranks everything else. An API error
-// comes next: once the API answers 529 the tool that ran last is of no interest,
-// and the code is what separates an outage from throttling (#584).
+// detailText is the Detail cell's content. What it shows and in what order — a
+// raised call first, then the API error code, then the activity — is the daemon's
+// (ADR-0011, #618); the vocabulary of error labels went with it, so this side no
+// longer holds a copy to drift. What stays is the escaping, which is this
+// client's own concern: the daemon serves text, and a browser is not a terminal.
 export function detailText(s) {
-  if (hasCall(s)) return s.call_message ? esc(s.call_message) : "called you";
-  if (s && s.status === "error" && s.api_error_status) return esc(apiErrorLabel(s.api_error_status));
-  return s.detail ? esc(s.detail) : "-";
+  return esc(s && s.detail_text ? s.detail_text : "-");
 }
 
 export function humanTokens(n) { n = Number(n) || 0; if (n >= 1e6) return trim(n / 1e6) + "M"; if (n >= 1e3) return trim(n / 1e3) + "k"; return String(n); }
@@ -61,8 +46,6 @@ export function relResetHint(rfc) {
   if (d) return `resets in ${d}d ${h}h`; if (h) return `resets in ${h}h ${m}m`; return `resets in ${m}m`;
 }
 
-export const shortModel = (m) => (m || "").replace(/^claude-/, "");
-export function projectName(dir) { if (!dir) return "-"; const p = dir.replace(/\/+$/, "").split("/"); return p[p.length - 1] || dir; }
 export const totalTokens = (u) => (u.input_tokens || 0) + (u.output_tokens || 0) + (u.cache_creation_tokens || 0) + (u.cache_read_tokens || 0);
 
 export function sparkSVG(data, w = 72, h = 18) {
@@ -150,22 +133,6 @@ export function rank(session) {
   return typeof r === "number" ? r : Number.MAX_SAFE_INTEGER;
 }
 
-// shortId is the first eight characters of a session id, the fallback the table
-// shows for a session Claude has not titled yet. Kept at eight to match
-// `shortID` in internal/tui/render.go: the two clients must name a row the same
-// way, and the filter below searches that name (#545).
-export function shortId(id) {
-  const r = [...String(id == null ? "" : id)];
-  return r.length > 8 ? r.slice(0, 8).join("") : r.join("");
-}
-
-// sessionName is the conversation title, falling back to the short id — the twin
-// of `sessionName` in internal/tui/render.go.
-export function sessionName(s) {
-  if (!s) return "";
-  return s.title ? s.title : shortId(s.id);
-}
-
 // fuzzyMatch reports whether pattern appears in text as a subsequence, ignoring
 // case: every character of the pattern in order, gaps allowed. `wapp` matches
 // `web-app`. It is deliberately not a substring match and not a regex.
@@ -195,7 +162,7 @@ export function fuzzyMatch(pattern, text) {
 export function sessionHaystack(s) {
   if (!s) return "";
   const f = (v) => (v == null ? "" : String(v));
-  return [sessionName(s), f(s.machine), projectName(s.project_dir), f(s.git_branch), f(s.status)].join(" ");
+  return [f(s.name), f(s.machine), f(s.project), f(s.git_branch), f(s.status)].join(" ");
 }
 
 // matchesFilter applies the active filter to one session. `rc` as the whole
@@ -227,19 +194,6 @@ export function contextPct(s) { return contextKnown(s) ? s.context_pct : 0; }
 // contextCell is the CTX column: a dash when unknown, a percentage otherwise —
 // including `0%` for a session known to have just been cleared.
 export function contextCell(s) { return contextKnown(s) ? `${s.context_pct}%` : "-"; }
-
-// PERMISSION_MODES is the #303 taxonomy, raw value to label. An unrecognised
-// non-empty value is shown as it came rather than relabelled: a new mode must
-// never read as the safe default (#304).
-export const PERMISSION_MODES = {
-  "": "-", default: "manual", acceptEdits: "accept",
-  plan: "plan", auto: "auto", bypassPermissions: "bypass",
-};
-
-export function modeLabel(raw) {
-  const r = raw == null ? "" : String(raw);
-  return Object.prototype.hasOwnProperty.call(PERMISSION_MODES, r) ? PERMISSION_MODES[r] : r;
-}
 
 // IDLE_PRESETS_MS are the "hide idle after" steps the TUI offers, in its order
 // (`idlePresets` in internal/tui/prefs.go). 0 is off, and it is the default.
@@ -275,11 +229,12 @@ export function hiddenByIdle(s, afterMs, nowMs) {
 export const GROUP_MODES = ["off", "machine", "project"];
 
 // groupKeyOf is the value a session groups under — the twin of `groupKey` in
-// internal/tui/render.go. Project groups by the last path segment, not the full
-// directory, so two machines checking out the same project land together.
+// internal/tui/render.go. Both now read the daemon's `project`, the last path
+// segment rather than the full directory, so two machines checking out the same
+// project land together (#618).
 export function groupKeyOf(s, mode) {
   if (!s) return "";
-  return mode === "project" ? projectName(s.project_dir) : (s.machine || "");
+  return mode === "project" ? (s.project || "") : (s.machine || "");
 }
 
 // groupSessions turns an ordered list into its groups, preserving the operator's

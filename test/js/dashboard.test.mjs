@@ -8,13 +8,13 @@ import { test } from "node:test";
 import { readFile } from "node:fs/promises";
 
 import {
-  esc, dash, trim, hasCall, detailText, apiErrorLabel, humanTokens, relAge, relResetHint,
-  shortModel, projectName, totalTokens, sparkSVG, migrateKeys, fullColOrder, colHidden, rank,
+  esc, dash, trim, hasCall, detailText, humanTokens, relAge, relResetHint,
+  totalTokens, sparkSVG, migrateKeys, fullColOrder, colHidden, rank,
   adoptLegacyKey, needsAttention, attentionCount, streamIsSilent, SILENCE_MS,
   readWatcher, fleetAlarm, fleetAlarmDetail, watcherCell,
-  fuzzyMatch, sessionHaystack, sessionName, shortId, matchesFilter,
+  fuzzyMatch, sessionHaystack, matchesFilter,
   GROUP_MODES, groupKeyOf, groupSessions, IDLE_PRESETS_MS, idleLabel, hiddenByIdle,
-  contextCell, contextKnown, contextPct, modeLabel, migrateV1Columns, V1_COLUMN_KEYS,
+  contextCell, contextKnown, contextPct, migrateV1Columns, V1_COLUMN_KEYS,
 } from "../../internal/web/static/lib.js";
 
 // esc is the dashboard's only defence against DOM-based XSS: session titles,
@@ -55,16 +55,19 @@ test("hasCall keys off call_at, not the message", () => {
   assert.equal(hasCall(null), false);
 });
 
-test("detailText lets a call outrank the last tool, and escapes both", () => {
-  assert.equal(detailText({ call_at: "t", call_message: "build done" }), "build done");
-  assert.equal(detailText({ call_at: "t" }), "called you");
-  assert.equal(detailText({ call_at: "t", call_message: "<img src=x onerror=1>" }),
-    "&lt;img src=x onerror=1&gt;", "a call message reaches the DOM and must be escaped");
-  assert.equal(detailText({ detail: "Bash" }), "Bash");
-  assert.equal(detailText({ detail: "<b>" }), "&lt;b&gt;");
-  assert.equal(detailText({}), "-");
-  assert.equal(detailText({ call_at: "t", detail: "Bash" }), "called you",
-    "the call is why the row is pulsing; it takes the cell");
+// What the cell shows and in what order — a call, then an API error, then the
+// activity — is the daemon's since #618 and is proved in
+// internal/server/naming_test.go. What is owed here is that the derived text is
+// rendered rather than recomputed, and that it is escaped: it carries a session
+// title and a call message, and this one reaches the DOM.
+test("detailText renders what the daemon derived, and escapes it", () => {
+  assert.equal(detailText({ detail_text: "build done" }), "build done");
+  assert.equal(detailText({ detail_text: "<img src=x onerror=1>" }),
+    "&lt;img src=x onerror=1&gt;");
+  assert.equal(detailText({ detail_text: "-" }), "-");
+  assert.equal(detailText({}), "-", "a view with no derived text still renders a dash, never `undefined`");
+  assert.equal(detailText({ detail_text: "529 Overloaded", detail: "Bash" }), "529 Overloaded",
+    "the raw detail is beside it and must not be preferred");
 });
 
 test("humanTokens scales to k and M", () => {
@@ -96,15 +99,6 @@ test("relResetHint counts down and never shows a past reset", () => {
   assert.match(relResetHint(inSec(5 * 3600)), /^resets in \d+h \d+m$/);
   assert.match(relResetHint(inSec(3 * 86400)), /^resets in \d+d \d+h$/);
   assert.equal(relResetHint("not a date"), "");
-});
-
-test("shortModel and projectName reduce identifiers to what fits a column", () => {
-  assert.equal(shortModel("claude-opus-4-8"), "opus-4-8");
-  assert.equal(shortModel(""), "");
-  assert.equal(shortModel(null), "");
-  assert.equal(projectName("/home/u/dev/api-gateway"), "api-gateway");
-  assert.equal(projectName("/home/u/dev/api-gateway///"), "api-gateway");
-  assert.equal(projectName(""), "-");
 });
 
 test("totalTokens sums all four buckets and tolerates missing ones", () => {
@@ -335,18 +329,8 @@ test("fuzzyMatch agrees with the shared fixture the Go side reads", async () => 
 // the end of one field into the start of the next. The Go side asserts the same
 // example in TestSessionHaystackShape.
 test("the haystack has the same shape as the TUI's", () => {
-  const s = { title: "api-gateway", machine: "minet-dev", project_dir: "/home/nico/gateway", git_branch: "main", status: "working" };
+  const s = { title: "api-gateway", name: "api-gateway", machine: "minet-dev", project: "gateway", git_branch: "main", status: "working" };
   assert.equal(sessionHaystack(s), "api-gateway minet-dev gateway main working");
-});
-
-test("an untitled session is named, and searchable, by its short id", () => {
-  assert.equal(shortId("abcdefghij-the-rest"), "abcdefgh");
-  assert.equal(shortId("short"), "short");
-  assert.equal(sessionName({ title: "", id: "abcdefghij-the-rest" }), "abcdefgh");
-  assert.equal(sessionName({ title: "named", id: "abcdefghij" }), "named");
-  const s = { id: "abcdefghij-the-rest", machine: "m", status: "idle" };
-  assert.equal(fuzzyMatch("abcdefghij", sessionHaystack(s)), false,
-    "the ninth character of the id must not be searchable — the name shows eight");
 });
 
 test("rc is a token as a whole pattern, and ordinary text otherwise", () => {
@@ -370,7 +354,8 @@ test("an empty filter selects everything", () => {
 
 // #546. Grouping. The mode names are pinned against the Go enum by
 // TestDashboardSharesTheGroupModes; what is asserted here is what grouping does.
-const G = (id, machine, dir, out) => ({ id, machine, project_dir: dir, status: "idle", usage: { output_tokens: out } });
+const G = (id, machine, dir, out) => ({ id, machine, project_dir: dir, project: dir.split("/").pop(),
+  status: "idle", usage: { output_tokens: out } });
 
 test("off returns the list untouched, in one group with no key", () => {
   const list = [G("a", "m1", "/h/x", 1), G("b", "m2", "/h/y", 2)];
@@ -380,9 +365,11 @@ test("off returns the list untouched, in one group with no key", () => {
   assert.deepEqual(groups[0].sessions.map((s) => s.id), ["a", "b"]);
 });
 
-test("the project key is the last path segment, so two roots meet in one group", () => {
-  assert.equal(groupKeyOf({ project_dir: "/home/nico/dev/api-gateway" }, "project"), "api-gateway");
-  assert.equal(groupKeyOf({ project_dir: "/srv/build/api-gateway" }, "project"), "api-gateway");
+// The last-path-segment rule is the daemon's (#618) and is proved there; what
+// this asserts is that two roots reduced to the same `project` meet in one group.
+test("the project key is what the daemon derived, so two roots meet in one group", () => {
+  assert.equal(groupKeyOf({ project_dir: "/home/nico/dev/api-gateway", project: "api-gateway" }, "project"), "api-gateway");
+  assert.equal(groupKeyOf({ project_dir: "/srv/build/api-gateway", project: "api-gateway" }, "project"), "api-gateway");
   assert.equal(groupKeyOf({ machine: "minet-dev" }, "machine"), "minet-dev");
 });
 
@@ -467,12 +454,6 @@ test("contextCell agrees with the shared fixture the Go side reads", async () =>
   }
 });
 
-test("modeLabel agrees with the shared fixture the Go side reads", async () => {
-  const raw = await readFile(new URL("../fixtures/column-cases.json", import.meta.url), "utf8");
-  const { mode } = JSON.parse(raw);
-  for (const c of mode) assert.equal(modeLabel(c.raw), c.want, `${c.raw} — ${c.why}`);
-});
-
 test("unknown and known-to-be-zero are different states", () => {
   // The daemon returns a nil pointer for the first and a 0 for the second, on
   // purpose (#367). Collapsing them here would rebuild the defect it fixed.
@@ -510,28 +491,6 @@ test("the v1 remap is deliberately not idempotent, which is why it runs once", (
 
 test("the remap collapses a duplicate rather than listing a column twice", () => {
   assert.deepEqual(migrateV1Columns(["tokens", "total"]), ["total"]);
-});
-
-// The TUI names an API error too (internal/tui/render.go). architecture.md binds
-// this dashboard to it on content, and two hand-kept lists of one vocabulary is
-// how that debt is taken on. Both sides read this fixture (#584).
-test("the API error labels match the shared fixture", async () => {
-  const { cases } = JSON.parse(await readFile(new URL("../fixtures/api-error-labels.json", import.meta.url), "utf8"));
-  assert.ok(cases.length > 0, "the shared fixture has no cases — the extraction is broken, not the code");
-  for (const c of cases) {
-    assert.equal(apiErrorLabel(c.code), c.label, `apiErrorLabel(${c.code})`);
-  }
-});
-
-// The code left the status pill for DETAIL, and DETAIL was already taken by the
-// watcher's activity — so the cell needs a stated order (#584).
-test("detailText puts a call first, then an API error, then the activity", () => {
-  const err = { status: "error", api_error_status: 529, detail: "Bash" };
-  assert.equal(detailText({ ...err, call_at: "2026-08-19T10:00:00Z", call_message: "done" }), "done");
-  assert.equal(detailText(err), "529 Overloaded");
-  assert.equal(detailText({ status: "error", api_error_status: 503, detail: "Bash" }), "503");
-  assert.equal(detailText({ status: "error", detail: "Bash" }), "Bash");
-  assert.equal(detailText({ status: "working", api_error_status: 529, detail: "Bash" }), "Bash");
 });
 
 // The watcher verdict is duplicated on purpose — it is a function of *now*, so it
