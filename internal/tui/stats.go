@@ -340,3 +340,8 @@ func renderTopSessions(top []api.TopSession) string {
 	}
 	return b.String()
 }
+
+func (m model) handleStatsKey(msg tea.KeyMsg) model {
+	m.stat = m.stat.handleKey(msg)
+	return m
+}

@@ -2,6 +2,7 @@ package tui
 
 import (
 	"fmt"
+	"strconv"
 	"strings"
 	"time"
 
@@ -292,5 +293,43 @@ func humanAge(d time.Duration) string {
 		return fmt.Sprintf("%dm", int(d.Minutes()))
 	default:
 		return fmt.Sprintf("%dh", int(d.Hours()))
+	}
+}
+
+// viewState is what the table cannot say about itself: the active sort and
+// grouping, and how many sessions the current filter is hiding.
+//
+// `hidden N` is the one element of the deleted summary row that exists nowhere
+// else on screen — `a` and `idle_hide_after` filter silently, so without it the
+// screen claims three sessions while the fleet has thirty. It is omitted when
+// nothing is hidden: a permanent zero is a row that trains the eye to skip the
+// place where the exception appears (docs/design/sessions-chrome.md § 2).
+func (m model) viewState() string {
+	parts := []string{labelStyle.Render("sort ") + sortNames[m.sess.sortKey] + sortArrow(m.sess.sortReversed)}
+	if m.sess.groupBy != groupNone {
+		parts = append(parts, labelStyle.Render("group ")+groupNames[m.sess.groupBy])
+	}
+	if h := m.hiddenCount(); h > 0 {
+		parts = append(parts, labelStyle.Render("hidden ")+strconv.Itoa(h))
+	}
+	return strings.Join(parts, dimStyle.Render(" · "))
+}
+
+// connGlyph is the permanent server-connection indicator, replacing the old
+// "updated Xs ago" (which SSE + the 5s poll pinned near zero): ● live when the
+// SSE stream is connected, ○ offline when it is down and the last poll also
+// failed, ◍ reconnecting otherwise (the poll is still reaching the server).
+func (m model) connGlyph() string {
+	switch {
+	// `sseLive` is an observation, and one made before a suspend is not evidence
+	// of anything now. A failing poll is present-tense proof the server is out of
+	// reach, so it outranks a stale "connected": the indicator must not assert the
+	// one thing it cannot currently know (#457).
+	case m.sseLive && m.err == nil:
+		return lipgloss.NewStyle().Foreground(cGreen).Render("●")
+	case m.err != nil:
+		return lipgloss.NewStyle().Foreground(cRed).Render("○")
+	default:
+		return lipgloss.NewStyle().Foreground(cAmber).Render("◍")
 	}
 }
