@@ -2,6 +2,7 @@ package tui
 
 import (
 	"fmt"
+	"strconv"
 	"strings"
 
 	"github.com/charmbracelet/lipgloss"
@@ -471,16 +472,37 @@ func totalTokens(s api.SessionView) int64 {
 		s.Usage.CacheCreationTokens + s.Usage.CacheReadTokens
 }
 
-// humanizeTokens renders a token count compactly (e.g. 1234 -> "1.2k").
+// humanizeTokens renders a token count compactly (e.g. 1234 -> "1.2k"). The
+// dashboard has a twin, and test/fixtures/format-cases.json is what keeps them
+// honest (ADR-0011's fourth family, #619).
+//
+// The arithmetic is integer on purpose. Dividing into a float and rounding the
+// result rounds *twice*: 1150/1000 is 1.14999…, which the multiply by ten pulls
+// back up to exactly 11.5, which then rounds to 1.2 — while JavaScript, reading
+// the same double, answers 1.1. Every count ending in 50 diverged that way, four
+// thousand values in the first three million. A float that is never formed cannot
+// be rounded twice, and both languages compute the same integer.
+//
+// One decimal is always kept, `1.0k` and not `1k`: this column is aligned on a
+// character grid, and a width that changes with the value breaks the column.
 func humanizeTokens(n int64) string {
 	switch {
 	case n >= 1_000_000:
-		return fmt.Sprintf("%.1fM", float64(n)/1_000_000)
+		return oneDecimal(n, 1_000_000) + "M"
 	case n >= 1_000:
-		return fmt.Sprintf("%.1fk", float64(n)/1_000)
+		return oneDecimal(n, 1_000) + "k"
 	default:
-		return fmt.Sprintf("%d", n)
+		return strconv.FormatInt(n, 10)
 	}
+}
+
+// oneDecimal renders n/unit to one decimal place, the half rounded away from
+// zero. `unit/20` is half of one tenth of a unit — the half being rounded — and
+// `unit/10` is a tenth, so the whole thing is one integer division and no
+// multiplication, which also keeps it clear of overflow near int64's ceiling.
+func oneDecimal(n, unit int64) string {
+	t := (n + unit/20) / (unit / 10)
+	return fmt.Sprintf("%d.%d", t/10, t%10)
 }
 
 func orDash(s string) string {

@@ -503,7 +503,7 @@ test("the four columns the dashboard was missing now render", async () => {
   const html = h.lastTable();
   assert.match(html, />nico</, "user");
   assert.match(html, />50%</, "ctx — the percentage the daemon derived (ADR-0011)");
-  assert.match(html, />5k</, "out, on its own rather than only inside the total");
+  assert.match(html, />5\.0k</, "out, on its own rather than only inside the total — with the decimal the terminal keeps (#619)");
   assert.match(html, />plan</, "mode");
 });
 

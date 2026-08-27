@@ -70,26 +70,30 @@ test("detailText renders what the daemon derived, and escapes it", () => {
     "the raw detail is beside it and must not be preferred");
 });
 
-test("humanTokens scales to k and M", () => {
-  assert.equal(humanTokens(0), "0");
-  assert.equal(humanTokens(999), "999");
-  assert.equal(humanTokens(1000), "1k");
-  assert.equal(humanTokens(1500), "1.5k");
-  assert.equal(humanTokens(1_000_000), "1M");
-  assert.equal(humanTokens(2_350_000), "2.4M");
+// The scale itself is in test/fixtures/format-cases.json now, read by the Go side
+// too (#619) — this list used to assert `humanTokens(1000) === "1k"` while the Go
+// list asserted "1.0k", each green, neither containing the case that separated
+// them. What stays here is what the fixture cannot carry: a value that is not a
+// number at all, which only this side can be handed.
+test("humanTokens survives what is not a number", () => {
   assert.equal(humanTokens(null), "0");
   assert.equal(humanTokens("nonsense"), "0");
+  assert.equal(humanTokens(undefined), "0");
 });
 
-test("relAge steps through seconds, minutes, hours, days", () => {
-  const ago = (s) => new Date(Date.now() - s * 1000).toISOString();
-  assert.equal(relAge(ago(5)), "5s");
-  assert.equal(relAge(ago(90)), "1m");
-  assert.equal(relAge(ago(3 * 3600)), "3h");
-  assert.equal(relAge(ago(2 * 86400)), "2d");
-  assert.equal(relAge("not a date"), "-");
-  assert.equal(relAge(new Date(Date.now() + 60_000).toISOString()), "0s",
-    "a future timestamp clamps to zero rather than going negative");
+// The scale moved to the shared fixture (#619); what is left is that relAge reads
+// the real clock, which the fixture cannot express because it pins one. The clock
+// is read once and held: reading it on both sides of the assertion makes the test
+// fail on any stall longer than a second.
+test("relAge reads the wall clock", () => {
+  const now = Date.now();
+  const realNow = Date.now;
+  Date.now = () => now;
+  try {
+    assert.equal(relAge(new Date(now - 5000).toISOString()), "5s");
+  } finally {
+    Date.now = realNow;
+  }
 });
 
 test("relResetHint counts down and never shows a past reset", () => {
@@ -541,6 +545,26 @@ test("a machine card names which failure it is showing", () => {
 
 const fixture = async (name) =>
   JSON.parse(await readFile(new URL(`../fixtures/${name}`, import.meta.url), "utf8"));
+
+test("token formatting agrees with the shared fixture", async () => {
+  const { tokens } = await fixture("format-cases.json");
+  assert.ok(tokens.length > 0, "the shared fixture has no token cases");
+  for (const c of tokens) assert.equal(humanTokens(c.n), c.want, `${c.n} — ${c.why}`);
+});
+
+test("relative ages agree with the shared fixture", async () => {
+  const { age } = await fixture("format-cases.json");
+  assert.ok(age.length > 0, "the shared fixture has no age cases");
+  const realNow = Date.now;
+  try {
+    for (const c of age) {
+      Date.now = () => Date.parse(c.now);
+      assert.equal(relAge(c.seen), c.want, `${c.seen || "(empty)"} — ${c.why}`);
+    }
+  } finally {
+    Date.now = realNow;
+  }
+});
 
 test("the group modes agree with the shared fixture", async () => {
   const { modes } = await fixture("group-cases.json");
