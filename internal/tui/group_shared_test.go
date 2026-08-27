@@ -8,7 +8,7 @@ import (
 
 // #546. The dashboard groups the table too, and it has its own copy of the rule
 // because the browser cannot import Go. The mode names matter as much as the
-// behaviour: an operator's saved preference holds the *name* on both sides, so a
+// behavior: an operator's saved preference holds the *name* on both sides, so a
 // mode renamed on one client and not the other silently resets their grouping.
 //
 // This used to read the shipped `lib.js` with a regular expression. That checked a

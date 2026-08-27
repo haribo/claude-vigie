@@ -11,7 +11,7 @@ import (
 // client (ADR-0011) and the dashboard holds a second implementation. Both read
 // this case list (#547, #619).
 //
-// The steps are checked alongside the behaviour because they are what an operator's
+// The steps are checked alongside the behavior because they are what an operator's
 // saved value is one of: a preset offered on one client and not the other leaves a
 // stored threshold the dashboard cannot represent.
 
