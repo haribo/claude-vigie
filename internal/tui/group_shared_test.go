@@ -61,6 +61,7 @@ func TestDashboardSharesTheGroupModes(t *testing.T) {
 func TestGroupKeyUsesTheProjectName(t *testing.T) {
 	s := stubSessionForHaystack()
 	s.ProjectDir = "/home/ada/dev/api-gateway"
+	s.Project = "api-gateway" // as the daemon derives it (#618)
 	if got := groupKey(s, groupProject); got != "api-gateway" {
 		t.Errorf("project group key = %q, want the last segment", got)
 	}

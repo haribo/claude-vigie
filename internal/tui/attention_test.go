@@ -35,7 +35,8 @@ func TestNotifyTransitions(t *testing.T) {
 	// the helper does too: a fixture that omits it describes an answer the server
 	// never sends.
 	sess := func(id, st string) api.SessionView {
-		return api.SessionView{ID: id, Title: id, Status: st, Attention: status.NeedsAttention(st)}
+		// Name as the daemon derives it — the notification is fed the display name (#618).
+		return api.SessionView{ID: id, Title: id, Name: id, Status: st, Attention: status.NeedsAttention(st)}
 	}
 
 	// First apply arms prevStatus; no working predecessor → nothing fires.

@@ -172,7 +172,8 @@ func TestVisibleSessionsFilterAndSort(t *testing.T) {
 func TestFilterInput(t *testing.T) {
 	key := func(s string) tea.KeyMsg { return tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune(s)} }
 	named := func(kt tea.KeyType) tea.KeyMsg { return tea.KeyMsg{Type: kt} }
-	var m tea.Model = model{sessions: []api.SessionView{{Title: "claude-fleet"}, {Title: "note"}}}
+	var m tea.Model = model{sessions: []api.SessionView{
+		{Title: "claude-fleet", Name: "claude-fleet"}, {Title: "note", Name: "note"}}}
 
 	m, _ = m.Update(key("/"))
 	if !m.(model).sess.filtering {

@@ -10,6 +10,7 @@ import (
 	"github.com/charmbracelet/lipgloss"
 
 	"github.com/haribo/claude-vigie/internal/api"
+	"github.com/haribo/claude-vigie/internal/modelinfo"
 )
 
 // statsView is the Stats tab's own state: the time granularity the buckets are
@@ -249,7 +250,7 @@ func (m model) renderStats() string {
 	b.WriteString(dimStyle.Render("TOKENS  ·  by model") + "\n")
 	legend := make([]string, len(models))
 	for i, mdl := range models {
-		name := shortModel(mdl)
+		name := modelinfo.Short(mdl)
 		if name == "" {
 			name = "—"
 		}
@@ -334,7 +335,7 @@ func renderTopSessions(top []api.TopSession) string {
 	for _, s := range top {
 		b.WriteString(pad(clip(s.Name, 21), 22) +
 			dimStyle.Render(pad(orDash(s.Machine), 14)) +
-			dimStyle.Render(pad(shortModel(s.Model), 12)) +
+			dimStyle.Render(pad(modelinfo.Short(s.Model), 12)) +
 			statusStyle(s.Status).Render(pad("● "+s.Status, 11)) +
 			humanizeTokens(s.OutputTokens) + "\n")
 	}

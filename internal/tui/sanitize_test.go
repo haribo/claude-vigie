@@ -92,8 +92,8 @@ func TestTheNotificationPathSeesCleanText(t *testing.T) {
 // a report body and the server checks only that it is non-empty
 // (internal/server/report.go), unlike `event` and `status`, which are matched
 // against closed vocabularies (#515). It reaches the screen by three paths — the
-// detail panel prints it in full, `sessionName` falls back to it whenever a
-// session has no title yet, and the desktop notification is fed the same name.
+// detail panel prints it in full, the daemon's `name` falls back to it whenever a
+// session has no title yet (#618), and the desktop notification is fed that name.
 //
 // The fixtures above all use `ID: "a"`, which is exactly why this went unseen.
 const evilID = "sess\x1b]52;c;cGF5bG9hZA==\x07\x1b[2Jid"
@@ -101,10 +101,10 @@ const evilID = "sess\x1b]52;c;cGF5bG9hZA==\x07\x1b[2Jid"
 func TestAControlSequenceInTheSessionIdNeverReachesTheScreen(t *testing.T) {
 	m := stubModel()
 	m.width, m.height = 200, 40
-	// No Title: the id is what the row is named, which is the ordinary case for a
-	// session that has not been titled yet.
+	// No Title, so the daemon named the session after its id — Name carries the
+	// hostile characters too, which is the path the row's own cell renders (#618).
 	m = m.applySessions(sessionsMsg{gen: 1, sessions: []api.SessionView{
-		{ID: evilID, Machine: "m", Status: "working"},
+		{ID: evilID, Name: string([]rune(evilID)[:8]), Machine: "m", Status: "working"},
 	}})
 
 	if got := m.sessions[0].ID; strings.ContainsAny(got, "\x1b\r") {

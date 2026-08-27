@@ -50,12 +50,6 @@ func TestColumnWidthsFitContent(t *testing.T) {
 	}
 }
 
-func TestShortModel(t *testing.T) {
-	if got := shortModel("claude-opus-4-8"); got != "opus-4-8" {
-		t.Errorf("shortModel = %q, want opus-4-8", got)
-	}
-}
-
 func TestPadAndTruncate(t *testing.T) {
 	if got := pad("ab", 5); got != "ab   " {
 		t.Errorf("pad = %q, want %q", got, "ab   ")
@@ -65,35 +59,13 @@ func TestPadAndTruncate(t *testing.T) {
 	}
 }
 
-func TestShortIDAndProjectName(t *testing.T) {
-	if got := shortID("5c483c16-96b5-4f61"); got != "5c483c16" {
-		t.Errorf("shortID = %q, want 5c483c16", got)
-	}
-	if got := shortID("abc"); got != "abc" {
-		t.Errorf("shortID(short) = %q, want abc", got)
-	}
-	if got := projectName("/home/x/claude-fleet"); got != "claude-fleet" {
-		t.Errorf("projectName = %q, want claude-fleet", got)
-	}
-	if got := projectName(""); got != "-" {
-		t.Errorf("projectName(empty) = %q, want -", got)
-	}
-}
-
-func TestSessionName(t *testing.T) {
-	if got := sessionName(api.SessionView{Title: "my-conv", ID: "5c483c16-x"}); got != "my-conv" {
-		t.Errorf("sessionName with title = %q, want my-conv", got)
-	}
-	if got := sessionName(api.SessionView{ID: "5c483c16-x"}); got != "5c483c16" {
-		t.Errorf("sessionName without title = %q, want short id 5c483c16", got)
-	}
-}
-
 func TestRenderTableWide(t *testing.T) {
+	// Name, Project and ModelShort come from the daemon now (ADR-0011, #618); the
+	// raw fields beside them are what it derived them from.
 	out := renderTable([]api.SessionView{{
-		ID: "5c483c16-96b5-4f61", Title: "my-session", Machine: "laptop",
-		ProjectDir: "/home/x/proj", GitBranch: "main",
-		Model: "claude-opus-4-8", Status: "working",
+		ID: "5c483c16-96b5-4f61", Title: "my-session", Name: "my-session", Machine: "laptop",
+		ProjectDir: "/home/x/proj", Project: "proj", GitBranch: "main",
+		Model: "claude-opus-4-8", ModelShort: "opus-4-8", Status: "working",
 		Usage:      api.Usage{OutputTokens: 1500, InputTokens: 500},
 		LastSeenAt: "2026-07-26T17:01:32Z",
 	}}, columns, 200, -1, sortState{})
@@ -110,10 +82,11 @@ func TestModelCellUnknownShowsDash(t *testing.T) {
 	// A session open before Claude's first reply has no model name anywhere; the
 	// MODEL cell must read as a dash, not an ambiguous blank (#242) — while a
 	// known model still renders its short form.
-	if got := orDash(shortModel("")); got != "-" {
+	cell := columnByKey()["model"].cell
+	if got := cell(api.SessionView{}); got != "-" {
 		t.Errorf("empty model cell = %q, want %q", got, "-")
 	}
-	if got := orDash(shortModel("claude-opus-4-8")); got != "opus-4-8" {
+	if got := cell(api.SessionView{Model: "claude-opus-4-8", ModelShort: "opus-4-8"}); got != "opus-4-8" {
 		t.Errorf("known model cell = %q, want opus-4-8", got)
 	}
 }
