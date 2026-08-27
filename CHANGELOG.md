@@ -17,6 +17,10 @@ file is the single source of truth, not a second narrative.
 
 ### Fixed
 
+- The terminal and the browser show the same token count. A session at 1250
+  tokens read `1.2k` in one and `1.3k` in the other, and round values lost their
+  decimal in the browser only (#619).
+
 - The GNOME indicator names a session the way the terminal and the browser do.
   One without a title showed as its project directory there and as its short id
   everywhere else, so the same session had two names (#618).

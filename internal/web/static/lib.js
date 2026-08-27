@@ -28,7 +28,29 @@ export function detailText(s) {
   return esc(s && s.detail_text ? s.detail_text : "-");
 }
 
-export function humanTokens(n) { n = Number(n) || 0; if (n >= 1e6) return trim(n / 1e6) + "M"; if (n >= 1e3) return trim(n / 1e3) + "k"; return String(n); }
+// humanTokens is the twin of `humanizeTokens` in internal/tui/render.go, proved
+// against test/fixtures/format-cases.json (#619).
+//
+// Integer arithmetic, matching the Go side character for character in intent: a
+// float divide followed by a rounding rounds twice, and the two languages land on
+// different sides of it. That is not what shipped — it is what the first attempt at
+// aligning the two did, and it would have made 1150 tokens read `1.2k` in the
+// terminal and `1.1k` here, on 4004 counts in the first three million.
+//
+// The decimal is always kept — `1.0k`, not `1k` — because the terminal column is
+// aligned on a character grid and a width that changes with the value breaks it.
+// The two clients show one figure or they show two.
+export function humanTokens(n) {
+  n = Number(n) || 0;
+  if (n >= 1e6) return oneDecimal(n, 1e6) + "M";
+  if (n >= 1e3) return oneDecimal(n, 1e3) + "k";
+  return String(n);
+}
+
+function oneDecimal(n, unit) {
+  const t = Math.floor((n + unit / 20) / (unit / 10));
+  return `${Math.floor(t / 10)}.${t % 10}`;
+}
 export function ageSec(rfc) { const t = Date.parse(rfc); return Number.isNaN(t) ? Infinity : Math.max(0, (Date.now() - t) / 1000); }
 
 export function relAge(rfc) {
@@ -223,9 +245,13 @@ export function hiddenByIdle(s, afterMs, nowMs) {
 }
 
 // GROUP_MODES are how the sessions table can be grouped, in the TUI's enum order.
-// Kept identical to `groupNames` in internal/tui/model.go — a Go test reads this
-// literal and fails on drift, because a grouping an operator finds in one window
-// and not the other is the divergence #544 forbids.
+// Kept identical to `groupNames` in internal/tui/sessions.go, and proved so by
+// test/fixtures/group-cases.json, which both suites read (#619). A Go test used to
+// pull this literal out of the file with a regular expression instead; the case
+// list replaced it, because a constant matching says nothing about behaviour at a
+// boundary. The names matter as much as the behaviour: an operator's saved
+// preference holds the name, so a mode renamed on one client and not the other
+// silently resets their grouping — the divergence #544 forbids.
 export const GROUP_MODES = ["off", "machine", "project"];
 
 // groupKeyOf is the value a session groups under — the twin of `groupKey` in

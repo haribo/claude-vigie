@@ -1,0 +1,27 @@
+{
+  "_comment": [
+    "Shared cases for hiding sessions that have gone quiet (#547, #619).",
+    "The threshold is a preference, so the rule stays client-side (ADR-0011) and is",
+    "read by internal/tui/prefs_shared_test.go and test/js/dashboard.test.mjs.",
+    "Three details that are easy to get wrong and all matter: the clock is",
+    "`last_seen_at` and not the status, so a `working` session whose reports stopped",
+    "is hidden too — the same 'nothing is happening here' signal; an unreadable",
+    "timestamp keeps the session visible, because losing a row over a date that will",
+    "not parse is worse than showing one row too many; and the comparison is strictly",
+    "greater than, so a session exactly at the threshold is still shown.",
+    "`presets` is the list of steps the settings screen offers, in its order."
+  ],
+  "presets_seconds": [0, 900, 1800, 3600, 10800, 21600],
+  "cases": [
+    { "why": "a threshold of zero is off — nothing is ever hidden by it", "now": "2026-08-27T12:00:00Z", "seen": "2026-08-01T00:00:00Z", "after_seconds": 0, "hidden": false },
+    { "why": "quieter than the threshold, so hidden", "now": "2026-08-27T12:00:00Z", "seen": "2026-08-27T11:00:00Z", "after_seconds": 900, "status": "idle", "hidden": true },
+    { "why": "a `working` session whose reports stopped is hidden too — the clock is last_seen_at, not the status", "now": "2026-08-27T12:00:00Z", "seen": "2026-08-27T11:00:00Z", "after_seconds": 900, "status": "working", "hidden": true },
+    { "why": "and a recent `ended` one is not hidden by this rule, which is not the hide-ended preference", "now": "2026-08-27T12:05:00Z", "seen": "2026-08-27T12:00:00Z", "after_seconds": 900, "status": "ended", "hidden": false },
+    { "why": "exactly at the threshold is still shown — the comparison is strict", "now": "2026-08-27T12:15:00Z", "seen": "2026-08-27T12:00:00Z", "after_seconds": 900, "hidden": false },
+    { "why": "one second past it is hidden", "now": "2026-08-27T12:15:01Z", "seen": "2026-08-27T12:00:00Z", "after_seconds": 900, "hidden": true },
+    { "why": "recent enough to stay", "now": "2026-08-27T12:05:00Z", "seen": "2026-08-27T12:00:00Z", "after_seconds": 900, "hidden": false },
+    { "why": "a timestamp that will not parse keeps the row rather than losing it", "now": "2026-08-27T12:00:00Z", "seen": "not-a-date", "after_seconds": 900, "hidden": false },
+    { "why": "no timestamp at all keeps the row for the same reason", "now": "2026-08-27T12:00:00Z", "seen": "", "after_seconds": 900, "hidden": false },
+    { "why": "a timestamp in the future is not quiet", "now": "2026-08-27T12:00:00Z", "seen": "2026-08-27T13:00:00Z", "after_seconds": 900, "hidden": false }
+  ]
+}

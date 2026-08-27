@@ -1,7 +1,6 @@
 package tui
 
 import (
-	"encoding/json"
 	"os"
 	"strings"
 	"testing"
@@ -32,14 +31,7 @@ type columnFixture struct {
 
 func loadColumnFixture(t *testing.T) columnFixture {
 	t.Helper()
-	b, err := os.ReadFile("../../test/fixtures/column-cases.json")
-	if err != nil {
-		t.Fatalf("reading the shared fixture: %v", err)
-	}
-	var f columnFixture
-	if err := json.Unmarshal(b, &f); err != nil {
-		t.Fatalf("parsing the shared fixture: %v", err)
-	}
+	f := loadFixture[columnFixture](t, "column-cases.json")
 	// Only the context half is read here: the mode labels moved to the daemon with
 	// the rest of the naming family, and internal/server/naming_test.go reads the
 	// mode section of this same fixture (ADR-0011, #618).

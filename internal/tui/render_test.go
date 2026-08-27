@@ -7,15 +7,6 @@ import (
 	"github.com/haribo/claude-vigie/internal/api"
 )
 
-func TestHumanizeTokens(t *testing.T) {
-	cases := map[int64]string{0: "0", 999: "999", 1500: "1.5k", 2_500_000: "2.5M"}
-	for n, want := range cases {
-		if got := humanizeTokens(n); got != want {
-			t.Errorf("humanizeTokens(%d) = %q, want %q", n, got, want)
-		}
-	}
-}
-
 // TestColumnWidthsFitContent guards the #319 tightening: no column is narrower
 // than its header (plus the sort arrow, if sortable), and the resnugged
 // fixed-format columns still hold their widest real cell.
