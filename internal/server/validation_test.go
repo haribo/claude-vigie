@@ -65,6 +65,45 @@ func TestAnUnknownStatusIsRefused(t *testing.T) {
 	}
 }
 
+// #629. The report's single `timestamp` is copied into five fields of the session
+// view — StartedAt, LastSeenAt, EndedAt, CallAt, StatusChangedAt — and the TUI's
+// detail panel prints three of them as they came. A report whose timestamp is an
+// OSC sequence therefore set the title of the operator's terminal window.
+//
+// It reached further than the display: the same value keys the events table, the
+// activity samples, the daily token rollup and the working-seconds arithmetic,
+// all of which fail soft on a value that will not parse and drop the row.
+//
+// Empty is still accepted, deliberately and on the model of the status check
+// above: absent is not malformed, it renders as a dash, and it cannot act on a
+// terminal.
+func TestATimestampThatIsNotATimestampIsRefused(t *testing.T) {
+	srv := newTestServer(t)
+	report := func(ts string) api.ReportRequest {
+		return api.ReportRequest{SessionID: "s", Machine: "m", Event: "SessionStart", Timestamp: ts}
+	}
+	for _, ts := range []string{
+		"\x1b]0;pwned\x07",    // the one this exists to refuse
+		"2026-08-27",          // a date is not an instant, and Date.parse would take it
+		"2026-08-27T12:00:00", // no zone: two clients would read it differently
+		"not-a-date",
+	} {
+		if code := postReportCode(t, srv, report(ts)); code != http.StatusBadRequest {
+			t.Errorf("timestamp %q was accepted: %d", ts, code)
+		}
+	}
+	for _, ts := range []string{
+		"", // absent, which every field tolerates
+		"2026-08-27T12:00:00Z",
+		"2026-08-27T14:00:00+02:00",
+		"2026-08-27T12:00:00.123456789Z",
+	} {
+		if code := postReportCode(t, srv, report(ts)); code >= http.StatusMultipleChoices {
+			t.Errorf("the well-formed timestamp %q was refused: %d", ts, code)
+		}
+	}
+}
+
 // The lease exists so exactly one machine fetches; nothing checked it here, so
 // any caller could overwrite the figure the whole fleet reads.
 func TestUsageIsRefusedWithoutTheLease(t *testing.T) {
