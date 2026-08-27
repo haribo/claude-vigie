@@ -91,8 +91,8 @@ func sanitizeSessions(sessions []api.SessionView) []api.SessionView {
 		// RFC3339 instant (#629), so nothing hostile should arrive — and that is a
 		// check in the *other* binary. The invariant stated above is about this
 		// model, and a model whose safety depends on a promise made across a network
-		// is not the invariant it claims to be. The detail panel prints three of
-		// these as they came.
+		// is not the invariant it claims to be. The detail panel is where they
+		// surfaced: it printed three of them exactly as the report sent them.
 		s.StartedAt = sanitizeText(s.StartedAt)
 		s.LastSeenAt = sanitizeText(s.LastSeenAt)
 		s.EndedAt = sanitizeText(s.EndedAt)

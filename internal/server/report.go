@@ -440,9 +440,14 @@ func rejectReport(req api.ReportRequest) (reason, message string) {
 	// again, in the fields that do not look like text (#629).
 	//
 	// Refusing it here rather than cleaning it at each screen also keeps a value
-	// that is not an instant out of the events table, the activity samples and the
-	// daily rollup, all of which key on it and silently drop the row when it will
-	// not parse.
+	// that is not an instant out of three places that key on it and do not check
+	// it, none of which merely ignore it:
+	//
+	//   - the events table stores it verbatim — plain INSERT, no constraint;
+	//   - `token_samples` is keyed on it and pruned by `ORDER BY at DESC LIMIT`,
+	//     so a string that sorts high evicts real samples;
+	//   - `dayOf` falls back to *now* rather than failing, so the tokens land on
+	//     today in `stats_daily`, which is never recomputed (#432).
 	//
 	// Empty stays accepted, on the model of the status check above: absent is not
 	// malformed, it renders as a dash, and it cannot act on a terminal.

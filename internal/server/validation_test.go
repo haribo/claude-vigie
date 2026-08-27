@@ -70,9 +70,11 @@ func TestAnUnknownStatusIsRefused(t *testing.T) {
 // detail panel prints three of them as they came. A report whose timestamp is an
 // OSC sequence therefore set the title of the operator's terminal window.
 //
-// It reached further than the display: the same value keys the events table, the
-// activity samples, the daily token rollup and the working-seconds arithmetic,
-// all of which fail soft on a value that will not parse and drop the row.
+// It reached further than the display. The same value keys the events table, the
+// activity samples and the daily token rollup, and none of the three rejects it:
+// the event row is stored as it came, a sample keyed on a string that sorts high
+// evicts real ones, and `dayOf` falls back to *now*, so the tokens land on today
+// in a table that is never recomputed (#432).
 //
 // Empty is still accepted, deliberately and on the model of the status check
 // above: absent is not malformed, it renders as a dash, and it cannot act on a
