@@ -101,6 +101,16 @@ the client never imports the server/store packages, so it never links them.
 - Shared DTOs/types may live together in a `types.go`
 - One responsibility per function, one purpose per package
 
+**Exception — the Bubble Tea model (`internal/tui`).** Every tab's renderer and
+key handler is a method on the single `model` struct, so the rule above gathers
+the whole UI into `model.go`. It did, twice: #379 split the per-tab state out and
+the file kept growing, because nothing written down said where a tab's code
+belonged (#627). Group these methods by the view they serve instead — one file
+per tab (`sessions.go`, `stats.go`, `machines.go`, `settings.go`), each holding
+that tab's state struct, its key handling and its rendering. `model.go` keeps the
+`model` struct, the message types, `Init`/`Update`/`View`, the `tea.Cmd`
+constructors and the animation ticks: the dispatch, not the views.
+
 ## Dependency injection
 
 Accept interfaces, return structs. Inject dependencies via constructors.
