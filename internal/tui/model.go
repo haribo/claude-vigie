@@ -117,9 +117,11 @@ type eventMsg struct{}
 type connMsg struct{ live bool }
 
 type watcherMsg struct {
-	machines map[string]string
-	versions map[string]api.VersionInfo
-	err      error
+	// The whole payload, not the two maps the model happens to keep: a field added
+	// to it must reach the sanitizer and its guard, and picking fields out here is
+	// how one would not (#635).
+	status api.WatcherStatus
+	err    error
 }
 
 type settingsMsg struct {
@@ -218,7 +220,7 @@ func (m model) watcherCmd() tea.Cmd {
 	}
 	return func() tea.Msg {
 		s, err := m.fetchWatcher()
-		return watcherMsg{machines: s.Machines, versions: s.Versions, err: err}
+		return watcherMsg{status: s, err: err}
 	}
 }
 
@@ -388,19 +390,19 @@ func (m model) applyDataMsg(msg tea.Msg) model {
 	case versionMsg:
 		m.markRefresh(srcVersion, msg.err)
 		if msg.err == nil {
-			m.daemonVersion = msg.v
+			m.daemonVersion = SanitizeVersion(msg.v)
 		}
 	case watcherMsg:
 		m.markRefresh(srcWatcher, msg.err)
 		if msg.err == nil {
-			m.watcherMachines = msg.machines
-			m.watcherVersions = msg.versions
+			ws := sanitizeWatcherStatus(msg.status)
+			m.watcherMachines, m.watcherVersions = ws.Machines, ws.Versions
 			m.gotWatcher = true
 		}
 	case statsMsg:
 		m.markRefresh(srcStats, msg.err)
 		if msg.err == nil {
-			m.stats = msg.stats
+			m.stats = sanitizeStats(msg.stats)
 		}
 	case settingsMsg:
 		m.markRefresh(srcSettings, msg.err)

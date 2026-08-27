@@ -30,6 +30,11 @@ file is the single source of truth, not a second narrative.
 
 ### Security
 
+- Everything the terminal draws is checked before it is drawn, not sessions
+  alone. A watcher build in the Machines tab, a session name in the Stats
+  ranking, or a build named by the startup check could carry characters that act
+  on the operator's terminal (#635).
+
 - The daemon refuses a session report whose timestamp is not a real instant, and
   the terminal never prints one unchecked. A crafted report could act on the
   operator's terminal — set its window title — when they opened that session's
