@@ -14,14 +14,11 @@ import (
 // This used to read the shipped `lib.js` with a regular expression. That checked a
 // constant array matched and could say nothing about what either side does at a
 // boundary, which is where this repository's rules have actually diverged (#619).
-// Both suites read one case list instead. That retires `jsArrayFromFile`, which is
-// half of ADR-0011's measurable end state; the other half — "no Go test reads a
-// JavaScript file to check a constant" — is not reached, and saying so is the
-// point. `internal/status/status_test.go:63` still holds a character-for-character
-// clone of the same helper, because the constants it checks (`STATUSES` in app.js,
-// `STATUS_ORDER` in extension.js) are module-private: no test suite can import
-// them, so a shared case list cannot reach them until they move to a lib. That is
-// tracked separately, not silently left (#633).
+// Both suites read one case list instead. That retires `jsArrayFromFile`, and
+// #633 retired its clone in internal/status by moving the two status constants
+// into each client's lib so their own suites could import them — so ADR-0011's
+// measurable end state holds in both halves: no Go test pulls a constant out of a
+// JavaScript file with a regular expression any more.
 
 type groupFixture struct {
 	Modes []string `json:"modes"`

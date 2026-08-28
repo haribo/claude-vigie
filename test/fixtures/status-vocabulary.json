@@ -1,0 +1,27 @@
+{
+  "_comment": [
+    "The session status vocabulary, most-active first (#423, #633).",
+    "The daemon owns it (internal/status.All) and refuses a report carrying anything",
+    "else, but each client keeps an ordered copy for presentation: the dashboard",
+    "styles a status only if it knows it, and the GNOME menu groups by this order.",
+    "A status missing from a copy is not a cosmetic loss — the menu held four of the",
+    "nine and silently dropped every session in the other five, `stalled` among them",
+    "(#422).",
+    "This file replaces a regular expression. Two Go tests used to pull the literal",
+    "out of app.js and extension.js, because a module-private constant is reachable",
+    "no other way; the constants moved to each client's lib and all three sides read",
+    "this list instead. `docs/design/session-status.md` section 1 stays the prose",
+    "specification, and a Go test keeps it in step with the vocabulary too."
+  ],
+  "order": [
+    "working",
+    "thinking",
+    "compacting",
+    "waiting",
+    "stalled",
+    "idle",
+    "error",
+    "stale",
+    "ended"
+  ]
+}

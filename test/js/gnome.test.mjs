@@ -7,8 +7,9 @@
 
 import assert from "node:assert/strict";
 import { test } from "node:test";
+import { readFile } from "node:fs/promises";
 
-import { groupOrder, needsAttention, attentionReason, attentionIds } from "../../gnome-extension/lib.js";
+import { groupOrder, needsAttention, attentionReason, attentionIds, STATUS_ORDER } from "../../gnome-extension/lib.js";
 
 // The documented vocabulary, passed in explicitly. The list that ships is checked
 // against docs/design/session-status.md by a Go test (#423); what is checked here
@@ -105,4 +106,10 @@ test("attentionIds holds exactly the sessions calling for the operator", () => {
   assert.deepEqual([...attentionIds(sessions)].sort(), ["a", "c", "d"]);
   assert.equal(attentionIds([]).size, 0);
   assert.equal(attentionIds(null).size, 0);
+});
+
+test("the indicator's status order agrees with the shared fixture", async () => {
+  const raw = await readFile(new URL("../fixtures/status-vocabulary.json", import.meta.url), "utf8");
+  assert.deepEqual(STATUS_ORDER, JSON.parse(raw).order,
+    "a status missing here takes its sessions off the menu entirely (#422)");
 });

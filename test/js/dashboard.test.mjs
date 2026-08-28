@@ -14,7 +14,7 @@ import {
   readWatcher, fleetAlarm, fleetAlarmDetail, watcherCell,
   fuzzyMatch, sessionHaystack, matchesFilter,
   GROUP_MODES, groupKeyOf, groupSessions, IDLE_PRESETS_MS, idleLabel, hiddenByIdle,
-  contextCell, contextKnown, contextPct, migrateV1Columns, V1_COLUMN_KEYS,
+  contextCell, contextKnown, contextPct, migrateV1Columns, V1_COLUMN_KEYS, STATUSES,
 } from "../../internal/web/static/lib.js";
 
 // Every shared case list is read the same way; the interesting part is what each
@@ -577,4 +577,10 @@ test("idle hiding agrees with the shared fixture", async () => {
     const got = hiddenByIdle(s, c.after_seconds * 1000, Date.parse(c.now));
     assert.equal(got, c.hidden, `${c.seen || "(empty)"} after ${c.after_seconds}s — ${c.why}`);
   }
+});
+
+test("the dashboard's status vocabulary agrees with the shared fixture", async () => {
+  const { order } = await fixture("status-vocabulary.json");
+  assert.deepEqual(STATUSES, order,
+    "a status the dashboard does not know is styled as `idle` — displayed as something it is not");
 });

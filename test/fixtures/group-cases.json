@@ -7,9 +7,8 @@
     "The `modes` list replaces a regex scrape: a Go test used to pull the GROUP_MODES",
     "array out of lib.js with a regular expression. That checked a constant matched",
     "and could say nothing about behaviour at a boundary, which is where the rules in",
-    "this repository have actually diverged. It retires `jsArrayFromFile`, which is",
-    "half of ADR-0011's end state; the status vocabulary is still scraped from two",
-    "module-private constants no suite can import (#633)."
+    "this repository have actually diverged. It retired `jsArrayFromFile`; #633",
+    "retired its last clone, so no Go test reads a JavaScript constant by regex."
   ],
   "modes": ["off", "machine", "project"],
   "keys": [
