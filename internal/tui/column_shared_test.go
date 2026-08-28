@@ -61,6 +61,18 @@ var webExtraColumns = map[string]bool{"open": true}
 // two sets had drifted to 16 against 13, with `act` naming the activity sparkline
 // on one side and the detail button on the other — so a naive comparison would
 // have called that a match and reported the wrong divergence.
+//
+// This one reads the shipped JavaScript and stays that way, decided rather than
+// left over (#633). Every other rule that lived twice moved to a case list both
+// suites read, because a rule is a behavior and a list can state it. This is not
+// a rule: it is the question of whether the dashboard offers the same columns the
+// TUI does, and the answer belongs to the TUI's own `columns` table. A fixture
+// would be a third list for both sides to drift from, which is what the guard
+// exists to catch.
+//
+// It is also not the scrape #633 retired: that one pulled a `const NAME = [...]`
+// literal out of a file to compare it with a Go constant. This extracts the keys
+// of a table of column definitions, which no constant declares anywhere.
 func TestDashboardSharesTheColumnSet(t *testing.T) {
 	b, err := os.ReadFile("../../internal/web/static/app.js")
 	if err != nil {

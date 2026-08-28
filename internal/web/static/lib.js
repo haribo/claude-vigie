@@ -244,6 +244,16 @@ export function hiddenByIdle(s, afterMs, nowMs) {
   return nowMs - t > afterMs;
 }
 
+// STATUSES is the session vocabulary, most-active first. app.js styles a status
+// only if it is in here and falls back to `idle` otherwise, so a status missing
+// from the list is displayed as something it is not (#423).
+//
+// It lives here rather than in app.js so both this client and its test suite can
+// name it: a Go test used to pull the literal out of app.js with a regular
+// expression, because a module-private constant is reachable no other way. Both
+// sides now read test/fixtures/status-vocabulary.json (#633).
+export const STATUSES = ["working", "thinking", "compacting", "waiting", "stalled", "idle", "error", "stale", "ended"];
+
 // GROUP_MODES are how the sessions table can be grouped, in the TUI's enum order.
 // Kept identical to `groupNames` in internal/tui/sessions.go, and proved so by
 // test/fixtures/group-cases.json, which both suites read (#619). A Go test used to

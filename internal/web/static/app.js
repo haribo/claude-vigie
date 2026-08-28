@@ -11,16 +11,13 @@ import {
   adoptLegacyKey, needsAttention, attentionCount, streamIsSilent, REFRESH_MS,
   readWatcher, fleetAlarm, fleetAlarmDetail, watcherCell,
   matchesFilter, GROUP_MODES, groupSessions, contextKnown, contextPct, contextCell, migrateV1Columns,
-  IDLE_PRESETS_MS, idleLabel, hiddenByIdle,
+  IDLE_PRESETS_MS, idleLabel, hiddenByIdle, STATUSES,
 } from "./lib.js";
 
 // Both keys were named for the old brand. They hold live state — a signed-in
 // token and a column layout — so the old name is read once and carried over
 // rather than dropped (adoptLegacyKey, #478).
 const TOKEN_KEY = "vigie_token";
-// Kept identical to docs/design/session-status.md § 1 and internal/status — a Go
-// test reads this literal and fails on any drift (#423).
-const STATUSES = ["working", "thinking", "compacting", "waiting", "stalled", "idle", "error", "stale", "ended"];
 
 let token = adoptLegacyKey(localStorage, "cf_token", TOKEN_KEY) || "";
 let sessions = [], byId = new Map();
