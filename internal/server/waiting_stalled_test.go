@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/haribo/claude-vigie/internal/api"
+	"github.com/haribo/claude-vigie/internal/store"
 	"github.com/haribo/claude-vigie/internal/version"
 )
 
@@ -139,5 +140,34 @@ func TestWaitingStillYieldsToObservationAndToMovement(t *testing.T) {
 	report(watchReport("working", time.Date(2026, 8, 16, 12, 1, 0, 0, time.UTC).Format(time.RFC3339)))
 	if got := status(); got != "working" {
 		t.Errorf("the transcript moved past the prompt and the session stayed %q, want working", got)
+	}
+}
+
+// #636. `timeAfter` used to be documented as "false on any parse error, so a
+// missing timestamp never holds anything", while `holdsWaiting` negates it — so
+// an absent timestamp holds the waiting rather than releasing it.
+//
+// That is the right way round: this rule exists to demand evidence that the
+// transcript moved past when waiting was posted, and a report with no timestamp
+// carries none. The comment said the opposite, which is the kind of sentence
+// someone corrects the code to match. This pins the behavior so they cannot.
+func TestAWatchReportWithNoTimestampCannotClearAWaiting(t *testing.T) {
+	sess := store.Session{Status: "waiting", StatusSource: "hook", StatusChangedAt: "2026-08-28T12:00:00Z"}
+	inferred := func(ts string) api.ReportRequest {
+		return api.ReportRequest{Event: "watch", Status: "idle", Timestamp: ts}
+	}
+	for _, c := range []struct {
+		why  string
+		ts   string
+		want bool
+	}{
+		{"no timestamp is no evidence the transcript moved", "", true},
+		{"nor is one that will not parse", "not-a-date", true},
+		{"one older than the waiting is evidence it did not", "2026-08-28T11:00:00Z", true},
+		{"one newer than the waiting is the evidence this rule asks for", "2026-08-28T12:00:01Z", false},
+	} {
+		if got := holdsWaiting(sess, inferred(c.ts)); got != c.want {
+			t.Errorf("holdsWaiting(ts=%q) = %v, want %v — %s", c.ts, got, c.want, c.why)
+		}
 	}
 }

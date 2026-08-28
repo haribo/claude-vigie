@@ -370,8 +370,15 @@ func holdsWaiting(sess store.Session, req api.ReportRequest) bool {
 	return !timeAfter(req.Timestamp, sess.StatusChangedAt)
 }
 
-// timeAfter reports whether RFC3339 time a is strictly after b (false on any
-// parse error, so a missing timestamp never holds anything).
+// timeAfter reports whether RFC3339 time a is strictly after b, and false when
+// either will not parse.
+//
+// Read that at the one place it is called: holdsWaiting *negates* it, so an
+// absent or unreadable timestamp holds the waiting rather than releasing it.
+// That is the right way round — with no timestamp there is no evidence the
+// transcript moved, and this rule exists to demand that evidence — but the
+// comment here used to claim the opposite, which is the kind of sentence someone
+// corrects the code to match (#636).
 func timeAfter(a, b string) bool {
 	ta, err1 := time.Parse(time.RFC3339, a)
 	tb, err2 := time.Parse(time.RFC3339, b)
