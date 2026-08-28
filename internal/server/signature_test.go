@@ -53,6 +53,17 @@ var signatureExcluded = map[string]string{
 	// that, only lengthen the string.
 	"Attention": "derived from the effective status, which is evaluated at read time and outside the signature by design",
 	"Rank":      "derived from the effective status, which is evaluated at read time and outside the signature by design",
+	// The naming and label family (#618). Each is a pure function of covered
+	// fields, so it cannot change unless one of them does.
+	"Name":       "derived from Title and ID, both covered",
+	"Project":    "derived from ProjectDir, which is covered",
+	"ModelShort": "derived from Model, which is covered",
+	"ModeLabel":  "derived from PermissionMode, which is covered",
+	"ModeDetail": "derived from PermissionMode, which is covered",
+	// DetailText reads the *effective* status for its API-error arm, like Attention
+	// and Rank above; its other inputs — CallAt, CallMessage, APIErrorStatus,
+	// Detail — are all covered.
+	"DetailText": "derived from the call, the API error code and Detail, all covered, plus the effective status which is outside by design",
 }
 
 // fieldsCovered lists what the signature reads, by view field name. Kept beside

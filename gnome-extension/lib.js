@@ -2,6 +2,17 @@
 // extension.js keeps everything that touches Shell; this file is what a test can
 // exercise under node (#430).
 
+// STATUS_ORDER is the session vocabulary, most-active first. The menu groups by
+// it, and a status missing from it used to take its sessions off the screen
+// entirely — the list held four of the nine, `stalled` among the five it dropped,
+// the state most worth a look (#422, #423).
+//
+// It lives here rather than in extension.js so this file's node test can name it:
+// a Go test used to pull the literal out of extension.js with a regular
+// expression, because a module-private constant is reachable no other way. Both
+// sides now read test/fixtures/status-vocabulary.json (#633).
+export const STATUS_ORDER = ['working', 'thinking', 'compacting', 'waiting', 'stalled', 'idle', 'error', 'stale', 'ended'];
+
 // groupOrder takes the known order as an argument rather than reading a
 // module-level constant: the list itself stays in extension.js, where a Go test
 // checks it against the design document (#423), and this stays a pure function a
@@ -16,13 +27,6 @@ export function groupOrder(sessions, statusOrder) {
     const seen = new Set(sessions.map(s => s.status).filter(Boolean));
     const unknown = [...seen].filter(s => !statusOrder.includes(s)).sort();
     return [...statusOrder, ...unknown];
-}
-
-export function basename(path) {
-    if (!path)
-        return '';
-    const parts = path.replace(/\/+$/, '').split('/');
-    return parts[parts.length - 1] || path;
 }
 
 // The statuses that call for the operator: the session is blocked and needs a

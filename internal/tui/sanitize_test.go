@@ -92,8 +92,8 @@ func TestTheNotificationPathSeesCleanText(t *testing.T) {
 // a report body and the server checks only that it is non-empty
 // (internal/server/report.go), unlike `event` and `status`, which are matched
 // against closed vocabularies (#515). It reaches the screen by three paths — the
-// detail panel prints it in full, `sessionName` falls back to it whenever a
-// session has no title yet, and the desktop notification is fed the same name.
+// detail panel prints it in full, the daemon's `name` falls back to it whenever a
+// session has no title yet (#618), and the desktop notification is fed that name.
 //
 // The fixtures above all use `ID: "a"`, which is exactly why this went unseen.
 const evilID = "sess\x1b]52;c;cGF5bG9hZA==\x07\x1b[2Jid"
@@ -101,10 +101,10 @@ const evilID = "sess\x1b]52;c;cGF5bG9hZA==\x07\x1b[2Jid"
 func TestAControlSequenceInTheSessionIdNeverReachesTheScreen(t *testing.T) {
 	m := stubModel()
 	m.width, m.height = 200, 40
-	// No Title: the id is what the row is named, which is the ordinary case for a
-	// session that has not been titled yet.
+	// No Title, so the daemon named the session after its id — Name carries the
+	// hostile characters too, which is the path the row's own cell renders (#618).
 	m = m.applySessions(sessionsMsg{gen: 1, sessions: []api.SessionView{
-		{ID: evilID, Machine: "m", Status: "working"},
+		{ID: evilID, Name: string([]rune(evilID)[:8]), Machine: "m", Status: "working"},
 	}})
 
 	if got := m.sessions[0].ID; strings.ContainsAny(got, "\x1b\r") {
@@ -127,5 +127,88 @@ func TestTheSessionIdKeepsItsReadableTextAndLength(t *testing.T) {
 	}
 	if len([]rune(got)) != len([]rune(evilID)) {
 		t.Errorf("id length changed: %d runes, want %d", len([]rune(got)), len([]rune(evilID)))
+	}
+}
+
+// #629. The five timestamps were the fields nobody thought of — #540 again, one
+// field further along. A report carries one `timestamp` and the daemon copies it
+// into all five; three of them the detail panel prints exactly as they came, so a
+// report whose timestamp was an OSC 0 sequence set the title of the operator's
+// terminal window the moment they opened that session.
+//
+// The daemon now refuses such a report (rejectReport, internal/server/report.go).
+// This asserts the second half: the model is clean even when the daemon's check
+// did not run, because the invariant sanitize.go states is about this model and
+// not about a promise made across a network.
+const evilStamp = "\x1b]0;pwned\x07"
+
+func TestAControlSequenceInATimestampNeverReachesTheScreen(t *testing.T) {
+	m := stubModel()
+	m.width, m.height = 200, 40
+	m = m.applySessions(sessionsMsg{gen: 1, sessions: []api.SessionView{{
+		ID: "a", Name: "a", Machine: "m", Status: "working",
+		StartedAt: evilStamp, LastSeenAt: evilStamp, EndedAt: evilStamp,
+		StatusChangedAt: evilStamp, CallAt: evilStamp,
+	}}})
+
+	got := m.sessions[0]
+	for label, v := range map[string]string{
+		"StartedAt": got.StartedAt, "LastSeenAt": got.LastSeenAt, "EndedAt": got.EndedAt,
+		"StatusChangedAt": got.StatusChangedAt, "CallAt": got.CallAt,
+	} {
+		if strings.ContainsAny(v, "\x1b\r") {
+			t.Errorf("the stored %s still carries a control character: %q", label, v)
+		}
+	}
+	for _, view := range []string{m.View(), renderDetail(got)} {
+		if strings.ContainsAny(view, "\x1b\r") {
+			t.Errorf("a control character reached the screen:\n%q", view)
+		}
+	}
+}
+
+// #635. The MACHINES tab printed a watcher's reported build, and the STATS tab the
+// session, machine and model of its ranking, exactly as the reports sent them. The
+// guards above prove the cleaning functions; this proves they are wired, by driving
+// the model the way the fetchers do and reading what each surface draws.
+//
+// Two shapes, because they reach the screen by different routes. A hostile *value*
+// under a machine that has sessions reaches the MACHINES column; a hostile machine
+// *name* reaches the fleet alarm in the state modal, which names the machines whose
+// watcher stopped. A test carrying only the first would stay green with the
+// sanitizer unwired, because a poisoned key matches no session and renders nothing.
+func TestControlSequencesNeverReachTheMachinesOrStatsTabs(t *testing.T) {
+	m := stubModel()
+	m.width, m.height = 200, 40
+	m = m.applySessions(sessionsMsg{gen: 1, sessions: []api.SessionView{
+		{ID: "a", Name: "a", Machine: "m", Status: "working"},
+	}})
+
+	// A build reported for the machine the session runs on, and a second machine
+	// whose name is hostile and whose watcher went silent long ago.
+	upd, _ := m.Update(watcherMsg{status: api.WatcherStatus{
+		LastSeen: evil,
+		Machines: map[string]string{
+			"m":          "2026-08-27T12:00:00Z",
+			"box" + evil: "2020-01-01T00:00:00Z",
+		},
+		Versions: map[string]api.VersionInfo{"m": {Version: evil, Commit: evil}},
+	}})
+	upd, _ = upd.(model).Update(statsMsg{stats: api.StatsResponse{
+		Daily:       []api.DailyStat{{Day: "2026-08-27", Model: evil, OutputTokens: 10, WorkingSeconds: 60}},
+		TopSessions: []api.TopSession{{Name: evil, Machine: evil, Model: evil, Status: "idle"}},
+	}})
+	upd, _ = upd.(model).Update(versionMsg{v: api.VersionInfo{Version: evil, Commit: evil}})
+	m = upd.(model)
+
+	for _, tb := range []tab{tabSessions, tabMachines, tabStats, tabSettings} {
+		m.tab = tb
+		if view := m.View(); strings.ContainsAny(view, "\x1b\r") {
+			t.Errorf("a control character reached the screen on tab %d:\n%q", tb, view)
+		}
+	}
+	m.tab, m.showState = tabSessions, true
+	if view := m.View(); strings.ContainsAny(view, "\x1b\r") {
+		t.Errorf("a control character reached the state modal:\n%q", view)
 	}
 }

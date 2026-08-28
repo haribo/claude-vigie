@@ -77,7 +77,7 @@ the client never imports the server/store packages, so it never links them.
 | `internal/transcript` | client | Parses a session transcript, incrementally |
 | `internal/apiclient` | client | One authenticated GET against the daemon, shared by the TUI and the preflight |
 | `internal/status` | both | The session status vocabulary and its sort order |
-| `internal/modelinfo` | both | What a Claude model's name implies — today, its context window size (ADR-0011) |
+| `internal/modelinfo` | both | What a Claude model's name implies — its context window size, and its short display form (ADR-0011) |
 | `internal/install` | client | Merges the reporting hooks into Claude Code's settings |
 | `internal/presence` | client | Session→process mapping, read back through `/proc` |
 | `internal/compaction` | client | Compaction markers dropped by the `PreCompact` hook |
@@ -100,6 +100,16 @@ the client never imports the server/store packages, so it never links them.
 - One file = one struct and its methods (e.g. `server.go`, `sqlite.go`)
 - Shared DTOs/types may live together in a `types.go`
 - One responsibility per function, one purpose per package
+
+**Exception — the Bubble Tea model (`internal/tui`).** Every tab's renderer and
+key handler is a method on the single `model` struct, so the rule above gathers
+the whole UI into `model.go`. It did, twice: #379 split the per-tab state out and
+the file kept growing, because nothing written down said where a tab's code
+belonged (#627). Group these methods by the view they serve instead — one file
+per tab (`sessions.go`, `stats.go`, `machines.go`, `settings.go`), each holding
+that tab's state struct, its key handling and its rendering. `model.go` keeps the
+`model` struct, the message types, `Init`/`Update`/`View`, the `tea.Cmd`
+constructors and the animation ticks: the dispatch, not the views.
 
 ## Dependency injection
 

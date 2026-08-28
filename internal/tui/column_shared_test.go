@@ -1,7 +1,6 @@
 package tui
 
 import (
-	"encoding/json"
 	"os"
 	"strings"
 	"testing"
@@ -32,16 +31,12 @@ type columnFixture struct {
 
 func loadColumnFixture(t *testing.T) columnFixture {
 	t.Helper()
-	b, err := os.ReadFile("../../test/fixtures/column-cases.json")
-	if err != nil {
-		t.Fatalf("reading the shared fixture: %v", err)
-	}
-	var f columnFixture
-	if err := json.Unmarshal(b, &f); err != nil {
-		t.Fatalf("parsing the shared fixture: %v", err)
-	}
-	if len(f.Context) == 0 || len(f.Mode) == 0 {
-		t.Fatal("the shared fixture is missing a section — the extraction is broken, not the code")
+	f := loadFixture[columnFixture](t, "column-cases.json")
+	// Only the context half is read here: the mode labels moved to the daemon with
+	// the rest of the naming family, and internal/server/naming_test.go reads the
+	// mode section of this same fixture (ADR-0011, #618).
+	if len(f.Context) == 0 {
+		t.Fatal("the shared fixture has no context cases — the extraction is broken, not the code")
 	}
 	return f
 }
@@ -58,14 +53,6 @@ func TestContextCellAgreesWithTheSharedFixture(t *testing.T) {
 	}
 }
 
-func TestModeLabelAgreesWithTheSharedFixture(t *testing.T) {
-	for _, c := range loadColumnFixture(t).Mode {
-		if got, _ := permissionModeLabel(c.Raw); got != c.Want {
-			t.Errorf("permissionModeLabel(%q) = %q, want %q — %s", c.Raw, got, c.Want, c.Why)
-		}
-	}
-}
-
 // webExtraColumns are keys the dashboard has and the TUI cannot: a pointer-driven
 // affordance is a *gesture*, free under #544. Everything else must match.
 var webExtraColumns = map[string]bool{"open": true}
@@ -74,6 +61,18 @@ var webExtraColumns = map[string]bool{"open": true}
 // two sets had drifted to 16 against 13, with `act` naming the activity sparkline
 // on one side and the detail button on the other — so a naive comparison would
 // have called that a match and reported the wrong divergence.
+//
+// This one reads the shipped JavaScript and stays that way, decided rather than
+// left over (#633). Every other rule that lived twice moved to a case list both
+// suites read, because a rule is a behavior and a list can state it. This is not
+// a rule: it is the question of whether the dashboard offers the same columns the
+// TUI does, and the answer belongs to the TUI's own `columns` table. A fixture
+// would be a third list for both sides to drift from, which is what the guard
+// exists to catch.
+//
+// It is also not the scrape #633 retired: that one pulled a `const NAME = [...]`
+// literal out of a file to compare it with a Go constant. This extracts the keys
+// of a table of column definitions, which no constant declares anywhere.
 func TestDashboardSharesTheColumnSet(t *testing.T) {
 	b, err := os.ReadFile("../../internal/web/static/app.js")
 	if err != nil {

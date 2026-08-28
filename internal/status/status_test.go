@@ -1,6 +1,7 @@
 package status
 
 import (
+	"encoding/json"
 	"os"
 	"regexp"
 	"sort"
@@ -18,12 +19,8 @@ import (
 // (#421) and the GNOME extension dropped them from its menu entirely (#422).
 
 const (
-	designDoc    = "../../docs/design/session-status.md"
-	listDoc      = "../../docs/design/session-list.md"
-	dashboardJS  = "../../internal/web/static/app.js"
-	dashboardLib = "../../internal/web/static/lib.js"
-	gnomeJS      = "../../gnome-extension/extension.js"
-	gnomeLib     = "../../gnome-extension/lib.js"
+	designDoc = "../../docs/design/session-status.md"
+	listDoc   = "../../docs/design/session-list.md"
 )
 
 // statusesFromDoc reads § 1's table, which is where the vocabulary is specified.
@@ -59,27 +56,6 @@ func sectionOne(doc string) string {
 		return rest[:end]
 	}
 	return rest
-}
-
-// jsArray extracts a `const NAME = ["a", "b"]` literal from a JavaScript file.
-func jsArray(t *testing.T, path, name string) []string {
-	t.Helper()
-	b, err := os.ReadFile(path)
-	if err != nil {
-		t.Fatalf("reading %s: %v", path, err)
-	}
-	decl := regexp.MustCompile(`const\s+` + name + `\s*=\s*\[([^\]]*)\]`)
-	m := decl.FindStringSubmatch(string(b))
-	if m == nil {
-		t.Fatalf("%s: no `const %s = [...]` found — was it renamed?", path, name)
-	}
-	var out []string
-	for _, raw := range strings.Split(m[1], ",") {
-		if v := strings.Trim(strings.TrimSpace(raw), `"'`); v != "" {
-			out = append(out, v)
-		}
-	}
-	return out
 }
 
 func diff(t *testing.T, what string, got, want []string) {
@@ -144,22 +120,31 @@ func statusesFromSortTable(t *testing.T) []string {
 
 // TestAllMatchesTheDesignDocument keeps the code honest against the
 // specification, in that direction: the document decides, the code follows.
+// The clients keep an ordered copy of the vocabulary for presentation, and both
+// read this list under node. A Go test used to pull each literal out of the
+// shipped JavaScript with a regular expression instead, which is what #633
+// retired: a scrape can check that a constant matches and nothing about what the
+// client does with it, and it could only reach a constant that was module-private
+// by not importing it.
+func TestTheStatusVocabularyMatchesTheSharedFixture(t *testing.T) {
+	var f struct {
+		Order []string `json:"order"`
+	}
+	b, err := os.ReadFile("../../test/fixtures/status-vocabulary.json")
+	if err != nil {
+		t.Fatalf("reading the shared fixture: %v", err)
+	}
+	if err := json.Unmarshal(b, &f); err != nil {
+		t.Fatalf("parsing the shared fixture: %v", err)
+	}
+	if len(f.Order) == 0 {
+		t.Fatal("the shared fixture has no statuses — the extraction is broken, not the code")
+	}
+	diff(t, "test/fixtures/status-vocabulary.json", f.Order, All)
+}
+
 func TestAllMatchesTheDesignDocument(t *testing.T) {
 	diff(t, designDoc+" § 1", statusesFromDoc(t), All)
-}
-
-// TestDashboardKnowsEveryStatus: app.js uses STATUSES to decide whether a status
-// can be styled, falling back to "idle". A status missing here is displayed as
-// something it is not.
-func TestDashboardKnowsEveryStatus(t *testing.T) {
-	diff(t, dashboardJS+" STATUSES", jsArray(t, dashboardJS, "STATUSES"), All)
-}
-
-// TestGnomeExtensionKnowsEveryStatus: the extension groups its menu by this list.
-// A status missing here is a session the operator never sees — which is how a
-// `stalled` session, the one most worth a look, went invisible (#422).
-func TestGnomeExtensionKnowsEveryStatus(t *testing.T) {
-	diff(t, gnomeJS+" STATUS_ORDER", jsArray(t, gnomeJS, "STATUS_ORDER"), All)
 }
 
 func TestKnown(t *testing.T) {

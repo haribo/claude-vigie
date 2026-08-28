@@ -9,6 +9,39 @@ file is the single source of truth, not a second narrative.
 
 ## [Unreleased]
 
+## [0.7.2] - 2026-08-28
+
+### Changed
+
+- What a session is called, and how its permission mode and faults are spelled,
+  are decided by the server rather than by each screen. A rule now reaches the
+  terminal, the browser and the GNOME indicator at once (#618).
+
+### Fixed
+
+- The terminal and the browser show the same token count. A session at 1250
+  tokens read `1.2k` in one and `1.3k` in the other, and round values lost their
+  decimal in the browser only (#619).
+
+- The GNOME indicator names a session the way the terminal and the browser do.
+  One without a title showed as its project directory there and as its short id
+  everywhere else, so the same session had two names (#618).
+
+- The Stats tab's ranking names an untitled session by its short id, as the
+  sessions table does, instead of printing the whole 36-character one (#630).
+
+### Security
+
+- Everything the terminal draws is checked before it is drawn, not sessions
+  alone. A watcher build in the Machines tab, a session name in the Stats
+  ranking, or a build named by the startup check could carry characters that act
+  on the operator's terminal (#635).
+
+- The daemon refuses a session report whose timestamp is not a real instant, and
+  the terminal never prints one unchecked. A crafted report could act on the
+  operator's terminal — set its window title — when they opened that session's
+  detail panel (#629).
+
 ## [0.7.1] - 2026-08-26
 
 ### Changed
@@ -470,7 +503,8 @@ across machines — it reads and reports session state; it never drives a sessio
 - The API binds `127.0.0.1` by default; every `/api/*` route is behind a
   constant-time shared-token check; request bodies are size-capped.
 
-[Unreleased]: https://github.com/haribo/claude-vigie/compare/v0.7.1...HEAD
+[Unreleased]: https://github.com/haribo/claude-vigie/compare/v0.7.2...HEAD
+[0.7.2]: https://github.com/haribo/claude-vigie/compare/v0.7.1...v0.7.2
 [0.7.1]: https://github.com/haribo/claude-vigie/compare/v0.7.0...v0.7.1
 [0.7.0]: https://github.com/haribo/claude-vigie/compare/v0.6.0...v0.7.0
 [0.6.0]: https://github.com/haribo/claude-vigie/compare/v0.5.0...v0.6.0

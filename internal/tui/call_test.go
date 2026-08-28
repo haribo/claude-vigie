@@ -83,20 +83,19 @@ func TestBlinkKeepsRowWidth(t *testing.T) {
 	}
 }
 
-// TestCallTakesTheDoingCell: the call message is the reason the row blinks, so it
-// outranks the last tool in DETAIL.
-func TestCallTakesTheDoingCell(t *testing.T) {
-	withMsg := api.SessionView{Detail: "Edit render.go", CallAt: "t", CallMessage: "backfill done"}
-	if got := detailCell(withMsg); got != "backfill done" {
-		t.Errorf("detailCell = %q, want the call message", got)
+// That a call takes the DETAIL cell is the daemon's precedence, proved in
+// internal/server/naming_test.go. What stays here is the color: the call message
+// is the reason the row is blinking, so it carries the row's status color rather
+// than the dim default, and the eye the marker drew lands on a readable reason
+// (#389).
+func TestACalledRowsDetailIsNotDimmed(t *testing.T) {
+	called := api.SessionView{Status: "idle", DetailText: "backfill done", CallAt: "t", CallMessage: "backfill done"}
+	if detailStyle(called).GetForeground() == dimStyle.GetForeground() {
+		t.Error("a calling session's detail was dimmed — it is the reason the row blinks")
 	}
-	noMsg := api.SessionView{Detail: "Edit render.go", CallAt: "t"}
-	if got := detailCell(noMsg); got != "called you" {
-		t.Errorf("a message-less call should still say so, got %q", got)
-	}
-	noCall := api.SessionView{Detail: "Edit render.go"}
-	if got := detailCell(noCall); got != "Edit render.go" {
-		t.Errorf("without a call the activity stays, got %q", got)
+	quiet := api.SessionView{Status: "working", DetailText: "Edit render.go"}
+	if detailStyle(quiet).GetForeground() != dimStyle.GetForeground() {
+		t.Error("an ordinary working row's detail should stay dim")
 	}
 }
 

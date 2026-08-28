@@ -2,7 +2,7 @@ package tui
 
 import (
 	"fmt"
-	"path/filepath"
+	"strconv"
 	"strings"
 
 	"github.com/charmbracelet/lipgloss"
@@ -86,12 +86,12 @@ type column struct {
 // aligned), then activity, rc, and the colored `● status`. The short session id
 // lives in the detail panel only.
 var columns = []column{
-	{"NAME", 22, 0, false, sessionName, func(s api.SessionView) lipgloss.Style { return statusStyle(s.Status) }},
+	{"NAME", 22, 0, false, func(s api.SessionView) string { return s.Name }, func(s api.SessionView) lipgloss.Style { return statusStyle(s.Status) }},
 	{"USER", 10, 8, false, func(s api.SessionView) string { return orDash(s.User) }, func(api.SessionView) lipgloss.Style { return userStyle }},
 	{"MACHINE", 10, 4, false, func(s api.SessionView) string { return s.Machine }, nil},
-	{"DIR", 16, 0, false, func(s api.SessionView) string { return projectName(s.ProjectDir) }, nil},
+	{"DIR", 16, 0, false, func(s api.SessionView) string { return s.Project }, nil},
 	{"BRANCH", 16, 7, false, func(s api.SessionView) string { return orDash(s.GitBranch) }, func(api.SessionView) lipgloss.Style { return dimStyle }},
-	{"MODEL", 12, 5, false, func(s api.SessionView) string { return orDash(shortModel(s.Model)) }, func(api.SessionView) lipgloss.Style { return dimStyle }},
+	{"MODEL", 12, 5, false, func(s api.SessionView) string { return orDash(s.ModelShort) }, func(api.SessionView) lipgloss.Style { return dimStyle }},
 	{"EFFORT", 6, 11, false, func(s api.SessionView) string { return orDash(s.Effort) }, func(api.SessionView) lipgloss.Style { return dimStyle }},
 	{"CTX", 5, 12, true, contextCell, func(s api.SessionView) lipgloss.Style {
 		if !contextKnown(s) {
@@ -105,33 +105,8 @@ var columns = []column{
 	{"ACT", 10, 9, false, func(s api.SessionView) string { return activitySpark(s.Samples) }, nil},
 	{"RC", 3, 1, false, rcCell, rcStyle},
 	{"STATUS", 12, 0, false, statusCell, func(s api.SessionView) lipgloss.Style { return statusStyle(s.Status) }},
-	{"MODE", 7, 8, false, modeCell, modeStyle},
-	{"DETAIL", 36, 10, false, detailCell, detailStyle},
-}
-
-// detailCell renders the contextual detail of the current state, or a dash. A
-// raised call takes the cell: it is the reason the row is blinking, and the
-// operator needs it more than the tool that ran last (#389).
-func detailCell(s api.SessionView) string {
-	if hasCall(s) {
-		if s.CallMessage != "" {
-			return s.CallMessage
-		}
-		return "called you"
-	}
-	// An API error outranks the activity: once the API answers 529 the last tool
-	// that ran is of no interest, and the code is the only thing that separates
-	// an outage from throttling. It is computed here rather than written into
-	// Detail by the watcher — Detail is persisted and cleared on a status change,
-	// so putting the code there as text would be a second source of truth for
-	// what APIErrorStatus already holds (#584).
-	if s.Status == "error" && s.APIErrorStatus != 0 {
-		return apiErrorLabel(s.APIErrorStatus)
-	}
-	if s.Detail == "" {
-		return "-"
-	}
-	return s.Detail
+	{"MODE", 7, 8, false, func(s api.SessionView) string { return s.ModeLabel }, modeStyle},
+	{"DETAIL", 36, 10, false, func(s api.SessionView) string { return s.DetailText }, detailStyle},
 }
 
 // detailStyle colors the DETAIL cell: amber for waiting (a call to action),
@@ -273,19 +248,17 @@ func renderGroupedTable(sessions []api.SessionView, base []column, width, select
 
 func groupKey(s api.SessionView, gb groupBy) string {
 	if gb == groupProject {
-		return projectName(s.ProjectDir)
+		return s.Project
 	}
 	return s.Machine
 }
 
 // renderDetail renders a full-session detail panel.
 func renderDetail(s api.SessionView) string {
-	name := s.Title
-	if name == "" {
-		name = s.ID
-	}
 	lines := []string{
-		detailField("Name", name),
+		// s.Name, not `title || full id`: this panel had a fourth naming rule, and
+		// it printed the id twice — once as Name, once as Session (#618).
+		detailField("Name", s.Name),
 		detailField("Session", s.ID),
 		detailField("User", orDash(s.User)),
 		detailField("Machine", s.Machine),
@@ -295,7 +268,7 @@ func renderDetail(s api.SessionView) string {
 		detailField("Effort", orDash(s.Effort)),
 		detailField("Context", contextGauge(s)),
 		detailField("Status", s.Status),
-		detailField("Mode", modeDetail(s)),
+		detailField("Mode", s.ModeDetail),
 		detailField("Detail", orDash(s.Detail)),
 		detailField("Remote control", rcLabel(s.RemoteControl)),
 	}
@@ -494,65 +467,47 @@ func statusCell(s api.SessionView) string {
 	return "● " + s.Status
 }
 
-// apiErrorLabel names the common Claude API error codes.
-func apiErrorLabel(code int) string {
-	switch code {
-	case 429:
-		return "429 Rate limited"
-	case 500:
-		return "500 Internal server error"
-	case 529:
-		return "529 Overloaded"
-	default:
-		return fmt.Sprintf("%d", code)
-	}
-}
-
-// sessionName is the conversation title, falling back to the short session id.
-func sessionName(s api.SessionView) string {
-	if s.Title != "" {
-		return s.Title
-	}
-	return shortID(s.ID)
-}
-
 func totalTokens(s api.SessionView) int64 {
 	return s.Usage.InputTokens + s.Usage.OutputTokens +
 		s.Usage.CacheCreationTokens + s.Usage.CacheReadTokens
 }
 
-// humanizeTokens renders a token count compactly (e.g. 1234 -> "1.2k").
+// humanizeTokens renders a token count compactly (e.g. 1234 -> "1.2k"). The
+// dashboard has a twin, and test/fixtures/format-cases.json is what keeps them
+// honest (ADR-0011's fourth family, #619).
+//
+// The arithmetic is integer on purpose. Dividing into a float and rounding the
+// result rounds *twice*: 1150/1000 is 1.14999…, which the multiply by ten pulls
+// back up to exactly 11.5, which then rounds to 1.2 — while JavaScript, reading
+// the same double, answers 1.1. 4004 of the first three million counts diverged
+// that way, all of them ending in 50 (though not every count ending in 50 did:
+// only those whose quotient falls just under the half). A float that is never
+// formed cannot be rounded twice, and both languages compute the same integer.
+//
+// One decimal is always kept, `1.0k` and not `1k`: this column is aligned on a
+// character grid, and a width that changes with the value breaks the column.
 func humanizeTokens(n int64) string {
 	switch {
 	case n >= 1_000_000:
-		return fmt.Sprintf("%.1fM", float64(n)/1_000_000)
+		return oneDecimal(n, 1_000_000) + "M"
 	case n >= 1_000:
-		return fmt.Sprintf("%.1fk", float64(n)/1_000)
+		return oneDecimal(n, 1_000) + "k"
 	default:
-		return fmt.Sprintf("%d", n)
+		return strconv.FormatInt(n, 10)
 	}
 }
 
-// shortModel drops the "claude-" prefix for a compact model label.
-func shortModel(m string) string {
-	return strings.TrimPrefix(m, "claude-")
-}
-
-// shortID returns the first 8 characters of a session id.
-func shortID(id string) string {
-	r := []rune(id)
-	if len(r) > 8 {
-		return string(r[:8])
-	}
-	return id
-}
-
-// projectName returns the final path segment of a project directory.
-func projectName(dir string) string {
-	if dir == "" {
-		return "-"
-	}
-	return filepath.Base(dir)
+// oneDecimal renders n/unit to one decimal place, the half rounded away from
+// zero. `unit/20` is half of one tenth of a unit — the half being rounded — and
+// `unit/10` is a tenth, so the whole thing is one integer division.
+//
+// The addition overflows within 50000 of int64's ceiling and prints nonsense
+// there. Not guarded: a session would have to report nine quintillion tokens, and
+// a branch on every render to describe an impossible number is worse than the
+// sentence you are reading.
+func oneDecimal(n, unit int64) string {
+	t := (n + unit/20) / (unit / 10)
+	return fmt.Sprintf("%d.%d", t/10, t%10)
 }
 
 func orDash(s string) string {

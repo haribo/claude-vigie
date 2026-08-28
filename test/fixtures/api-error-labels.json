@@ -1,5 +1,14 @@
 {
-  "why": "The TUI and the web dashboard both name an API error in the DETAIL cell (#584). They are two implementations of one vocabulary, and architecture.md binds them to agree on content: 'A divergence in content is debt, not design.' This fixture is that agreement, read by both sides.",
+  "_comment": [
+    "The API error vocabulary the DETAIL cell spells out (#584).",
+    "It was a shared fixture: the TUI and the dashboard each named these codes, and",
+    "both suites read this file so the two lists could not drift. Since #618 the",
+    "daemon derives the label and the clients render the string they are given, so",
+    "the rule lives once and only internal/server/naming_test.go reads this now.",
+    "It stays a file rather than a table in that test because the list is a mapping",
+    "of someone else's error codes: it is read and extended by people checking it",
+    "against the API's documentation, not by people reading Go."
+  ],
   "cases": [
     { "code": 429, "label": "429 Rate limited" },
     { "code": 500, "label": "500 Internal server error" },

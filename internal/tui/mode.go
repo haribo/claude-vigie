@@ -6,62 +6,35 @@ import (
 	"github.com/haribo/claude-vigie/internal/api"
 )
 
-// permissionModeLabel maps Claude Code's raw permission mode to a display label
-// and color. This is the pinned #303 taxonomy: the canonical field is
-// `permissionMode` (the hook payload's `permission_mode` mirrors it); the
-// redundant `type:"mode"` line — whose `normal` is the same mode as `default` — is
-// ignored upstream. Vigilance rises manual → accept → plan → auto → bypass:
+// The permission-mode labels moved to the daemon (ADR-0011, #618): it carries the
+// #303 taxonomy and the rule that an unrecognized mode is shown raw rather than
+// relabelled "manual", so a mode this build has never heard of cannot read as the
+// safe default (#304). What stays here is the color, which is rendering and
+// belongs to this client's palette.
 //
-//	default            → manual  (grey)   asks for everything — the safe default
-//	acceptEdits        → accept  (violet) auto-accepts file edits
-//	plan               → plan    (teal)   plans only, waits for your approval
-//	auto               → auto    (amber)  runs unattended
-//	bypassPermissions  → bypass  (red)    no permission checks at all — watch closely
+// Vigilance rises manual → accept → plan → auto → bypass, and the colors say so:
 //
-// An unknown non-empty value is shown raw (dimmed), never relabeled "manual" — a
-// new mode must not read as the safe default (#304).
-func permissionModeLabel(raw string) (label string, style lipgloss.Style) {
-	switch raw {
-	case "":
-		return "-", dimStyle
-	case "default":
-		return "manual", lipgloss.NewStyle().Foreground(cMuted)
-	case "acceptEdits":
-		return "accept", lipgloss.NewStyle().Foreground(cAccent2)
-	case "plan":
-		return "plan", lipgloss.NewStyle().Foreground(cTeal)
-	case "auto":
-		return "auto", lipgloss.NewStyle().Foreground(cAmber)
-	case "bypassPermissions":
-		return "bypass", lipgloss.NewStyle().Foreground(cRed)
-	default:
-		return raw, dimStyle // surface an unrecognized mode, don't fake "manual"
-	}
-}
-
-// modeCell / modeStyle feed the MODE table column.
-func modeCell(s api.SessionView) string { l, _ := permissionModeLabel(s.PermissionMode); return l }
+//	default            → grey    asks for everything — the safe default
+//	acceptEdits        → violet  auto-accepts file edits
+//	plan               → teal    plans only, waits for your approval
+//	auto               → amber   runs unattended
+//	bypassPermissions  → red     no permission checks at all — watch closely
+//
+// An unrecognized mode is dimmed rather than colored: the cell already says it is
+// unknown by showing it raw, and a color would claim it a rung on that scale.
 func modeStyle(s api.SessionView) lipgloss.Style {
-	_, st := permissionModeLabel(s.PermissionMode)
-	return st
-}
-
-// modeDetail spells the mode out for the session detail panel.
-func modeDetail(s api.SessionView) string {
 	switch s.PermissionMode {
-	case "":
-		return "-"
 	case "default":
-		return "manual — asks for permission"
+		return lipgloss.NewStyle().Foreground(cMuted)
 	case "acceptEdits":
-		return "accept — auto-accepts edits"
+		return lipgloss.NewStyle().Foreground(cAccent2)
 	case "plan":
-		return "plan — awaiting plan approval"
+		return lipgloss.NewStyle().Foreground(cTeal)
 	case "auto":
-		return "auto — runs unattended"
+		return lipgloss.NewStyle().Foreground(cAmber)
 	case "bypassPermissions":
-		return "bypass — no permission checks"
-	default:
-		return s.PermissionMode
+		return lipgloss.NewStyle().Foreground(cRed)
+	default: // no mode reported, or one this build has never heard of
+		return dimStyle
 	}
 }

@@ -8,14 +8,19 @@ import { test } from "node:test";
 import { readFile } from "node:fs/promises";
 
 import {
-  esc, dash, trim, hasCall, detailText, apiErrorLabel, humanTokens, relAge, relResetHint,
-  shortModel, projectName, totalTokens, sparkSVG, migrateKeys, fullColOrder, colHidden, rank,
+  esc, dash, trim, hasCall, detailText, humanTokens, relAge, relResetHint,
+  totalTokens, sparkSVG, migrateKeys, fullColOrder, colHidden, rank,
   adoptLegacyKey, needsAttention, attentionCount, streamIsSilent, SILENCE_MS,
   readWatcher, fleetAlarm, fleetAlarmDetail, watcherCell,
-  fuzzyMatch, sessionHaystack, sessionName, shortId, matchesFilter,
+  fuzzyMatch, sessionHaystack, matchesFilter,
   GROUP_MODES, groupKeyOf, groupSessions, IDLE_PRESETS_MS, idleLabel, hiddenByIdle,
-  contextCell, contextKnown, contextPct, modeLabel, migrateV1Columns, V1_COLUMN_KEYS,
+  contextCell, contextKnown, contextPct, migrateV1Columns, V1_COLUMN_KEYS, STATUSES,
 } from "../../internal/web/static/lib.js";
+
+// Every shared case list is read the same way; the interesting part is what each
+// test asserts, not the four lines that open the file (#619).
+const fixture = async (name) =>
+  JSON.parse(await readFile(new URL(`../fixtures/${name}`, import.meta.url), "utf8"));
 
 // esc is the dashboard's only defence against DOM-based XSS: session titles,
 // branches and detail text all come from transcripts, and the operator's token
@@ -55,38 +60,30 @@ test("hasCall keys off call_at, not the message", () => {
   assert.equal(hasCall(null), false);
 });
 
-test("detailText lets a call outrank the last tool, and escapes both", () => {
-  assert.equal(detailText({ call_at: "t", call_message: "build done" }), "build done");
-  assert.equal(detailText({ call_at: "t" }), "called you");
-  assert.equal(detailText({ call_at: "t", call_message: "<img src=x onerror=1>" }),
-    "&lt;img src=x onerror=1&gt;", "a call message reaches the DOM and must be escaped");
-  assert.equal(detailText({ detail: "Bash" }), "Bash");
-  assert.equal(detailText({ detail: "<b>" }), "&lt;b&gt;");
-  assert.equal(detailText({}), "-");
-  assert.equal(detailText({ call_at: "t", detail: "Bash" }), "called you",
-    "the call is why the row is pulsing; it takes the cell");
+// What the cell shows and in what order — a call, then an API error, then the
+// activity — is the daemon's since #618 and is proved in
+// internal/server/naming_test.go. What is owed here is that the derived text is
+// rendered rather than recomputed, and that it is escaped: it carries a session
+// title and a call message, and this one reaches the DOM.
+test("detailText renders what the daemon derived, and escapes it", () => {
+  assert.equal(detailText({ detail_text: "build done" }), "build done");
+  assert.equal(detailText({ detail_text: "<img src=x onerror=1>" }),
+    "&lt;img src=x onerror=1&gt;");
+  assert.equal(detailText({ detail_text: "-" }), "-");
+  assert.equal(detailText({}), "-", "a view with no derived text still renders a dash, never `undefined`");
+  assert.equal(detailText({ detail_text: "529 Overloaded", detail: "Bash" }), "529 Overloaded",
+    "the raw detail is beside it and must not be preferred");
 });
 
-test("humanTokens scales to k and M", () => {
-  assert.equal(humanTokens(0), "0");
-  assert.equal(humanTokens(999), "999");
-  assert.equal(humanTokens(1000), "1k");
-  assert.equal(humanTokens(1500), "1.5k");
-  assert.equal(humanTokens(1_000_000), "1M");
-  assert.equal(humanTokens(2_350_000), "2.4M");
+// The scale itself is in test/fixtures/format-cases.json now, read by the Go side
+// too (#619) — this list used to assert `humanTokens(1000) === "1k"` while the Go
+// list asserted "1.0k", each green, neither containing the case that separated
+// them. What stays here is what the fixture cannot carry: a value that is not a
+// number at all, which only this side can be handed.
+test("humanTokens survives what is not a number", () => {
   assert.equal(humanTokens(null), "0");
   assert.equal(humanTokens("nonsense"), "0");
-});
-
-test("relAge steps through seconds, minutes, hours, days", () => {
-  const ago = (s) => new Date(Date.now() - s * 1000).toISOString();
-  assert.equal(relAge(ago(5)), "5s");
-  assert.equal(relAge(ago(90)), "1m");
-  assert.equal(relAge(ago(3 * 3600)), "3h");
-  assert.equal(relAge(ago(2 * 86400)), "2d");
-  assert.equal(relAge("not a date"), "-");
-  assert.equal(relAge(new Date(Date.now() + 60_000).toISOString()), "0s",
-    "a future timestamp clamps to zero rather than going negative");
+  assert.equal(humanTokens(undefined), "0");
 });
 
 test("relResetHint counts down and never shows a past reset", () => {
@@ -96,15 +93,6 @@ test("relResetHint counts down and never shows a past reset", () => {
   assert.match(relResetHint(inSec(5 * 3600)), /^resets in \d+h \d+m$/);
   assert.match(relResetHint(inSec(3 * 86400)), /^resets in \d+d \d+h$/);
   assert.equal(relResetHint("not a date"), "");
-});
-
-test("shortModel and projectName reduce identifiers to what fits a column", () => {
-  assert.equal(shortModel("claude-opus-4-8"), "opus-4-8");
-  assert.equal(shortModel(""), "");
-  assert.equal(shortModel(null), "");
-  assert.equal(projectName("/home/u/dev/api-gateway"), "api-gateway");
-  assert.equal(projectName("/home/u/dev/api-gateway///"), "api-gateway");
-  assert.equal(projectName(""), "-");
 });
 
 test("totalTokens sums all four buckets and tolerates missing ones", () => {
@@ -322,8 +310,7 @@ test("streamIsSilent never condemns a stream it has never heard from", () => {
 // were, so the copy is not trusted: this reads the same fixture that
 // internal/tui/filter_shared_test.go reads, and the two must agree case for case.
 test("fuzzyMatch agrees with the shared fixture the Go side reads", async () => {
-  const raw = await readFile(new URL("../fixtures/fuzzy-cases.json", import.meta.url), "utf8");
-  const { cases } = JSON.parse(raw);
+  const { cases } = await fixture("fuzzy-cases.json");
   assert.ok(cases.length > 0, "the shared fixture has no cases — the extraction is broken, not the code");
   for (const c of cases) {
     assert.equal(fuzzyMatch(c.pattern, c.text), c.want,
@@ -335,18 +322,8 @@ test("fuzzyMatch agrees with the shared fixture the Go side reads", async () => 
 // the end of one field into the start of the next. The Go side asserts the same
 // example in TestSessionHaystackShape.
 test("the haystack has the same shape as the TUI's", () => {
-  const s = { title: "api-gateway", machine: "minet-dev", project_dir: "/home/nico/gateway", git_branch: "main", status: "working" };
-  assert.equal(sessionHaystack(s), "api-gateway minet-dev gateway main working");
-});
-
-test("an untitled session is named, and searchable, by its short id", () => {
-  assert.equal(shortId("abcdefghij-the-rest"), "abcdefgh");
-  assert.equal(shortId("short"), "short");
-  assert.equal(sessionName({ title: "", id: "abcdefghij-the-rest" }), "abcdefgh");
-  assert.equal(sessionName({ title: "named", id: "abcdefghij" }), "named");
-  const s = { id: "abcdefghij-the-rest", machine: "m", status: "idle" };
-  assert.equal(fuzzyMatch("abcdefghij", sessionHaystack(s)), false,
-    "the ninth character of the id must not be searchable — the name shows eight");
+  const s = { title: "api-gateway", name: "api-gateway", machine: "orion-dev", project: "gateway", git_branch: "main", status: "working" };
+  assert.equal(sessionHaystack(s), "api-gateway orion-dev gateway main working");
 });
 
 test("rc is a token as a whole pattern, and ordinary text otherwise", () => {
@@ -370,7 +347,8 @@ test("an empty filter selects everything", () => {
 
 // #546. Grouping. The mode names are pinned against the Go enum by
 // TestDashboardSharesTheGroupModes; what is asserted here is what grouping does.
-const G = (id, machine, dir, out) => ({ id, machine, project_dir: dir, status: "idle", usage: { output_tokens: out } });
+const G = (id, machine, dir, out) => ({ id, machine, project_dir: dir, project: dir.split("/").pop(),
+  status: "idle", usage: { output_tokens: out } });
 
 test("off returns the list untouched, in one group with no key", () => {
   const list = [G("a", "m1", "/h/x", 1), G("b", "m2", "/h/y", 2)];
@@ -380,10 +358,12 @@ test("off returns the list untouched, in one group with no key", () => {
   assert.deepEqual(groups[0].sessions.map((s) => s.id), ["a", "b"]);
 });
 
-test("the project key is the last path segment, so two roots meet in one group", () => {
-  assert.equal(groupKeyOf({ project_dir: "/home/nico/dev/api-gateway" }, "project"), "api-gateway");
-  assert.equal(groupKeyOf({ project_dir: "/srv/build/api-gateway" }, "project"), "api-gateway");
-  assert.equal(groupKeyOf({ machine: "minet-dev" }, "machine"), "minet-dev");
+// The last-path-segment rule is the daemon's (#618) and is proved there; what
+// this asserts is that two roots reduced to the same `project` meet in one group.
+test("the project key is what the daemon derived, so two roots meet in one group", () => {
+  assert.equal(groupKeyOf({ project_dir: "/home/ada/dev/api-gateway", project: "api-gateway" }, "project"), "api-gateway");
+  assert.equal(groupKeyOf({ project_dir: "/srv/build/api-gateway", project: "api-gateway" }, "project"), "api-gateway");
+  assert.equal(groupKeyOf({ machine: "orion-dev" }, "machine"), "orion-dev");
 });
 
 test("grouping keeps the operator's sort inside each group", () => {
@@ -456,8 +436,7 @@ test("the presets and their labels match what the TUI offers", () => {
 // #550. CTX and MODE are two more rules copied out of Go. Neither copy is
 // trusted: this reads the same fixture internal/tui/column_shared_test.go reads.
 test("contextCell agrees with the shared fixture the Go side reads", async () => {
-  const raw = await readFile(new URL("../fixtures/column-cases.json", import.meta.url), "utf8");
-  const { context } = JSON.parse(raw);
+  const { context } = await fixture("column-cases.json");
   assert.ok(context.length > 0, "the fixture has no context cases");
   for (const c of context) {
     // The daemon derives `pct` from the model and the reading (ADR-0011); this
@@ -465,12 +444,6 @@ test("contextCell agrees with the shared fixture the Go side reads", async () =>
     const s = { model: c.model, context_tokens: c.tokens, context_pct: c.pct };
     assert.equal(contextCell(s), c.want, `pct=${c.pct} — ${c.why}`);
   }
-});
-
-test("modeLabel agrees with the shared fixture the Go side reads", async () => {
-  const raw = await readFile(new URL("../fixtures/column-cases.json", import.meta.url), "utf8");
-  const { mode } = JSON.parse(raw);
-  for (const c of mode) assert.equal(modeLabel(c.raw), c.want, `${c.raw} — ${c.why}`);
 });
 
 test("unknown and known-to-be-zero are different states", () => {
@@ -512,36 +485,13 @@ test("the remap collapses a duplicate rather than listing a column twice", () =>
   assert.deepEqual(migrateV1Columns(["tokens", "total"]), ["total"]);
 });
 
-// The TUI names an API error too (internal/tui/render.go). architecture.md binds
-// this dashboard to it on content, and two hand-kept lists of one vocabulary is
-// how that debt is taken on. Both sides read this fixture (#584).
-test("the API error labels match the shared fixture", async () => {
-  const { cases } = JSON.parse(await readFile(new URL("../fixtures/api-error-labels.json", import.meta.url), "utf8"));
-  assert.ok(cases.length > 0, "the shared fixture has no cases — the extraction is broken, not the code");
-  for (const c of cases) {
-    assert.equal(apiErrorLabel(c.code), c.label, `apiErrorLabel(${c.code})`);
-  }
-});
-
-// The code left the status pill for DETAIL, and DETAIL was already taken by the
-// watcher's activity — so the cell needs a stated order (#584).
-test("detailText puts a call first, then an API error, then the activity", () => {
-  const err = { status: "error", api_error_status: 529, detail: "Bash" };
-  assert.equal(detailText({ ...err, call_at: "2026-08-19T10:00:00Z", call_message: "done" }), "done");
-  assert.equal(detailText(err), "529 Overloaded");
-  assert.equal(detailText({ status: "error", api_error_status: 503, detail: "Bash" }), "503");
-  assert.equal(detailText({ status: "error", detail: "Bash" }), "Bash");
-  assert.equal(detailText({ status: "working", api_error_status: 529, detail: "Bash" }), "Bash");
-});
-
 // The watcher verdict is duplicated on purpose — it is a function of *now*, so it
 // decays between fetches and must be derived where it is displayed (ADR-0011's
 // third category, #617). Duplicated, not unchecked: this reads the same case list
 // internal/tui/watcher_shared_test.go reads, and the two must agree case for
 // case, including the exact alarm text (#623).
 test("readWatcher agrees with the shared fixture the Go side reads", async () => {
-  const raw = await readFile(new URL("../fixtures/watcher-cases.json", import.meta.url), "utf8");
-  const { verdict } = JSON.parse(raw);
+  const { verdict } = await fixture("watcher-cases.json");
   assert.ok(verdict.length > 0, "the fixture has no verdict cases");
   for (const c of verdict) {
     assert.equal(readWatcher(c.seen, Date.parse(c.now)), c.want, `seen=${c.seen} — ${c.why}`);
@@ -549,8 +499,7 @@ test("readWatcher agrees with the shared fixture the Go side reads", async () =>
 });
 
 test("the fleet alarm agrees with the shared fixture, text included", async () => {
-  const raw = await readFile(new URL("../fixtures/watcher-cases.json", import.meta.url), "utf8");
-  const { fleet } = JSON.parse(raw);
+  const { fleet } = await fixture("watcher-cases.json");
   assert.ok(fleet.length > 0, "the fixture has no fleet cases");
   for (const c of fleet) {
     const r = fleetAlarm(c.machines, Date.parse(c.now));
@@ -571,4 +520,67 @@ test("a machine card names which failure it is showing", () => {
     { cls: "w-bad", text: "none" });
   assert.deepEqual(watcherCell(readWatcher("not-a-time", Date.parse("2026-08-26T12:00:02Z"))),
     { cls: "w-bad", text: "time?" });
+});
+
+// ── The shared case lists of ADR-0011's fourth family (#619) ─────────────────
+//
+// Grouping, idle hiding and the two figures each client formats are duplicated on
+// purpose: they are functions of what the operator typed or chose, and an age is a
+// function of *now*. Duplicated, not unchecked — the Go suite reads these same
+// files and both must answer every case identically.
+
+test("token formatting agrees with the shared fixture", async () => {
+  const { tokens } = await fixture("format-cases.json");
+  assert.ok(tokens.length > 0, "the shared fixture has no token cases");
+  for (const c of tokens) assert.equal(humanTokens(c.n), c.want, `${c.n} — ${c.why}`);
+});
+
+test("relative ages agree with the shared fixture", async () => {
+  const { age } = await fixture("format-cases.json");
+  assert.ok(age.length > 0, "the shared fixture has no age cases");
+  const realNow = Date.now;
+  try {
+    for (const c of age) {
+      Date.now = () => Date.parse(c.now);
+      assert.equal(relAge(c.seen), c.want, `${c.seen || "(empty)"} — ${c.why}`);
+    }
+  } finally {
+    Date.now = realNow;
+  }
+});
+
+test("the group modes agree with the shared fixture", async () => {
+  const { modes } = await fixture("group-cases.json");
+  assert.deepEqual(GROUP_MODES, modes,
+    "a mode renamed on one client and not the other resets an operator's saved grouping");
+});
+
+test("group keys agree with the shared fixture", async () => {
+  const { keys } = await fixture("group-cases.json");
+  assert.ok(keys.length > 0, "the shared fixture has no key cases");
+  for (const c of keys) {
+    assert.equal(groupKeyOf({ machine: c.machine, project: c.project }, c.mode), c.want, c.why);
+  }
+});
+
+test("the idle presets agree with the shared fixture", async () => {
+  const { presets_seconds } = await fixture("idle-cases.json");
+  assert.deepEqual(IDLE_PRESETS_MS, presets_seconds.map((s) => s * 1000),
+    "a step offered on one client and not the other leaves a stored threshold the other cannot represent");
+});
+
+test("idle hiding agrees with the shared fixture", async () => {
+  const { cases } = await fixture("idle-cases.json");
+  assert.ok(cases.length > 0, "the shared fixture has no idle cases");
+  for (const c of cases) {
+    const s = { last_seen_at: c.seen, status: c.status || "idle" };
+    const got = hiddenByIdle(s, c.after_seconds * 1000, Date.parse(c.now));
+    assert.equal(got, c.hidden, `${c.seen || "(empty)"} after ${c.after_seconds}s — ${c.why}`);
+  }
+});
+
+test("the dashboard's status vocabulary agrees with the shared fixture", async () => {
+  const { order } = await fixture("status-vocabulary.json");
+  assert.deepEqual(STATUSES, order,
+    "a status the dashboard does not know is styled as `idle` — displayed as something it is not");
 });

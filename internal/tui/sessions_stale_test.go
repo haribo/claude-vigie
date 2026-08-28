@@ -27,8 +27,8 @@ func twoSessions(t *testing.T) model {
 	m.width = 140
 	m.fetch = func() ([]api.SessionView, error) {
 		return []api.SessionView{
-			{ID: "s1", Title: "api-gateway", Status: "working"},
-			{ID: "s2", Title: "web-app", Status: "waiting"},
+			{ID: "s1", Title: "api-gateway", Name: "api-gateway", Status: "working"},
+			{ID: "s2", Title: "web-app", Name: "web-app", Status: "waiting"},
 		}, nil
 	}
 	return m.applySessions(m.fetchCmd(1)().(sessionsMsg))
@@ -92,7 +92,7 @@ func TestTheNoticeGoesWhenThePollRecovers(t *testing.T) {
 	}
 
 	m.fetch = func() ([]api.SessionView, error) {
-		return []api.SessionView{{ID: "s1", Title: "api-gateway", Status: "idle"}}, nil
+		return []api.SessionView{{ID: "s1", Title: "api-gateway", Name: "api-gateway", Status: "idle"}}, nil
 	}
 	m = m.applySessions(m.fetchCmd(3)().(sessionsMsg))
 

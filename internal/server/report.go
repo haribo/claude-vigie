@@ -370,8 +370,15 @@ func holdsWaiting(sess store.Session, req api.ReportRequest) bool {
 	return !timeAfter(req.Timestamp, sess.StatusChangedAt)
 }
 
-// timeAfter reports whether RFC3339 time a is strictly after b (false on any
-// parse error, so a missing timestamp never holds anything).
+// timeAfter reports whether RFC3339 time a is strictly after b, and false when
+// either will not parse.
+//
+// Read that at the one place it is called: holdsWaiting *negates* it, so an
+// absent or unreadable timestamp holds the waiting rather than releasing it.
+// That is the right way round — with no timestamp there is no evidence the
+// transcript moved, and this rule exists to demand that evidence — but the
+// comment here used to claim the opposite, which is the kind of sentence someone
+// corrects the code to match (#636).
 func timeAfter(a, b string) bool {
 	ta, err1 := time.Parse(time.RFC3339, a)
 	tb, err2 := time.Parse(time.RFC3339, b)
@@ -434,8 +441,36 @@ func rejectReport(req api.ReportRequest) (reason, message string) {
 	// only a malformed report is refused here.
 	case req.Event == "watch" && req.Status == "":
 		return "watch_without_status", "a watch report must carry a status"
+	// The report carries one timestamp and the server copies it into five fields of
+	// the session view, three of which the TUI's detail panel prints as they came.
+	// An OSC sequence there set the title of the operator's terminal window — #540
+	// again, in the fields that do not look like text (#629).
+	//
+	// Refusing it here rather than cleaning it at each screen also keeps a value
+	// that is not an instant out of three places that key on it and do not check
+	// it, none of which merely ignore it:
+	//
+	//   - the events table stores it verbatim — plain INSERT, no constraint;
+	//   - `token_samples` is keyed on it and pruned by `ORDER BY at DESC LIMIT`,
+	//     so a string that sorts high evicts real samples;
+	//   - `dayOf` falls back to *now* rather than failing, so the tokens land on
+	//     today in `stats_daily`, which is never recomputed (#432).
+	//
+	// Empty stays accepted, on the model of the status check above: absent is not
+	// malformed, it renders as a dash, and it cannot act on a terminal.
+	case req.Timestamp != "" && !isRFC3339(req.Timestamp):
+		return "invalid_timestamp", "timestamp must be an RFC3339 instant"
 	}
 	return "", ""
+}
+
+// isRFC3339 reports whether s is an instant vigie can reason about. Strict on
+// purpose: a bare date or a time with no zone parses in JavaScript and not in Go,
+// so accepting one would put a value on screen that the two clients read
+// differently (ADR-0011's whole subject).
+func isRFC3339(s string) bool {
+	_, err := time.Parse(time.RFC3339, s)
+	return err == nil
 }
 
 // knownEvents are the events vigie emits: the Claude Code hooks it installs
