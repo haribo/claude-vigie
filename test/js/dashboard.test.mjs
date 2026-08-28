@@ -322,8 +322,8 @@ test("fuzzyMatch agrees with the shared fixture the Go side reads", async () => 
 // the end of one field into the start of the next. The Go side asserts the same
 // example in TestSessionHaystackShape.
 test("the haystack has the same shape as the TUI's", () => {
-  const s = { title: "api-gateway", name: "api-gateway", machine: "minet-dev", project: "gateway", git_branch: "main", status: "working" };
-  assert.equal(sessionHaystack(s), "api-gateway minet-dev gateway main working");
+  const s = { title: "api-gateway", name: "api-gateway", machine: "orion-dev", project: "gateway", git_branch: "main", status: "working" };
+  assert.equal(sessionHaystack(s), "api-gateway orion-dev gateway main working");
 });
 
 test("rc is a token as a whole pattern, and ordinary text otherwise", () => {
@@ -361,9 +361,9 @@ test("off returns the list untouched, in one group with no key", () => {
 // The last-path-segment rule is the daemon's (#618) and is proved there; what
 // this asserts is that two roots reduced to the same `project` meet in one group.
 test("the project key is what the daemon derived, so two roots meet in one group", () => {
-  assert.equal(groupKeyOf({ project_dir: "/home/nico/dev/api-gateway", project: "api-gateway" }, "project"), "api-gateway");
+  assert.equal(groupKeyOf({ project_dir: "/home/ada/dev/api-gateway", project: "api-gateway" }, "project"), "api-gateway");
   assert.equal(groupKeyOf({ project_dir: "/srv/build/api-gateway", project: "api-gateway" }, "project"), "api-gateway");
-  assert.equal(groupKeyOf({ machine: "minet-dev" }, "machine"), "minet-dev");
+  assert.equal(groupKeyOf({ machine: "orion-dev" }, "machine"), "orion-dev");
 });
 
 test("grouping keeps the operator's sort inside each group", () => {
