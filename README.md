@@ -72,7 +72,7 @@ full design.
 
 ```
 vigied serve     # server: HTTP + SSE API, SQLite — runs on the host
-vigied token     # server: print/generate the shared auth token
+vigied token     # server: print the shared auth token
 vigied stats-repair  # server: correct one day's output-token figure
 vigie  init      # client: write the config (the watcher installs the hooks)
 vigie  hooks     # client: add/remove reporting hooks (one leg per VIGIE_CONFIG)
