@@ -26,6 +26,9 @@ file is the single source of truth, not a second narrative.
   branch — done on every event, so once per tool call — was unbounded, and a
   held `index.lock` or a stalled mount spent the hook's whole budget on it,
   losing the status change and the heartbeat with it (#658).
+- The `interrupted` marker now actually appears. A turn killed with Ctrl-C has
+  been announced since 0.4.0, but the server blanked the marker on arrival, so an
+  interrupted session had always looked exactly like one that finished (#659).
 
 ## [0.8.0] - 2026-08-30
 

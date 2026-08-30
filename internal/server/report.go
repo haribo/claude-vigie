@@ -297,6 +297,23 @@ func reportDetail(req api.ReportRequest) string {
 	return req.Activity
 }
 
+// idleDetails are the DETAIL values a *resting* session legitimately carries.
+//
+// The #236 rule blanks the activity on idle, because a turn's "doing" message
+// means nothing once the turn is over. These two describe the rest itself rather
+// than a turn, so the rule does not apply to them:
+//
+//   - `shell` — the operator dropped to a shell inside Claude. The session is
+//     idle but not free (#280);
+//   - `interrupted` — the last turn was killed rather than finished, which is
+//     the whole distinction the marker exists to draw. The watcher had been
+//     sending it since #351 and this blanked it on arrival, so it never reached
+//     a screen while a design document and a changelog entry described it (#659).
+//
+// Both clear the same way, with no timer: the next report that does not carry
+// one leaves the session with an empty DETAIL.
+var idleDetails = map[string]bool{"shell": true, "interrupted": true}
+
 // applyStatus folds the report's status into the session: the reconciled status
 // and its owner, when it last changed, and the transient activity message.
 func applyStatus(sess store.Session, req api.ReportRequest) store.Session {
@@ -327,10 +344,10 @@ func applyStatus(sess store.Session, req api.ReportRequest) store.Session {
 	// "doing".
 	detail := reportDetail(req)
 	switch {
-	case sess.Status == "idle" && detail == "shell":
-		sess.Detail = "shell" // a shell session is idle but not free: keep it in DETAIL (#280)
+	case sess.Status == "idle" && idleDetails[detail]:
+		sess.Detail = detail
 	case sess.Status == "idle" || sess.Status == "ended":
-		sess.Detail = "" // clears once the shell ends (the report no longer carries "shell")
+		sess.Detail = "" // clears once the report stops carrying it
 	case detail != "":
 		sess.Detail = detail
 	case sess.Status != prev:
