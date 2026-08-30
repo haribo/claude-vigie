@@ -15,6 +15,14 @@ file is the single source of truth, not a second narrative.
   Reasoning and compacting turn green like working, and `stale` takes `ended`'s
   grey in the browser with a hollow dot to tell them apart (#654).
 
+### Fixed
+
+- The session-retention setting now survives and governs. `off (keep all)` was
+  read as "never set" and overwritten with 24 h at every daemon restart, deleting
+  the sessions it was meant to keep; and a daemon started with
+  `--session-retention=0` stored a window chosen in Settings without ever
+  applying it (#656).
+
 ## [0.8.0] - 2026-08-30
 
 ### Changed

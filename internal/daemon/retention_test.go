@@ -115,3 +115,51 @@ func TestPruneLoopSeedsTheRetentionSetting(t *testing.T) {
 func testLogger() *slog.Logger {
 	return slog.New(slog.NewTextHandler(io.Discard, nil))
 }
+
+// TestSeedRetentionLeavesKeepAllAlone is the #656 regression. Settings offers
+// `off (keep all)`, which stores an empty retention — the operator saying keep
+// every session. The seed used to treat "stored, but empty" the same as "never
+// stored" and write the default over it on the next daemon start, so a deploy or
+// a `Restart=on-failure` silently deleted every session quiet for 24 h.
+//
+// `GetMeta` already separates the two (absent → ok=false, empty → ok=true), and
+// `decideRetention` honors the distinction; only the seed erased it.
+func TestSeedRetentionLeavesKeepAllAlone(t *testing.T) {
+	st, err := store.Open(filepath.Join(t.TempDir(), "r.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = st.Close() })
+	ctx := context.Background()
+
+	// What the TUI writes for `off (keep all)` and the API stores verbatim.
+	if err := st.SetMeta(ctx, server.RetentionMetaKey, ""); err != nil {
+		t.Fatal(err)
+	}
+
+	seedRetention(ctx, st, 24*time.Hour)
+
+	v, ok, err := st.GetMeta(ctx, server.RetentionMetaKey)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !ok || v != "" {
+		t.Errorf("keep-all became %q (present=%v) after a restart; the operator's sessions would be pruned", v, ok)
+	}
+}
+
+// The first-run seed still happens: an absent key is not a choice.
+func TestSeedRetentionWritesTheDefaultOnFirstRun(t *testing.T) {
+	st, err := store.Open(filepath.Join(t.TempDir(), "r.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = st.Close() })
+	ctx := context.Background()
+
+	seedRetention(ctx, st, 36*time.Hour)
+
+	if v, ok, _ := st.GetMeta(ctx, server.RetentionMetaKey); !ok || v != "36h0m0s" {
+		t.Errorf("seeded %q (present=%v), want the default retention", v, ok)
+	}
+}
