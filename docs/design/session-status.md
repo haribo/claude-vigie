@@ -32,6 +32,60 @@ human right now.
 
 ---
 
+## 1bis. What a status colour says
+
+Every status is drawn as a coloured pill in both clients. **A status colour states
+how much attention the session requires, and nothing else.**
+
+The nine colours were picked one at a time, as each status was added, and the rule
+above was never written — so three of them spent three vivid, unrelated hues on
+three ways of saying *running, leave it alone*. In front of twenty sessions the
+operator could not answer the one question they opened vigie for by looking; they
+had to read every label. Colour did no sorting (#654).
+
+Four families, four colours:
+
+| Family | Statuses | Light | Dark |
+| --- | --- | --- | --- |
+| **Running** — nothing to do | `working`, `thinking`, `compacting` | `#16a34a` | `#4ade80` |
+| **Calling** — it needs a human | `waiting` | `#b45309` | `#fbbf24` |
+| | `stalled` | `#ea580c` | `#fb923c` |
+| | `error` | `#dc2626` | `#f87171` |
+| **At rest** — between turns | `idle` | `#2563eb` | `#60a5fa` |
+| **Over** — nothing more will happen | `stale`, `ended` | `#94a3b8` | `#64748b` |
+
+The calling family keeps three colours because they are three different asks:
+answer a prompt, unstick a tool, look at an outage. The other families ask for
+nothing, so they need no distinction between their members.
+
+**`stale` and `ended` share the grey deliberately.** Under the rule they are one
+family. Telling them apart is a *second* reading and is carried by shape — `◌`
+against `●` — which is what § 1 already asked for. A second grey separates
+nothing at a glance and costs the rule its meaning.
+
+**The pulse belongs to the calling family and stays there.** It runs on the state
+pill for a degraded chain ([sessions-chrome.md](sessions-chrome.md) § 6); on a
+status it would mean *this one is asking*. Extending it to a running status would
+make the calm side of the board shout.
+
+### The label is the redundancy, colour is the accelerator
+
+The green-versus-warm axis carries the whole rule, and that is the most common
+colour deficiency there is. The status pill nevertheless carries no shape of its
+own, and that is deliberate: **the status is written out beside the dot**, in the
+terminal and in the browser alike. Nothing here is knowable by colour only.
+
+An operator who cannot separate the hues reads the words — which is what everyone
+did before this rule existed. They lose the acceleration, not the answer. Giving
+nine statuses nine shapes would slow the column down for everyone in order to
+speed it up for some.
+
+This is the opposite call from the state pill, which encodes its level in shape as
+well as colour ([sessions-chrome.md](sessions-chrome.md) § 3) — because that pill
+has no label beside it. The difference is the label, not the audience.
+
+---
+
 ## 2. Two sources decide status
 
 A session's status is fed by two independent observers. Neither is authoritative

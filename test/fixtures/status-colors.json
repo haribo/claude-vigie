@@ -1,0 +1,78 @@
+{
+  "_comment": [
+    "One colour per attention family (docs/design/session-status.md § 1bis, #654).",
+    "A status colour states how much attention the session requires and nothing else,",
+    "so `working`, `thinking` and `compacting` share one green and `stale` shares",
+    "`ended`'s grey — what separates those two is the hollow dot, not a second grey.",
+    "The two clients had already drifted before the rule was written: `thinking` was",
+    "#9333ea in the terminal and #7e22ce in the browser on a light theme, and the",
+    "browser had invented a zinc for `stale` close enough to `ended` to separate",
+    "nothing.",
+    "Read by internal/tui/status_color_test.go, which checks both sides: the Go",
+    "palette by calling it, and the stylesheet by reading its custom properties. The",
+    "node suite cannot evaluate a CSS variable without a DOM, so one reader covers",
+    "both rather than none."
+  ],
+  "families": {
+    "running": "nothing to do — a turn is in progress",
+    "calling": "it needs a human",
+    "at rest": "between turns",
+    "over": "nothing more will happen"
+  },
+  "statuses": [
+    {
+      "status": "working",
+      "family": "running",
+      "light": "#16a34a",
+      "dark": "#4ade80"
+    },
+    {
+      "status": "thinking",
+      "family": "running",
+      "light": "#16a34a",
+      "dark": "#4ade80"
+    },
+    {
+      "status": "compacting",
+      "family": "running",
+      "light": "#16a34a",
+      "dark": "#4ade80"
+    },
+    {
+      "status": "waiting",
+      "family": "calling",
+      "light": "#b45309",
+      "dark": "#fbbf24"
+    },
+    {
+      "status": "stalled",
+      "family": "calling",
+      "light": "#ea580c",
+      "dark": "#fb923c"
+    },
+    {
+      "status": "error",
+      "family": "calling",
+      "light": "#dc2626",
+      "dark": "#f87171"
+    },
+    {
+      "status": "idle",
+      "family": "at rest",
+      "light": "#2563eb",
+      "dark": "#60a5fa"
+    },
+    {
+      "status": "stale",
+      "family": "over",
+      "light": "#94a3b8",
+      "dark": "#64748b"
+    },
+    {
+      "status": "ended",
+      "family": "over",
+      "light": "#94a3b8",
+      "dark": "#64748b"
+    }
+  ]
+}
