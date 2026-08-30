@@ -25,6 +25,18 @@ func (s *Server) handleUsageLease(w http.ResponseWriter, r *http.Request) {
 		s.writeError(w, http.StatusBadRequest, "holder is required")
 		return
 	}
+	if req.Release {
+		// The holder fetched nothing and is handing the lease back, so the next
+		// machine can try. Without this one machine with no local credentials keeps
+		// renewing and the gauges stay empty for the whole fleet (#646).
+		if err := s.store.ReleaseLease(r.Context(), req.Holder); err != nil {
+			s.log.Error("releasing lease", "error", err)
+			s.writeError(w, http.StatusInternalServerError, "internal error")
+			return
+		}
+		s.writeJSON(w, http.StatusOK, api.LeaseResponse{})
+		return
+	}
 	acquired, expiry, err := s.store.AcquireLease(r.Context(), req.Holder, usageLeaseTTL, s.now())
 	if err != nil {
 		s.log.Error("acquiring lease", "error", err)

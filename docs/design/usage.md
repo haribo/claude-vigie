@@ -38,6 +38,15 @@ machine fetches it, and the rest read the shared result:
 - **Backoff.** The usage endpoint is aggressively rate-limited, so the fetcher
   backs off exponentially on failure (a circuit breaker) rather than retrying
   tightly.
+- **A holder that cannot fetch gives the lease back.** The lease is a right to
+  fetch, not a right to hold: a machine that takes it and then fails — most
+  plainly because it has no local credentials — hands it back so the next machine
+  can try. Without that, one machine with nothing to read empties the gauges for
+  the whole fleet, permanently, and an empty gauge reads exactly like one nobody
+  has filled yet.
+
+  A holder that *crashes* needs no rule: it stops renewing and the lease lapses.
+  What needs one is the holder that keeps asking and never delivers.
 
 The server keeps only the last posted percentages and reset times; every
 dashboard shows that same shared snapshot.

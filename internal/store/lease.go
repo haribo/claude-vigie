@@ -76,3 +76,14 @@ func (s *Store) LeaseHolder(ctx context.Context, now time.Time) (string, bool, e
 	}
 	return holder, true, nil
 }
+
+// ReleaseLease drops the lease if holder still holds it, and does nothing
+// otherwise — a machine that lost the lease while it was failing must not take it
+// from whoever has it now (#646).
+func (s *Store) ReleaseLease(ctx context.Context, holder string) error {
+	if _, err := s.db.ExecContext(ctx,
+		`DELETE FROM usage_lease WHERE id = 1 AND holder = ?`, holder); err != nil {
+		return fmt.Errorf("releasing lease: %w", err)
+	}
+	return nil
+}

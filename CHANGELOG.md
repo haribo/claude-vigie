@@ -11,6 +11,11 @@ file is the single source of truth, not a second narrative.
 
 ### Fixed
 
+- A machine that cannot read the account's usage no longer keeps the whole
+  fleet's gauges empty. It took the fetch turn, failed — most plainly for want of
+  local credentials — and kept renewing it, so no other machine ever fetched
+  (#646).
+
 - The browser and the terminal open the sessions table the same way. The browser
   put the session seen longest ago at the top, and the smallest token counts
   first, while the header arrow claimed the opposite (#645).
