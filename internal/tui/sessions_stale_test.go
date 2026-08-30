@@ -4,6 +4,7 @@ import (
 	"errors"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/haribo/claude-vigie/internal/api"
 )
@@ -50,18 +51,23 @@ func TestTheTableSurvivesAFailedPoll(t *testing.T) {
 }
 
 // The operator must still be told, and told *why* — a network blip and a rejected
-// token both blank a screen, but they call for different actions.
+// token both blank a screen, but they call for different actions. Since #650 that
+// happens in the state modal rather than in a banner over the table: the banner
+// said the same thing less precisely and stayed up for as long as the outage.
 func TestTheFailureIsStillAnnouncedWithItsReason(t *testing.T) {
 	m := twoSessions(t)
 	m.fetch = func() ([]api.SessionView, error) { return nil, errBlip }
 	m = m.applySessions(m.fetchCmd(2)().(sessionsMsg))
 
-	out := m.viewSessions()
-	if !strings.Contains(out, "could not refresh") {
-		t.Errorf("nothing says the figures are not current:\n%s", out)
+	if m.serverRow().level != levelBroken {
+		t.Errorf("a failed poll left the server row at %v — nothing says the figures are old", m.serverRow())
 	}
-	if !strings.Contains(out, "context deadline exceeded") {
-		t.Errorf("the reason is not shown:\n%s", out)
+	modal := renderState(m.stateRows(), 140)
+	if !strings.Contains(modal, "context deadline exceeded") {
+		t.Errorf("the modal does not name the reason:\n%s", modal)
+	}
+	if out := m.viewSessions(); !strings.Contains(out, "api-gateway") {
+		t.Errorf("the fleet went missing with the banner:\n%s", out)
 	}
 }
 
@@ -87,7 +93,7 @@ func TestTheNoticeGoesWhenThePollRecovers(t *testing.T) {
 	m := twoSessions(t)
 	m.fetch = func() ([]api.SessionView, error) { return nil, errBlip }
 	m = m.applySessions(m.fetchCmd(2)().(sessionsMsg))
-	if !strings.Contains(m.viewSessions(), "could not refresh") {
+	if m.serverRow().level != levelBroken {
 		t.Fatal("the failure was not announced")
 	}
 
@@ -96,19 +102,68 @@ func TestTheNoticeGoesWhenThePollRecovers(t *testing.T) {
 	}
 	m = m.applySessions(m.fetchCmd(3)().(sessionsMsg))
 
-	out := m.viewSessions()
-	if strings.Contains(out, "could not refresh") {
-		t.Errorf("the notice survived a successful poll:\n%s", out)
+	if m.serverRow().level == levelBroken {
+		t.Errorf("the alarm survived a successful poll: %v", m.serverRow())
 	}
-	if !strings.Contains(out, "api-gateway") {
+	if out := m.viewSessions(); !strings.Contains(out, "api-gateway") {
 		t.Errorf("the recovered table is missing:\n%s", out)
 	}
 }
 
-// A healthy model shows no notice at all — the check that keeps this from
-// becoming decoration nobody reads.
+// A healthy model flags nothing — the check that keeps the pill from becoming
+// decoration nobody reads.
 func TestAHealthyTableCarriesNoNotice(t *testing.T) {
-	if out := twoSessions(t).viewSessions(); strings.Contains(out, "could not refresh") {
-		t.Errorf("a healthy table is flagged:\n%s", out)
+	m := twoSessions(t)
+	if m.serverRow().level == levelBroken {
+		t.Errorf("a healthy fleet is flagged: %v", m.serverRow())
+	}
+}
+
+// The two banners this tab used to carry are gone for good (#650): the pill takes
+// the worst level on every tab and the modal names the fault, and for the watcher
+// it names the machine, which the banner never did.
+//
+// Each is asserted in the state that *used to draw it* — a healthy model would
+// pass however the code behaved, since both lines were conditional — and over
+// `View()`, because the watcher banner was drawn there and not in `viewSessions`.
+//
+// The two faults are exercised apart on purpose. With the link down the modal
+// answers `unknown` for the watcher rather than naming a machine, because a TUI
+// that cannot reach the server cannot know which watchers are reporting (§ 4 of
+// docs/design/sessions-chrome.md). The banner asserted "no watcher reporting" in
+// that state anyway, which was not a fact it had.
+func TestTheSessionsTabDrawsNoWarningLineWhenARefreshFails(t *testing.T) {
+	m := twoSessions(t)
+	m.height = 40
+	m.fetch = func() ([]api.SessionView, error) { return nil, errBlip }
+	m = m.applySessions(m.fetchCmd(2)().(sessionsMsg))
+	if !m.refreshFailed[srcSessions] || m.err == nil {
+		t.Fatal("the fixture is not in the failed-refresh state — the check would prove nothing")
+	}
+
+	if out := m.View(); strings.Contains(out, "could not refresh") {
+		t.Errorf("the refresh banner is back on the sessions tab:\n%s", out)
+	}
+	if modal := renderState(m.stateRows(), 140); !strings.Contains(modal, "context deadline exceeded") {
+		t.Errorf("the modal lost the refresh failure:\n%s", modal)
+	}
+}
+
+func TestTheSessionsTabDrawsNoWarningLineWhenAWatcherStops(t *testing.T) {
+	m := twoSessions(t)
+	m.height = 40
+	m.gotWatcher = true
+	m.watcherMachines = map[string]string{"orion": "2020-01-01T00:00:00Z", "beta": m.now().Format(time.RFC3339)}
+	if alarm, _, _, _ := fleetAlarm(m.watcherMachines, m.now()); !alarm {
+		t.Fatal("the fixture's watcher is not stale — the check would prove nothing")
+	}
+
+	if out := m.View(); strings.Contains(out, "no watcher reporting") {
+		t.Errorf("the watcher banner is back on the sessions tab:\n%s", out)
+	}
+	// And says more than the banner did: which machine, and how many of how many.
+	modal := renderState(m.stateRows(), 140)
+	if !strings.Contains(modal, "orion") {
+		t.Errorf("the modal does not name the silent machine:\n%s", modal)
 	}
 }

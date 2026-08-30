@@ -45,9 +45,13 @@ func TestWatcherStale(t *testing.T) {
 		{"unparseable is stale", "not-a-time", true},
 	}
 	for _, c := range cases {
-		m := model{watcherMachines: map[string]string{"orion": c.seen}}
-		if got := m.watcherStale(); got != c.want {
-			t.Errorf("%s: watcherStale = %v, want %v", c.name, got, c.want)
+		m := model{gotWatcher: true, watcherMachines: map[string]string{"orion": c.seen}}
+		// Through watcherRow, which is what actually renders: watcherStale() was a
+		// second entry point to the same verdict and was left with no caller when the
+		// banner went (#650), so a guard on it would have stopped covering anything.
+		got := m.watcherRow().level == levelBroken
+		if got != c.want {
+			t.Errorf("%s: the watcher row reads broken = %v, want %v", c.name, got, c.want)
 		}
 	}
 }

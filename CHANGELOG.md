@@ -9,6 +9,31 @@ file is the single source of truth, not a second narrative.
 
 ## [Unreleased]
 
+## [0.8.0] - 2026-08-30
+
+### Changed
+
+- The Sessions tab no longer carries its own warning lines. A watcher that stopped
+  and a failed refresh are both named by the state pill and the modal behind `i`,
+  which says which machine — the banner said `no watcher reporting` however many
+  were, and stayed up for as long as the machine was off (#650).
+
+### Fixed
+
+- A machine that cannot read the account's usage no longer keeps the whole
+  fleet's gauges empty. It took the fetch turn, failed — most plainly for want of
+  local credentials — and kept renewing it, so no other machine ever fetched
+  (#646).
+
+- The browser and the terminal open the sessions table the same way. The browser
+  put the session seen longest ago at the top, and the smallest token counts
+  first, while the header arrow claimed the opposite (#645).
+
+- Refreshing the vigie hooks no longer edits your own. It rewrote
+  `settings.json` from a three-field idea of what a hook is, so a conditional
+  hook came back unconditional and a prompt hook lost its model — and one of
+  yours grouped with one of ours was deleted outright (#644).
+
 ## [0.7.2] - 2026-08-28
 
 ### Changed
@@ -503,7 +528,8 @@ across machines — it reads and reports session state; it never drives a sessio
 - The API binds `127.0.0.1` by default; every `/api/*` route is behind a
   constant-time shared-token check; request bodies are size-capped.
 
-[Unreleased]: https://github.com/haribo/claude-vigie/compare/v0.7.2...HEAD
+[Unreleased]: https://github.com/haribo/claude-vigie/compare/v0.8.0...HEAD
+[0.8.0]: https://github.com/haribo/claude-vigie/compare/v0.7.2...v0.8.0
 [0.7.2]: https://github.com/haribo/claude-vigie/compare/v0.7.1...v0.7.2
 [0.7.1]: https://github.com/haribo/claude-vigie/compare/v0.7.0...v0.7.1
 [0.7.0]: https://github.com/haribo/claude-vigie/compare/v0.6.0...v0.7.0

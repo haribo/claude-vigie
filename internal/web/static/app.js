@@ -11,7 +11,7 @@ import {
   adoptLegacyKey, needsAttention, attentionCount, streamIsSilent, REFRESH_MS,
   readWatcher, fleetAlarm, fleetAlarmDetail, watcherCell,
   matchesFilter, GROUP_MODES, groupSessions, contextKnown, contextPct, contextCell, migrateV1Columns,
-  IDLE_PRESETS_MS, idleLabel, hiddenByIdle, STATUSES,
+  IDLE_PRESETS_MS, idleLabel, hiddenByIdle, STATUSES, SORT_COMPARATORS, DEFAULT_SORT,
 } from "./lib.js";
 
 // Both keys were named for the old brand. They hold live state — a signed-in
@@ -41,7 +41,7 @@ const GROUP_KEY = "vigie_group";
 const IDLE_KEY = "vigie_idle_hide";
 let idleHideAfter = IDLE_PRESETS_MS.includes(Number(localStorage.getItem(IDLE_KEY))) ? Number(localStorage.getItem(IDLE_KEY)) : 0;
 let groupBy = GROUP_MODES.includes(localStorage.getItem(GROUP_KEY) || "") ? localStorage.getItem(GROUP_KEY) : "off";
-let sortKey = "seen", sortDir = 1;           // 1 = descending
+let sortKey = DEFAULT_SORT.key, sortDir = DEFAULT_SORT.dir;   // 1 = the comparator's own order
 let statsPeriod = "Week", statsLoaded = false, settingsLoaded = false;
 let liveCtrl = null, liveRetry = null, tickTimer = null, metaTimer = null;
 // When the stream last delivered any bytes, keep-alive comments included. It is
@@ -131,39 +131,39 @@ const COLS = [
   // s.name, not `title || id`: the daemon names the session (#618), and an untitled one by the first
   // eight characters of its id in the TUI, and the filter searches that name — a
   // column showing 36 characters of a key the filter cannot reach is a trap (#545).
-  { key: "name", label: "Session", cmp: (a, b) => (a.name || "").localeCompare(b.name || ""),
+  { key: "name", label: "Session", cmp: SORT_COMPARATORS.name,
     cell: (s) => { const n = esc(s.name || ""); return `<td class="name" title="${esc(s.title || s.id)}"><span class="nm">${n}</span></td>`; } },
-  { key: "user", label: "User", cmp: (a, b) => (a.user || "").localeCompare(b.user || ""),
+  { key: "user", label: "User", cmp: SORT_COMPARATORS.user,
     cell: (s) => `<td class="${s.user ? "dim" : "faint"}">${esc(dash(s.user))}</td>` },
-  { key: "machine", label: "Machine", cmp: (a, b) => a.machine.localeCompare(b.machine),
+  { key: "machine", label: "Machine", cmp: SORT_COMPARATORS.machine,
     cell: (s) => `<td class="dim">${esc(s.machine)}</td>` },
-  { key: "dir", label: "Dir", cmp: (a, b) => (a.project || "").localeCompare(b.project || ""),
+  { key: "dir", label: "Dir", cmp: SORT_COMPARATORS.dir,
     cell: (s) => { const p = esc(s.project || ""); return `<td class="proj" title="${esc(s.project_dir || "")}">${p}</td>`; } },
-  { key: "branch", label: "Branch", cmp: (a, b) => (a.git_branch || "").localeCompare(b.git_branch || ""),
+  { key: "branch", label: "Branch", cmp: SORT_COMPARATORS.branch,
     cell: (s) => { const b = esc(dash(s.git_branch)); return `<td class="branch dim" title="${b}">${b}</td>`; } },
-  { key: "model", label: "Model", cmp: (a, b) => (a.model || "").localeCompare(b.model || ""),
+  { key: "model", label: "Model", cmp: SORT_COMPARATORS.model,
     cell: (s) => `<td class="${s.model ? "dim" : "faint"}">${esc(dash(s.model_short))}</td>` },
-  { key: "effort", label: "Effort", cmp: (a, b) => (a.effort || "").localeCompare(b.effort || ""),
+  { key: "effort", label: "Effort", cmp: SORT_COMPARATORS.effort,
     cell: (s) => `<td class="${s.effort ? "dim" : "faint"}">${esc(dash(s.effort))}</td>` },
   // Unknown and known-to-be-zero are different states on screen, and the daemon
   // keeps them apart precisely so this cell can say so (#367).
-  { key: "ctx", label: "Ctx", num: true, cmp: (a, b) => contextPct(a) - contextPct(b),
+  { key: "ctx", label: "Ctx", num: true, cmp: SORT_COMPARATORS.ctx,
     cell: (s) => { const k = contextKnown(s); const p = contextPct(s); const cls = !k ? "faint" : p >= 85 ? "ctx-hot" : p >= 60 ? "ctx-warn" : ""; return `<td class="num ${cls}">${contextCell(s)}</td>`; } },
-  { key: "out", label: "Out", num: true, cmp: (a, b) => ((a.usage || {}).output_tokens || 0) - ((b.usage || {}).output_tokens || 0),
+  { key: "out", label: "Out", num: true, cmp: SORT_COMPARATORS.out,
     cell: (s) => `<td class="num">${humanTokens((s.usage || {}).output_tokens)}</td>` },
-  { key: "total", label: "Total", num: true, cmp: (a, b) => totalTokens(a.usage || {}) - totalTokens(b.usage || {}),
+  { key: "total", label: "Total", num: true, cmp: SORT_COMPARATORS.total,
     cell: (s) => `<td class="num">${humanTokens(totalTokens(s.usage || {}))}</td>` },
-  { key: "seen", label: "Seen", num: true, cmp: (a, b) => ageSec(b.last_seen_at) - ageSec(a.last_seen_at),
+  { key: "seen", label: "Seen", num: true, cmp: SORT_COMPARATORS.seen,
     cell: (s) => `<td class="num dim">${relAge(s.last_seen_at)}</td>` },
   { key: "act", label: "Act", nosort: true,
     cell: (s) => `<td>${sparkSVG(s.samples)}</td>` },
-  { key: "rc", label: "RC", cmp: (a, b) => (a.remote_control === b.remote_control ? 0 : a.remote_control ? -1 : 1),
+  { key: "rc", label: "RC", cmp: SORT_COMPARATORS.rc,
     cell: (s) => `<td>${s.remote_control ? '<span class="rc-on" title="Remote control on">◉</span>' : '<span class="rc-off" title="Remote control off">○</span>'}</td>` },
-  { key: "status", label: "Status", cmp: (a, b) => rank(a) - rank(b),
+  { key: "status", label: "Status", cmp: SORT_COMPARATORS.status,
     cell: (s) => { const st = STATUSES.includes(s.status) ? s.status : "idle"; return `<td><span class="pill st-${st}${hasCall(s) ? " call" : ""}"><span class="dot"></span>${st}</span></td>`; } },
   // An unrecognised mode is surfaced raw, never relabelled "manual": a new mode
   // must not read as the safe default (#304).
-  { key: "mode", label: "Mode", cmp: (a, b) => (a.mode_label || "").localeCompare(b.mode_label || ""),
+  { key: "mode", label: "Mode", cmp: SORT_COMPARATORS.mode,
     cell: (s) => `<td class="${s.permission_mode ? "mode-" + esc(s.mode_label) : "faint"}">${esc(s.mode_label || "")}</td>` },
   { key: "detail", label: "Detail", nosort: true,
     cell: (s) => { const d = detailText(s); const cls = hasCall(s) ? "detail call" : (s.status === "waiting" ? "detail wait" : "detail"); return `<td class="${cls}" title="${d}">${d}</td>`; } },

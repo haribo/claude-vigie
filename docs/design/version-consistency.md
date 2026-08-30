@@ -115,8 +115,8 @@ Instead, on a `409` the watcher enters a **drifted** state:
 on mismatch, reports the drift immediately with its remediation rather than
 waiting for the first scan to be refused. If the server is unreachable or errors,
 **unknown is not drifted**: the watcher starts normally and lets the server
-arbitrate, the same "don't cry wolf" principle the stale-watcher banner already
-applies.
+arbitrate, the same "don't cry wolf" principle the watcher's own freshness
+verdict already applies.
 
 ## 5. Testing
 
