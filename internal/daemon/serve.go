@@ -183,11 +183,30 @@ func decideRetention(stored string, storedOK bool, def time.Duration) retention 
 	return retention{window: window, prune: true}
 }
 
+// seedRetention writes the default retention on first run, so the settings API
+// has something to show rather than an empty row.
+//
+// It fires only on an *absent* key. An empty stored value is not a blank to be
+// filled: it is `off (keep all)`, the choice Settings offers, and treating the
+// two alike meant every daemon restart wrote 24 h over the operator's decision
+// and pruned the sessions it was meant to keep (#656). `GetMeta` separates them
+// — absent is `ok=false`, empty is `ok=true` — and `decideRetention` already
+// reads the distinction correctly; only this write erased it.
+//
+// A non-positive default has nothing to seed: an absent key already means "the
+// default governs", and decideRetention answers `no pruning` for it.
+func seedRetention(ctx context.Context, st *store.Store, def time.Duration) {
+	if def <= 0 {
+		return
+	}
+	if _, ok, _ := st.GetMeta(ctx, server.RetentionMetaKey); !ok {
+		_ = st.SetMeta(ctx, server.RetentionMetaKey, def.String())
+	}
+}
+
 func pruneLoop(st *store.Store, defaultRetention time.Duration, log *slog.Logger) {
 	ctx := context.Background()
-	if v, ok, _ := st.GetMeta(ctx, server.RetentionMetaKey); !ok || v == "" {
-		_ = st.SetMeta(ctx, server.RetentionMetaKey, defaultRetention.String())
-	}
+	seedRetention(ctx, st, defaultRetention)
 	lastWarning := ""
 	prune := func() {
 		v, ok, _ := st.GetMeta(ctx, server.RetentionMetaKey)
