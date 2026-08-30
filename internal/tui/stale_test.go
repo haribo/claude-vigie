@@ -121,7 +121,9 @@ func TestSourcesAreFlaggedIndependently(t *testing.T) {
 // tracking because `m.err` already reached the operator. #456 reversed that —
 // `m.err` was not reporting the failure, it was standing in for the table. The
 // failure now surfaces in both places: `m.err` carries the reason, the tracking
-// draws the note, and the table stays.
+// puts the sessions row of the state modal into fault, and the table stays. The
+// note the Sessions tab used to draw beside them went with #650 — it said the
+// same thing, one keystroke closer and for as long as the outage lasted.
 func TestSessionsFailureKeepsTheTableAndSaysWhy(t *testing.T) {
 	m := stubModel()
 	m.width = 120

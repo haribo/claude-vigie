@@ -189,7 +189,7 @@ from any tab without losing the operator's place, and because half of these are
 not per-machine facts: the link, the sessions refresh, the platform and the
 versions are global.
 
-### What this does not destroy
+### What this destroys, and what it does not
 
 Per-source granularity exists because a panel that fails silently is a lie the
 operator cannot see through (#449, #456). It does not disappear and it does not
@@ -197,11 +197,31 @@ move: the modal is **added** to it, not substituted for it.
 
 An earlier draft had the failure banners (`staleNote`, `staleReason`, the watcher
 warning) removed in favour of the modal, on the grounds that they stopped costing
-a standing row. That premise is wrong — those lines are conditional, so they cost
-nothing while everything is healthy, and they appear exactly when the operator
-needs them, in the panel they are about. Deleting them would trade a warning at
-the point of use for one a keystroke away, and buy nothing. They stay; the modal
-answers a different question, which is *why*, for the whole chain at once.
+a standing row. The premise offered then was that those lines are conditional, so
+they cost nothing while everything is healthy — and **for two of them that premise
+was false** (#650).
+
+*Conditional* is not the same as *brief*. The watcher warning appeared whenever
+one machine anywhere in the fleet stopped beating, said `no watcher reporting`
+without naming it — plainly untrue on a fleet where the others report fine — and
+stayed for as long as that machine was off. A laptop left in a drawer for a week
+put a red line on the Sessions screen for a week. `staleReason` behaved the same
+way for as long as an outage lasted, which is exactly the resumed-laptop case
+#457 exists for.
+
+Both are gone from the Sessions tab. Neither fact is lost: the pill takes the
+worst level and pulses on every tab, and the modal says strictly more — for the
+watcher, `1 of 2 not reporting (orion)` where the banner said nothing at all
+about which machine.
+
+The `staleNote` banners on **Stats**, **Settings** and **Machines** stay, and the
+distinction is not taste. The modal has a row for the server, the sessions and the
+watcher; it has none for those three panels. Removing their notes would not remove
+a duplicate — it would leave stale figures on screen with nothing anywhere saying
+so, which is the defect #449 exists to prevent. Giving those panels their own
+modal rows is a separate question, and until it is answered their notes are the
+only thing standing between an operator and a figure that quietly stopped being
+true.
 
 ---
 

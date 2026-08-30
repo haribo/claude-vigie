@@ -9,6 +9,13 @@ file is the single source of truth, not a second narrative.
 
 ## [Unreleased]
 
+### Changed
+
+- The Sessions tab no longer carries its own warning lines. A watcher that stopped
+  and a failed refresh are both named by the state pill and the modal behind `i`,
+  which says which machine — the banner said `no watcher reporting` however many
+  were, and stayed up for as long as the machine was off (#650).
+
 ### Fixed
 
 - A machine that cannot read the account's usage no longer keeps the whole
