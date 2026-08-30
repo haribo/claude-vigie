@@ -9,6 +9,8 @@ file is the single source of truth, not a second narrative.
 
 ## [Unreleased]
 
+## [0.8.0] - 2026-08-30
+
 ### Changed
 
 - The Sessions tab no longer carries its own warning lines. A watcher that stopped
@@ -526,7 +528,8 @@ across machines — it reads and reports session state; it never drives a sessio
 - The API binds `127.0.0.1` by default; every `/api/*` route is behind a
   constant-time shared-token check; request bodies are size-capped.
 
-[Unreleased]: https://github.com/haribo/claude-vigie/compare/v0.7.2...HEAD
+[Unreleased]: https://github.com/haribo/claude-vigie/compare/v0.8.0...HEAD
+[0.8.0]: https://github.com/haribo/claude-vigie/compare/v0.7.2...v0.8.0
 [0.7.2]: https://github.com/haribo/claude-vigie/compare/v0.7.1...v0.7.2
 [0.7.1]: https://github.com/haribo/claude-vigie/compare/v0.7.0...v0.7.1
 [0.7.0]: https://github.com/haribo/claude-vigie/compare/v0.6.0...v0.7.0
