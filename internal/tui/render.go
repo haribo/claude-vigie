@@ -440,10 +440,11 @@ func statusStyle(status string) lipgloss.Style {
 		return lipgloss.NewStyle().Foreground(cAmber)
 	case "idle":
 		return lipgloss.NewStyle().Foreground(cBlue)
-	case "thinking":
-		return lipgloss.NewStyle().Foreground(cAccent2) // violet — reasoning inside a turn
-	case "compacting":
-		return lipgloss.NewStyle().Foreground(cCyan) // cyan — summarizing its context (#342)
+	case "thinking", "compacting":
+		// One family, one color: reasoning and compacting are both an active turn,
+		// and a color says how much attention a session needs, not what it is busy
+		// with (session-status.md § 1bis, #654).
+		return lipgloss.NewStyle().Foreground(cGreen)
 	case "error":
 		return lipgloss.NewStyle().Foreground(cRed)
 	case "stalled":

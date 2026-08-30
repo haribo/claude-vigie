@@ -2,8 +2,12 @@
   --bg: #f6f8fb; --surface: #ffffff; --surface-2: #f1f5f9; --border: #e2e8f0;
   --border-strong: #cbd5e1; --text: #0f172a; --muted: #64748b; --faint: #94a3b8;
   --accent: #0284c7; --accent-soft: rgba(2, 132, 199, 0.10);
-  --working: #16a34a; --waiting: #b45309; --idle: #2563eb; --thinking: #7e22ce;
-  --error: #dc2626; --ended: #94a3b8; --stalled: #ea580c; --stale: #a1a1aa; --compacting: #0891b2;
+  /* One colour per attention family (docs/design/session-status.md § 1bis, #654):
+     running, calling, at rest, over. `stale` and `ended` share the grey on purpose;
+     what separates them is the hollow dot, not a second grey. */
+  --working: #16a34a; --thinking: #16a34a; --compacting: #16a34a;
+  --waiting: #b45309; --stalled: #ea580c; --error: #dc2626;
+  --idle: #2563eb; --stale: #94a3b8; --ended: #94a3b8;
   --shadow: 0 1px 2px rgba(15, 23, 42, 0.06), 0 8px 24px rgba(15, 23, 42, 0.06);
   --mono: ui-monospace, "SF Mono", "JetBrains Mono", "Cascadia Code", Menlo, Consolas, monospace;
 }
@@ -12,8 +16,9 @@
     --bg: #0a0f1a; --surface: #0f172a; --surface-2: #16233a; --border: #1e293b;
     --border-strong: #273549; --text: #e2e8f0; --muted: #8595ac; --faint: #64748b;
     --accent: #38bdf8; --accent-soft: rgba(56, 189, 248, 0.12);
-    --working: #4ade80; --waiting: #fbbf24; --idle: #60a5fa; --thinking: #c084fc;
-    --error: #f87171; --ended: #64748b; --stalled: #fb923c; --stale: #71717a; --compacting: #22d3ee;
+    --working: #4ade80; --thinking: #4ade80; --compacting: #4ade80;
+    --waiting: #fbbf24; --stalled: #fb923c; --error: #f87171;
+    --idle: #60a5fa; --stale: #64748b; --ended: #64748b;
     --shadow: 0 1px 2px rgba(0, 0, 0, 0.4), 0 12px 32px rgba(0, 0, 0, 0.35);
   }
 }
@@ -97,6 +102,10 @@ td.dim { color: var(--muted); } td.faint { color: var(--faint); }
 .empty { padding: 26px; text-align: center; color: var(--muted); }
 .pill { display: inline-flex; align-items: center; gap: 6px; padding: 2px 9px 2px 7px; border-radius: 999px; font-size: 11.5px; font-weight: 600; color: var(--st); background: color-mix(in srgb, var(--st) 13%, transparent); border: 1px solid color-mix(in srgb, var(--st) 26%, transparent); }
 .pill .dot { width: 7px; height: 7px; border-radius: 50%; background: currentColor; }
+/* `stale` and `ended` share one grey, and shape is what separates them: no fresh
+   signal at all against a session that really ended. The terminal draws `◌`
+   against `●`; here the dot is hollow (docs/design/session-status.md § 1, § 1bis). */
+.pill.st-stale .dot { background: transparent; box-shadow: inset 0 0 0 1.5px currentColor; }
 /* Unlike the terminal, CSS animates properly: the pulse can be a soft fade rather
    than the two hard states the TUI is limited to. */
 .pill.call .dot { animation: callpulse 1.6s ease-in-out infinite; }

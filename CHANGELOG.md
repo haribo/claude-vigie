@@ -9,6 +9,12 @@ file is the single source of truth, not a second narrative.
 
 ## [Unreleased]
 
+### Changed
+
+- A session's colour now says how much attention it needs, and nothing else.
+  Reasoning and compacting turn green like working, and `stale` takes `ended`'s
+  grey in the browser with a hollow dot to tell them apart (#654).
+
 ## [0.8.0] - 2026-08-30
 
 ### Changed
