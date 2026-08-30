@@ -52,3 +52,41 @@ func TestUsageLeaseAndSnapshot(t *testing.T) {
 		t.Errorf("usage = %+v, want 5h=2 7d=27", got)
 	}
 }
+
+// #646. The lease is a right to fetch, not a right to hold. A machine that takes
+// it and then fetches nothing — most plainly because it has no local credentials
+// — kept renewing it every cycle, and every other machine was denied. The gauges
+// stayed empty for the whole fleet, permanently, and an empty gauge reads exactly
+// like one nobody has filled yet.
+func TestAHolderThatFetchedNothingHandsTheLeaseBack(t *testing.T) {
+	srv := newTestServer(t)
+	ask := func(holder string, release bool) api.LeaseResponse {
+		body, _ := json.Marshal(api.LeaseRequest{Holder: holder, Release: release})
+		rec := do(t, srv, http.MethodPost, "/api/usage/lease", body, true)
+		if rec.Code != http.StatusOK {
+			t.Fatalf("%s: %d", holder, rec.Code)
+		}
+		var lr api.LeaseResponse
+		if err := json.Unmarshal(rec.Body.Bytes(), &lr); err != nil {
+			t.Fatal(err)
+		}
+		return lr
+	}
+
+	if !ask("m1", false).Acquired {
+		t.Fatal("the first holder must acquire")
+	}
+	if ask("m2", false).Acquired {
+		t.Fatal("a second holder must be denied while the lease is held")
+	}
+	ask("m1", true) // m1 fetched nothing and says so
+	if !ask("m2", false).Acquired {
+		t.Error("the lease was handed back and m2 still cannot take it — the fleet's gauges stay empty")
+	}
+
+	// And a machine that no longer holds it cannot take it from whoever does.
+	ask("m1", true)
+	if h, _, err := srv.store.LeaseHolder(t.Context(), srv.now()); err != nil || h != "m2" {
+		t.Errorf("holder = %q (err %v), want m2 — a stale release must not steal the lease", h, err)
+	}
+}

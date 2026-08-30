@@ -157,6 +157,11 @@ type HeartbeatRequest struct {
 // LeaseRequest asks for the usage-fetch lease.
 type LeaseRequest struct {
 	Holder string `json:"holder"`
+	// Release hands the lease back instead of taking it. A holder that fetched
+	// nothing — no local credentials, or backing off — says so rather than
+	// renewing, so the next machine can try: the lease is a right to fetch, not a
+	// right to hold (docs/design/usage.md § 2, #646).
+	Release bool `json:"release,omitempty"`
 }
 
 // LeaseResponse is the reply to a lease request.

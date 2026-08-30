@@ -734,16 +734,33 @@ func usageCycle(ctx context.Context, cfg *config.Config, fetcher *usage.Fetcher)
 	if !lease.Acquired {
 		return // another machine holds the lease
 	}
+	// From here the lease is ours, and every way out that is not a successful post
+	// has to hand it back. A holder that keeps the lease without delivering empties
+	// the gauges for the whole fleet, and an empty gauge reads exactly like one
+	// nobody has filled yet (docs/design/usage.md § 2, #646).
 	rep, ok, err := fetcher.Fetch(ctx, clock.Now())
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "watch: usage fetch: %v\n", err)
+		releaseUsageLease(cfg)
 		return
 	}
 	if !ok {
-		return // backing off
+		releaseUsageLease(cfg) // backing off: someone else may be able to fetch now
+		return
 	}
 	rep.Holder = cfg.Machine // the lease this machine just acquired (#515)
 	if err := postJSON(cfg, "/api/usage", rep, nil); err != nil {
 		fmt.Fprintf(os.Stderr, "watch: post usage: %v\n", err)
+		releaseUsageLease(cfg)
+	}
+}
+
+// releaseUsageLease hands the lease back, best-effort: if the call fails the lease
+// simply lapses on its own after the server's TTL, which is the same outcome one
+// cycle later.
+func releaseUsageLease(cfg *config.Config) {
+	req := api.LeaseRequest{Holder: cfg.Machine, Release: true}
+	if err := postJSON(cfg, "/api/usage/lease", req, nil); err != nil {
+		fmt.Fprintf(os.Stderr, "watch: releasing the usage lease: %v\n", err)
 	}
 }
