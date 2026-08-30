@@ -29,6 +29,10 @@ file is the single source of truth, not a second narrative.
 - The `interrupted` marker now actually appears. A turn killed with Ctrl-C has
   been announced since 0.4.0, but the server blanked the marker on arrival, so an
   interrupted session had always looked exactly like one that finished (#659).
+- `vigied token` prints the token and never invents one. Run against a daemon
+  that takes its token from `VIGIE_TOKEN`, it used to find an empty database,
+  generate a fresh secret, store it and print that — so the machine you then
+  configured was refused (#657).
 
 ## [0.8.0] - 2026-08-30
 
