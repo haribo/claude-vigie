@@ -9,6 +9,13 @@ file is the single source of truth, not a second narrative.
 
 ## [Unreleased]
 
+### Fixed
+
+- Refreshing the vigie hooks no longer edits your own. It rewrote
+  `settings.json` from a three-field idea of what a hook is, so a conditional
+  hook came back unconditional and a prompt hook lost its model — and one of
+  yours grouped with one of ours was deleted outright (#644).
+
 ## [0.7.2] - 2026-08-28
 
 ### Changed

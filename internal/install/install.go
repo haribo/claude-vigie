@@ -112,7 +112,7 @@ func HooksInstalled(configPath string) (bool, error) {
 	}
 	for _, matchers := range hooks {
 		for _, m := range matchers {
-			if matcherIsLeg(m, configPath) {
+			if matcherHoldsLeg(m, configPath) {
 				return true, nil
 			}
 		}
@@ -204,7 +204,7 @@ func mergeHooks(existing []byte, events []string, binPath, configPath string, ti
 		return nil, err
 	}
 	for _, ev := range events {
-		hooks[ev] = append(stripLeg(hooks[ev], configPath), hookMatcher{
+		leg, err := json.Marshal(hookMatcher{
 			Matcher: "",
 			Hooks: []hookCommand{{
 				Type:    "command",
@@ -212,6 +212,10 @@ func mergeHooks(existing []byte, events []string, binPath, configPath string, ti
 				Timeout: timeout,
 			}},
 		})
+		if err != nil {
+			return nil, fmt.Errorf("encoding the %s hook: %w", ev, err)
+		}
+		hooks[ev] = append(stripLeg(hooks[ev], configPath), leg)
 	}
 	return encodeSettings(s, hooks)
 }
@@ -232,23 +236,33 @@ func removeHooks(existing []byte, configPath string) ([]byte, error) {
 	return encodeSettings(s, hooks)
 }
 
-func parseSettings(existing []byte) (map[string]json.RawMessage, map[string][]hookMatcher, error) {
+func parseSettings(existing []byte) (map[string]json.RawMessage, map[string][]json.RawMessage, error) {
 	s := map[string]json.RawMessage{}
 	if len(bytes.TrimSpace(existing)) > 0 {
 		if err := json.Unmarshal(existing, &s); err != nil {
 			return nil, nil, fmt.Errorf("parsing settings: %w", err)
 		}
 	}
-	hooks := map[string][]hookMatcher{}
+	// Each entry stays as it was read. vigie adds its own and removes its own; it
+	// never needs to know what is inside anyone else's, and decoding one into the
+	// struct below was enough to lose every field the struct does not have — a
+	// conditional hook came back unconditional, a prompt hook lost its model (#644).
+	hooks := map[string][]json.RawMessage{}
 	if raw, ok := s["hooks"]; ok {
 		if err := json.Unmarshal(raw, &hooks); err != nil {
 			return nil, nil, fmt.Errorf("parsing hooks: %w", err)
+		}
+		// `"hooks": null` decodes to a nil map, and the caller writes into it.
+		// Installing hooks is best-effort and must never be fatal (ADR-0009), and a
+		// panic in the watcher's startup refresh is the opposite of that.
+		if hooks == nil {
+			hooks = map[string][]json.RawMessage{}
 		}
 	}
 	return s, hooks, nil
 }
 
-func encodeSettings(s map[string]json.RawMessage, hooks map[string][]hookMatcher) ([]byte, error) {
+func encodeSettings(s map[string]json.RawMessage, hooks map[string][]json.RawMessage) ([]byte, error) {
 	if len(hooks) == 0 {
 		delete(s, "hooks")
 	} else {
@@ -265,21 +279,91 @@ func encodeSettings(s map[string]json.RawMessage, hooks map[string][]hookMatcher
 	return append(out, '\n'), nil
 }
 
-func stripLeg(matchers []hookMatcher, configPath string) []hookMatcher {
-	kept := make([]hookMatcher, 0, len(matchers))
-	for _, m := range matchers {
-		if !matcherIsLeg(m, configPath) {
-			kept = append(kept, m)
-		}
+// matcherHoldsLeg reports whether an entry contains one of vigie's hooks, without
+// touching it: the decoded copy is thrown away and the file is never rewritten
+// from it (#644).
+func matcherHoldsLeg(m json.RawMessage, configPath string) bool {
+	_, empty := stripLegFromMatcher(m, configPath)
+	if empty {
+		return true
 	}
-	return kept
-}
-
-func matcherIsLeg(m hookMatcher, configPath string) bool {
-	for _, h := range m.Hooks {
-		if owns(h.Command, configPath) {
+	var entry map[string]json.RawMessage
+	if err := json.Unmarshal(m, &entry); err != nil {
+		return false
+	}
+	var inner []json.RawMessage
+	if err := json.Unmarshal(entry["hooks"], &inner); err != nil {
+		return false
+	}
+	for _, h := range inner {
+		var parsed hookCommand
+		if err := json.Unmarshal(h, &parsed); err == nil && owns(parsed.Command, configPath) {
 			return true
 		}
 	}
 	return false
+}
+
+// stripLeg removes vigie's own hooks and returns everything else as it was read.
+//
+// It strips at the level of the individual hook, not of the entry that holds it.
+// An operator may put their own hook in the same entry as ours — the entry is
+// keyed by a matcher, and two hooks watching the same tools belong together — and
+// dropping the entry took their hook with it (#644).
+func stripLeg(matchers []json.RawMessage, configPath string) []json.RawMessage {
+	kept := make([]json.RawMessage, 0, len(matchers))
+	for _, m := range matchers {
+		stripped, empty := stripLegFromMatcher(m, configPath)
+		if empty {
+			continue // held nothing but ours
+		}
+		kept = append(kept, stripped)
+	}
+	return kept
+}
+
+// stripLegFromMatcher returns the entry without vigie's hooks, and whether that
+// left it with none at all.
+//
+// The entry comes back byte-identical unless one of ours was actually in it: an
+// entry we do not touch is never re-encoded, so a field this package has never
+// heard of cannot be lost. When we do have to rewrite it, the entry's own keys and
+// its surviving hooks are carried across as raw text for the same reason.
+//
+// Anything that does not parse into the shape we expect is somebody else's by
+// definition and is kept whole — a hook entry that is a string, a number, or an
+// object where an array belongs is not ours, and mangling it would be the very bug
+// this function exists to fix.
+func stripLegFromMatcher(m json.RawMessage, configPath string) (json.RawMessage, bool) {
+	entry := map[string]json.RawMessage{}
+	if err := json.Unmarshal(m, &entry); err != nil {
+		return m, false
+	}
+	var inner []json.RawMessage
+	if err := json.Unmarshal(entry["hooks"], &inner); err != nil {
+		return m, false
+	}
+	kept := make([]json.RawMessage, 0, len(inner))
+	for _, h := range inner {
+		var parsed hookCommand
+		if err := json.Unmarshal(h, &parsed); err != nil || !owns(parsed.Command, configPath) {
+			kept = append(kept, h)
+		}
+	}
+	switch {
+	case len(kept) == len(inner):
+		return m, false // none of ours: hand back the bytes we were given
+	case len(kept) == 0:
+		return nil, true
+	}
+	raw, err := json.Marshal(kept)
+	if err != nil {
+		return m, false // cannot happen with values we just decoded; keep the entry
+	}
+	entry["hooks"] = raw
+	out, err := json.Marshal(entry)
+	if err != nil {
+		return m, false
+	}
+	return out, false
 }
