@@ -1,0 +1,44 @@
+{
+  "_comment": [
+    "How the sessions table sorts, and what it opens on (#645).",
+    "The two clients had drifted on three columns and nobody noticed, because the",
+    "shared case lists built for #619 prove that the *rules* agree — the filter, the",
+    "grouping, the formatting — and not one of them says which key the table opens",
+    "on or in which direction. The browser opened on the session seen longest ago",
+    "while the terminal opened on the one seen a moment ago, and both token columns",
+    "ran backwards, with the header arrow claiming the opposite in all three cases.",
+    "`want` is the order of ids under the default direction, which is the one the",
+    "header renders as a down arrow. internal/tui/sort_shared_test.go and",
+    "test/js/dashboard.test.mjs read this file and must agree case for case.",
+    "Only the keys both clients sort by are here. `out` and `ctx` are columns the",
+    "browser can sort and the terminal cannot, so there is nothing to agree with;",
+    "they follow the same sense as the other numeric columns and the dashboard suite",
+    "checks them on its own."
+  ],
+  "now": "2026-08-30T12:00:00Z",
+  "default": { "key": "seen" },
+  "fleet": [
+    {
+      "id": "alpha", "name": "alpha", "machine": "orion", "status": "idle", "rank": 5,
+      "last_seen_at": "2026-08-30T11:00:00Z", "remote_control": false,
+      "usage": { "output_tokens": 100, "input_tokens": 0, "cache_creation_tokens": 0, "cache_read_tokens": 0 }
+    },
+    {
+      "id": "bravo", "name": "bravo", "machine": "orion", "status": "working", "rank": 0,
+      "last_seen_at": "2026-08-30T11:59:00Z", "remote_control": true,
+      "usage": { "output_tokens": 900, "input_tokens": 0, "cache_creation_tokens": 0, "cache_read_tokens": 0 }
+    },
+    {
+      "id": "charlie", "name": "charlie", "machine": "beta", "status": "waiting", "rank": 3,
+      "last_seen_at": "2026-08-30T10:00:00Z", "remote_control": false,
+      "usage": { "output_tokens": 500, "input_tokens": 0, "cache_creation_tokens": 0, "cache_read_tokens": 0 }
+    }
+  ],
+  "cases": [
+    { "key": "seen", "why": "the session that just moved is the one worth the glance", "want": ["bravo", "alpha", "charlie"] },
+    { "key": "total", "why": "the biggest consumer first, not the smallest", "want": ["bravo", "charlie", "alpha"] },
+    { "key": "status", "why": "by the rank the daemon sent, most active first", "want": ["bravo", "charlie", "alpha"] },
+    { "key": "name", "why": "A to Z", "want": ["alpha", "bravo", "charlie"] },
+    { "key": "rc", "why": "a session under remote control first, then by recency", "want": ["bravo", "alpha", "charlie"] }
+  ]
+}

@@ -11,6 +11,10 @@ file is the single source of truth, not a second narrative.
 
 ### Fixed
 
+- The browser and the terminal open the sessions table the same way. The browser
+  put the session seen longest ago at the top, and the smallest token counts
+  first, while the header arrow claimed the opposite (#645).
+
 - Refreshing the vigie hooks no longer edits your own. It rewrote
   `settings.json` from a three-field idea of what a hook is, so a conditional
   hook came back unconditional and a prompt hook lost its model — and one of
