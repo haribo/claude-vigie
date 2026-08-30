@@ -22,6 +22,10 @@ file is the single source of truth, not a second narrative.
   the sessions it was meant to keep; and a daemon started with
   `--session-retention=0` stored a window chosen in Settings without ever
   applying it (#656).
+- A stuck `git` no longer costs a hook its report. Looking up the session's
+  branch — done on every event, so once per tool call — was unbounded, and a
+  held `index.lock` or a stalled mount spent the hook's whole budget on it,
+  losing the status change and the heartbeat with it (#658).
 
 ## [0.8.0] - 2026-08-30
 
