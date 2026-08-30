@@ -1,8 +1,12 @@
 package tui
 
 import (
+	"errors"
+	"fmt"
 	"strings"
 	"testing"
+
+	"github.com/haribo/claude-vigie/internal/api"
 )
 
 func TestWindow(t *testing.T) {
@@ -86,6 +90,47 @@ func TestSessionsViewportFitsHeight(t *testing.T) {
 		hasIndicator := strings.Contains(view, "rows ")
 		if wantIndicator := budget > 0; hasIndicator != wantIndicator {
 			t.Errorf("height %d: indicator=%v, want %v (budget=%d)", h, hasIndicator, wantIndicator, budget)
+		}
+	}
+}
+
+// #650. The two banners this tab used to draw were measured into the row budget —
+// one of them wrongly: `staleReason` was written by the sessions view and never
+// counted, so a failed refresh made the screen render one row past the terminal.
+//
+// They are gone, and this keeps the budget honest in the states that used to draw
+// them: whatever is on screen, the tab fits the terminal exactly.
+func TestTheTabFitsTheTerminalInEveryFailedState(t *testing.T) {
+	sessions := make([]api.SessionView, 40)
+	for i := range sessions {
+		sessions[i] = api.SessionView{
+			ID: fmt.Sprintf("s%02d", i), Name: fmt.Sprintf("s%02d", i),
+			Machine: "orion", Status: "idle", LastSeenAt: "2026-08-30T12:00:00Z",
+		}
+	}
+	for _, c := range []struct {
+		name    string
+		failed  bool
+		watcher bool
+	}{
+		{"healthy", false, false},
+		{"a refresh failed", true, false},
+		{"a watcher stopped", false, true},
+		{"both", true, true},
+	} {
+		m := stubModel()
+		m.width, m.height = 140, 24
+		m = m.applySessions(sessionsMsg{gen: 1, sessions: sessions})
+		if c.failed {
+			m.err = errors.New("context deadline exceeded")
+			m.markRefresh(srcSessions, m.err)
+		}
+		if c.watcher {
+			m.gotWatcher = true
+			m.watcherMachines = map[string]string{"orion": "2020-01-01T00:00:00Z"}
+		}
+		if got := lineCount(m.View()); got > m.height {
+			t.Errorf("%s: the tab rendered %d lines into a %d-row terminal", c.name, got, m.height)
 		}
 	}
 }

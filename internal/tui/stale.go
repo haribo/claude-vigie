@@ -61,13 +61,3 @@ func (m model) staleMark(sources ...string) string {
 	}
 	return ""
 }
-
-// staleReason is the sessions panel's own note. It names the failure rather than
-// giving the generic line, because the reason distinguishes a network blip from a
-// rejected token — and the table stays on screen underneath either way (#456).
-func (m model) staleReason() string {
-	if !m.refreshFailed[srcSessions] || m.err == nil {
-		return ""
-	}
-	return warnStyle.Render("⚠ could not refresh — showing the last known sessions: "+m.err.Error()) + "\n"
-}

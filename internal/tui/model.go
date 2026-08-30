@@ -13,7 +13,7 @@ import (
 
 // pollInterval is the fallback refresh. SSE pushes data changes instantly, so
 // the poll only refreshes time-derived views (relative SEEN, the ended
-// threshold, idle hiding, the watcher-absent banner) and covers SSE dropouts.
+// threshold, idle hiding, the watcher's freshness) and covers SSE dropouts.
 const pollInterval = 5 * time.Second
 
 // tab identifies the active top-level view.
@@ -79,14 +79,6 @@ func (m model) now() time.Time {
 		return clock.Now()
 	}
 	return m.clock()
-}
-
-// watcherStale reports whether the statuses on screen may be frozen anywhere in
-// the fleet — a watcher that beat and stopped, or none beating at all. The rule
-// itself lives in watcher.go, so every indicator answers from one place.
-func (m model) watcherStale() bool {
-	alarm, _, _, _ := fleetAlarm(m.watcherMachines, m.now())
-	return alarm
 }
 
 type sessionsMsg struct {
@@ -478,9 +470,6 @@ func (m model) View() string {
 	// No title/clock line: open straight on the tab bar.
 	b.WriteString(renderTabBar(m.tab, m.width, m.statePill()))
 	b.WriteString("\n")
-	if m.gotWatcher && m.watcherStale() {
-		b.WriteString(m.watcherWarn() + "\n")
-	}
 
 	switch {
 	case m.showHelp:
@@ -509,11 +498,6 @@ func (m model) View() string {
 	return b.String()
 }
 
-// watcherWarn is the stale-watcher banner (shown when gotWatcher && watcherStale).
-func (m model) watcherWarn() string {
-	return warnStyle.Render("⚠ no watcher reporting — statuses may be stale")
-}
-
 // footerBlock is the single-hint row for the tabs that have no bottom bar to
 // carry it. Sessions folds the hint into its bar instead (#493).
 func (m model) footerBlock() string {
@@ -525,7 +509,7 @@ func (m model) footerBlock() string {
 }
 
 // bodyHeight is the number of terminal rows available to the tab body, between
-// the tab-bar/warn chrome above and the rule+footer below — the single source of
+// the tab-bar chrome above and the rule+footer below — the single source of
 // truth for the vertical budget (#378). It measures the rendered chrome rather
 // than hard-coding line counts, and returns 0 when the height is unknown, which
 // callers read as "render unbounded".
@@ -534,9 +518,6 @@ func (m model) bodyHeight() int {
 		return 0
 	}
 	chrome := lineCount(renderTabBar(m.tab, m.width, m.statePill()))
-	if m.gotWatcher && m.watcherStale() {
-		chrome += lineCount(m.watcherWarn())
-	}
 	if m.tab != tabSessions {
 		chrome += lineCount(m.footerBlock())
 	}

@@ -328,7 +328,6 @@ func (m model) viewSessions() string {
 	}
 
 	var b strings.Builder
-	b.WriteString(m.staleReason())
 	if m.sess.filtering || m.sess.filter != "" {
 		b.WriteString(m.sess.filterLine() + "\n")
 	}

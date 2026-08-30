@@ -132,7 +132,10 @@ the operator a search on the wrong machine.
 ## 6. The fleet verdict
 
 § 5 reads one machine's heartbeat. This section says what the whole-fleet
-indicator — the TUI's state pill and its banner — makes of *several* (#599).
+indicator — the TUI's state pill, and the modal behind `i` that names the silent
+machines — makes of *several* (#599). The Sessions tab carried a banner too until
+#650, which said `no watcher reporting` however many were reporting and never
+named one.
 
 **It is not the freshest machine.** The daemon keeps a global `watch_seen`
 alongside the per-machine keys, overwritten by every heartbeat from any machine,
