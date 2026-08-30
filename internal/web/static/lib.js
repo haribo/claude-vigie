@@ -254,6 +254,38 @@ export function hiddenByIdle(s, afterMs, nowMs) {
 // sides now read test/fixtures/status-vocabulary.json (#633).
 export const STATUSES = ["working", "thinking", "compacting", "waiting", "stalled", "idle", "error", "stale", "ended"];
 
+// How the sessions table sorts, and what it opens on.
+//
+// These live here rather than beside the cells in app.js so both this client and
+// its test suite can name them: test/fixtures/sort-cases.json pins the order each
+// key produces, and the Go suite reads the same list (#645).
+//
+// Three of them used to run backwards. The browser opened on the session seen
+// longest ago while the terminal opened on the one seen a moment ago, and the two
+// token columns put the smallest first where the terminal puts the largest — with
+// the header arrow claiming descending in all three cases. A numeric column opens
+// on what is worth the glance: the session that just moved, the one burning the
+// most tokens, the fullest context.
+export const DEFAULT_SORT = { key: "seen", dir: 1 };
+
+export const SORT_COMPARATORS = {
+  name: (a, b) => (a.name || "").localeCompare(b.name || ""),
+  user: (a, b) => (a.user || "").localeCompare(b.user || ""),
+  machine: (a, b) => (a.machine || "").localeCompare(b.machine || ""),
+  dir: (a, b) => (a.project || "").localeCompare(b.project || ""),
+  branch: (a, b) => (a.git_branch || "").localeCompare(b.git_branch || ""),
+  model: (a, b) => (a.model || "").localeCompare(b.model || ""),
+  effort: (a, b) => (a.effort || "").localeCompare(b.effort || ""),
+  mode: (a, b) => (a.mode_label || "").localeCompare(b.mode_label || ""),
+  status: (a, b) => rank(a) - rank(b),
+  rc: (a, b) => (a.remote_control === b.remote_control ? 0 : a.remote_control ? -1 : 1),
+  // Numeric, most notable first.
+  ctx: (a, b) => contextPct(b) - contextPct(a),
+  out: (a, b) => ((b.usage || {}).output_tokens || 0) - ((a.usage || {}).output_tokens || 0),
+  total: (a, b) => totalTokens(b.usage || {}) - totalTokens(a.usage || {}),
+  seen: (a, b) => ageSec(a.last_seen_at) - ageSec(b.last_seen_at),
+};
+
 // GROUP_MODES are how the sessions table can be grouped, in the TUI's enum order.
 // Kept identical to `groupNames` in internal/tui/sessions.go, and proved so by
 // test/fixtures/group-cases.json, which both suites read (#619). A Go test used to

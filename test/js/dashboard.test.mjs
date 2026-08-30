@@ -15,6 +15,7 @@ import {
   fuzzyMatch, sessionHaystack, matchesFilter,
   GROUP_MODES, groupKeyOf, groupSessions, IDLE_PRESETS_MS, idleLabel, hiddenByIdle,
   contextCell, contextKnown, contextPct, migrateV1Columns, V1_COLUMN_KEYS, STATUSES,
+  SORT_COMPARATORS, DEFAULT_SORT,
 } from "../../internal/web/static/lib.js";
 
 // Every shared case list is read the same way; the interesting part is what each
@@ -583,4 +584,42 @@ test("the dashboard's status vocabulary agrees with the shared fixture", async (
   const { order } = await fixture("status-vocabulary.json");
   assert.deepEqual(STATUSES, order,
     "a status the dashboard does not know is styled as `idle` — displayed as something it is not");
+});
+
+// #645. What the table opens on, and the order each key produces. The Go suite
+// reads the same list: three columns had drifted apart because every shared list
+// until now pinned a *rule* and none pinned a starting state.
+test("the table opens on the key the shared fixture names", async () => {
+  const { default: def } = await fixture("sort-cases.json");
+  assert.equal(DEFAULT_SORT.key, def.key);
+  assert.equal(DEFAULT_SORT.dir, 1, "the fixture's orders are the comparator's own, unreversed");
+});
+
+test("every sort key agrees with the shared fixture", async () => {
+  const f = await fixture("sort-cases.json");
+  assert.ok(f.cases.length > 0 && f.fleet.length > 1, "the shared fixture is missing a section");
+  const realNow = Date.now;
+  Date.now = () => Date.parse(f.now);
+  try {
+    for (const c of f.cases) {
+      const cmp = SORT_COMPARATORS[c.key];
+      assert.ok(cmp, `no comparator for ${c.key}`);
+      const got = [...f.fleet].sort((a, b) => cmp(a, b) * 1).map((s) => s.id);
+      assert.deepEqual(got, c.want, `${c.key} — ${c.why}`);
+    }
+  } finally {
+    Date.now = realNow;
+  }
+});
+
+// `out` and `ctx` are columns the browser sorts and the terminal does not, so the
+// fixture has nothing to compare them with. They follow the sense of the numeric
+// columns beside them: what is worth the glance comes first.
+test("the browser-only numeric columns sort like the ones beside them", () => {
+  const small = { id: "small", usage: { output_tokens: 1 }, context_pct: 10, context_tokens: 1 };
+  const big = { id: "big", usage: { output_tokens: 9000 }, context_pct: 90, context_tokens: 9 };
+  for (const key of ["out", "ctx"]) {
+    const got = [small, big].sort((a, b) => SORT_COMPARATORS[key](a, b)).map((s) => s.id);
+    assert.deepEqual(got, ["big", "small"], `${key} must open on the notable one`);
+  }
 });
