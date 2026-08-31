@@ -1,9 +1,19 @@
 version: 2
+
+# Dependabot opens its PRs against the repository's default branch, and that
+# branch is `main` (#574) — the released state, which a feature PR may never
+# target. `pr-base.yaml` refuses them, correctly, so without this every
+# dependency update lands in a dead end and looks like one waiting for review
+# (#681).
+#
+# `target-branch` is per-ecosystem, so both carry it. A third ecosystem added
+# without it would be silently broken the same way.
 updates:
   - package-ecosystem: gomod
     directory: /
     schedule:
       interval: weekly
+    target-branch: develop
     labels:
       - "type: chore"
 
@@ -11,5 +21,6 @@ updates:
     directory: /
     schedule:
       interval: weekly
+    target-branch: develop
     labels:
       - "type: chore"
