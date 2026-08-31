@@ -96,11 +96,22 @@ a status the moment it changes:
 
 | Hook event         | Status it sets                          |
 | ------------------ | --------------------------------------- |
-| `SessionStart`     | `idle` (only if the session was unknown) |
+| `SessionStart`     | `idle` if the session was unknown, or if it was `ended` (a resume — see below); otherwise it changes nothing |
 | `UserPromptSubmit` | `working`                               |
 | `Notification`     | `waiting` on `permission_prompt` (a human must decide); `idle` on `idle_prompt` (finished, awaiting the next prompt) — split by the payload's `notification_type` |
 | `Stop`             | `idle`                                  |
 | `SessionEnd`       | `ended`                                 |
+
+**A `SessionStart` on an `ended` session reopens it**, clearing the end time with
+it. `claude --resume` keeps the session id, so the same row comes back; the event
+is the only signal that says the session is not over, and treating it as
+"changes nothing" left the board announcing an end that had already been undone —
+until the operator typed something, which is a correction the board should not
+need (#664).
+
+The rule stays narrow: for every *live* status, `SessionStart` still says a
+session exists rather than what it is doing, and changes nothing. `ended` is the
+one value the event contradicts.
 
 `waiting` is a *semantic* state — Claude asked a question — and it leaves no
 trace in the transcript, so **nothing can infer it from transcript activity**. A
