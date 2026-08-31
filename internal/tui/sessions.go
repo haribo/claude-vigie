@@ -12,11 +12,15 @@ import (
 	"github.com/haribo/claude-vigie/internal/api"
 )
 
-// The Sessions tab's own behavior lives here (#379): the state transitions the
-// tab owns — filtering, sorting/grouping selection, cursor and detail movement —
-// operate on sessionsView alone. Anything that needs the terminal geometry (the
-// viewport offset) stays on the model, which re-scrolls after a transition; this
-// file holds no rendering.
+// The Sessions tab lives here (#379), behavior and rendering both: the state
+// transitions the tab owns — filtering, sorting/grouping selection, cursor and
+// detail movement — operate on sessionsView alone, and the views that draw them
+// follow below.
+//
+// What stays on the model is the terminal geometry: the viewport offset belongs
+// to the window rather than to the tab, and the model re-scrolls after a
+// transition. This comment used to end "this file holds no rendering", which
+// stopped being true 290 lines above `viewSessions` (#671).
 
 // visible returns the sessions to show: filtered, then sorted, then grouped, with
 // ended and idle-aged sessions hidden per the persistent view prefs.

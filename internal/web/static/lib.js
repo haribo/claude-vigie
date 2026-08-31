@@ -159,7 +159,7 @@ export function rank(session) {
 // case: every character of the pattern in order, gaps allowed. `wapp` matches
 // `web-app`. It is deliberately not a substring match and not a regex.
 //
-// This is a hand port of `fuzzyMatch` in internal/tui/model.go, and a copied rule
+// This is a hand port of `fuzzyMatch` in internal/tui/sessions.go, and a copied rule
 // is what #421, #422 and #466 all were. So it is not trusted: a shared fixture
 // (test/fixtures/fuzzy-cases.json) is run against both implementations, the Go
 // one in internal/tui and this one under node. Iterating the lowered string by
@@ -189,7 +189,7 @@ export function sessionHaystack(s) {
 
 // matchesFilter applies the active filter to one session. `rc` as the whole
 // pattern is a special token selecting remote-controlled sessions rather than a
-// text match — `internal/tui/sessionsview.go` does the same, and an operator who
+// text match — `internal/tui/sessions.go` does the same, and an operator who
 // learns it in one window must find it in the other.
 export function matchesFilter(s, filter) {
   if (!filter) return true;
@@ -309,7 +309,7 @@ export function groupKeyOf(s, mode) {
 // sort inside each one.
 //
 // The TUI sorts by the active key first, then *stably* re-sorts by group key
-// (internal/tui/sessionsview.go), so groups come out in key order while the rows
+// (internal/tui/sessions.go), so groups come out in key order while the rows
 // inside a group keep the chosen sort. JavaScript's sort has been stable since
 // ES2019, so the same two-step works here. Doing it in one comparison would lose
 // the inner order, which is the mistake this comment exists to prevent.
