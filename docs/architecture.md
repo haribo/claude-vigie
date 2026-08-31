@@ -197,5 +197,6 @@ exposing the daemon safely (TLS front, localhost bind, token handling), see
 
 SQLite, a single file managed by the server (see
 [ADR-0002](adr/0002-single-go-binary-with-sqlite.md)). Holds current session
-state and historical usage samples. Zero external database to deploy — the whole
-system is one binary plus a `.db` file.
+state and historical usage samples. Zero external database to deploy — the server
+is one binary plus a `.db` file, with the client shipping separately
+([ADR-0003](adr/0003-split-client-and-daemon-binaries.md)).

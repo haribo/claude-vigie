@@ -94,8 +94,8 @@ terminal's ([architecture](docs/architecture.md)).
 
 ## Design choices
 
-- **Go, static binaries** — trivial self-hosting, cross-platform, minimal
-  client surface (client and server are separate binaries). See
+- **Go, static binaries** — trivial self-hosting, minimal client surface
+  (client and server are separate binaries). See
   [ADR-0002](docs/adr/0002-single-go-binary-with-sqlite.md) and
   [ADR-0003](docs/adr/0003-split-client-and-daemon-binaries.md).
 - **Embedded SQLite** — no database server to deploy; full usage history.
@@ -104,6 +104,11 @@ terminal's ([architecture](docs/architecture.md)).
   no per-token price).
 
 ## Install & run
+
+**Linux only.** Releases ship `linux/amd64` and `linux/arm64`, and session
+presence is read from `/proc` — the signal every status derives from
+([ADR-0006](docs/adr/0006-session-presence-via-proc.md)). There is no macOS or
+Windows build.
 
 vigie ships **binaries** (`vigie`, `vigied`). How you run
 and expose them — systemd, containers, TLS front — is the deployer's call; see
