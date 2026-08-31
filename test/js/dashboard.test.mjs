@@ -15,7 +15,7 @@ import {
   fuzzyMatch, sessionHaystack, matchesFilter,
   GROUP_MODES, groupKeyOf, groupSessions, IDLE_PRESETS_MS, idleLabel, hiddenByIdle,
   contextCell, contextKnown, contextPct, migrateV1Columns, V1_COLUMN_KEYS, STATUSES,
-  SORT_COMPARATORS, DEFAULT_SORT,
+  SORT_COMPARATORS, DEFAULT_SORT, boardState, emptyMessage,
 } from "../../internal/web/static/lib.js";
 
 // Every shared case list is read the same way; the interesting part is what each
@@ -622,4 +622,33 @@ test("the browser-only numeric columns sort like the ones beside them", () => {
     const got = [small, big].sort((a, b) => SORT_COMPARATORS[key](a, b)).map((s) => s.id);
     assert.deepEqual(got, ["big", "small"], `${key} must open on the notable one`);
   }
+});
+
+// #673. The dashboard used to discard every rejection from `loadSessions` and
+// `start`, so two different failures wore the face of a healthy, quiet fleet.
+// These are the two decisions that were missing, kept here rather than in app.js
+// because app.js drives the DOM and cannot be imported.
+
+test("a failing refresh is not current, whatever the stream is doing", () => {
+  // The case that used to be invisible: the stream is up, the refresh is not.
+  assert.deepEqual(boardState(true, true), { cls: "stale", text: "not current" });
+  assert.deepEqual(boardState(false, true), { cls: "stale", text: "not current" });
+  // And the two healthy readings are unchanged.
+  assert.deepEqual(boardState(true, false), { cls: "live", text: "live" });
+  assert.deepEqual(boardState(false, false), { cls: "down", text: "reconnecting…" });
+});
+
+test("the empty table says which of the three silences it is", () => {
+  // Rows on screen: no message at all.
+  assert.equal(emptyMessage(3, false, false, true), null);
+  assert.equal(emptyMessage(3, true, true, true), null);
+  // The operator's own filter.
+  assert.equal(emptyMessage(0, true, false, true), "No sessions match the filter.");
+  // A fleet with nothing in it — an answer.
+  assert.equal(emptyMessage(0, false, false, true), "No sessions in view.");
+  // Never reached the server: not an empty fleet, and it must not read as one.
+  assert.equal(emptyMessage(0, false, true, false), "Cannot reach the server.");
+  assert.equal(emptyMessage(0, true, true, false), "Cannot reach the server.");
+  // Reached it before, cannot now: the emptiness is real but the list is not current.
+  assert.equal(emptyMessage(0, false, true, true), "No sessions in view — and the list is not current.");
 });

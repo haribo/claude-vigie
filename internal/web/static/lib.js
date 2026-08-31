@@ -377,6 +377,39 @@ export const REFRESH_MS = 5000;
 // (#457).
 export const SILENCE_MS = 30000;
 
+// boardState decides what the connection chip says, from the two things that can
+// go wrong independently: the event stream, and the refresh that keeps the table
+// true.
+//
+// They are not the same failure and one used to hide the other. The chip tracked
+// the stream alone, so a live stream over a failing `/api/sessions` — a restarting
+// server, a proxy hiccup, a 500 — left it green while the table froze on data that
+// aged by the minute, indistinguishable from a fleet that simply had not changed
+// (#673).
+//
+// Freshness wins when the two disagree: a stream that is up buys nothing if what
+// it triggers cannot be fetched. The terminal has always drawn this line — a
+// failed poll keeps the sessions on screen *and says they are not current*
+// (internal/tui/sessions.go, #456) — and this is the browser saying it too.
+export function boardState(streamLive, refreshFailed) {
+  if (refreshFailed) return { cls: "stale", text: "not current" };
+  return streamLive ? { cls: "live", text: "live" } : { cls: "down", text: "reconnecting…" };
+}
+
+// emptyMessage is what the sessions table says when it has no row to draw, or
+// null when it has rows and needs no message.
+//
+// Three silences, not one. A filter that matches nothing is the operator's own
+// doing; an empty fleet is an answer; no answer at all is neither, and it used to
+// borrow the empty fleet's words — you typed your token against an unreachable
+// server and the board showed you a calm, empty table (#673).
+export function emptyMessage(visibleCount, hasFilter, refreshFailed, everLoaded) {
+  if (visibleCount > 0) return null;
+  if (refreshFailed && !everLoaded) return "Cannot reach the server.";
+  if (refreshFailed) return "No sessions in view — and the list is not current.";
+  return hasFilter ? "No sessions match the filter." : "No sessions in view.";
+}
+
 // streamIsSilent reports whether nothing has been heard since lastHeardAt.
 // A stream nothing has ever been heard from is *not* silent: that is a connection
 // still being established, and condemning it would abort every connect attempt

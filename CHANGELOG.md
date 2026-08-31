@@ -9,6 +9,12 @@ file is the single source of truth, not a second narrative.
 
 ## [Unreleased]
 
+### Fixed
+
+- The dashboard says when the board is not current. A failing refresh used to be
+  discarded, so a frozen table sat under a green `live` chip, and a first load
+  against an unreachable server drew a calm, empty fleet (#673).
+
 ## [0.9.0] - 2026-08-31
 
 ### Changed
