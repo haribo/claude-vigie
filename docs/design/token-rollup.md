@@ -116,6 +116,15 @@ The mark is never pruned, for the same reason `stats_daily` is not: it is what
 makes that table's history correct. Its cost is one row per session ever seen —
 a session id and an integer.
 
+**The mark and the daily bucket move together, in one transaction.** The mark
+means *this much is already in `stats_daily`*, and raising it in a call of its own
+let that become true ahead of the fact: the mark advanced, the daily write failed,
+and because the table is never recomputed the growth was gone for good — silently,
+with nothing recording which day `vigied stats-repair` should be pointed at. Rare,
+since the insert fails only on a write error, and permanent when it happens. In
+one transaction a failure leaves the mark where it was, and the next report counts
+the same growth again (#669).
+
 ### 4.1 Also: one report per session per scan
 
 The scanner keeps a single report per session id, the one carrying the largest

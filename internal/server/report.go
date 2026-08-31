@@ -115,18 +115,24 @@ func (s *Server) rollupTokens(ctx context.Context, _, sess store.Session, req ap
 	// regression made the next report look like a whole lifetime of fresh output,
 	// permanently, since stats_daily is never recomputed (#432,
 	// docs/design/token-rollup.md).
-	delta, err := s.store.RaiseTokenMark(ctx, sess.ID, sess.Usage.OutputTokens)
+	//
+	// The mark and the daily write commit together (#669). Separately, a mark that
+	// advanced over a failed write said the growth had been counted when it had
+	// not — permanently, since stats_daily is never recomputed. Together, a failure
+	// leaves the mark where it was and the next report counts the same growth.
+	delta, err := s.store.RollUpTokens(ctx, sess.ID, sess.Usage.OutputTokens,
+		dayOf(req.Timestamp, s.now()), sess.Model)
 	if err != nil {
-		s.log.Error("raising token mark", "error", err)
+		s.log.Error("rolling up tokens", "error", err, "session", sess.ID)
 		return
 	}
 	if delta <= 0 {
 		return
 	}
+	// After the commit, not before: the metric counts what landed. It used to be
+	// incremented between the two writes, so a failed daily write left the metric
+	// ahead of the table it reports on.
 	metricOutputTokens.WithLabelValues(modelLabel(sess.Model)).Add(float64(delta)) // bounded: see modelFamilies (#528)
-	if err := s.store.AddDailyTokens(ctx, dayOf(req.Timestamp, s.now()), sess.Model, delta); err != nil {
-		s.log.Error("rolling up daily tokens", "error", err)
-	}
 }
 
 // rollupStatusInterval closes the interval since the session's previous event by
