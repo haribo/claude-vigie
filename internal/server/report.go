@@ -249,9 +249,7 @@ func applyReport(sess store.Session, isNew bool, req api.ReportRequest) store.Se
 	sess = applyCall(sess, req)
 
 	sess = applyStatus(sess, req)
-	if req.Event == "SessionEnd" {
-		sess.EndedAt = req.Timestamp
-	}
+	sess = applyEndedAt(sess, req)
 	if req.RemoteControl != nil {
 		sess.RemoteControl = *req.RemoteControl       // detected /rc state (read-only)
 		sess.RemoteURL = safeRemoteURL(req.RemoteURL) // resume URL travels with the /rc flag; "" clears it (#515)
@@ -313,6 +311,24 @@ func reportDetail(req api.ReportRequest) string {
 // Both clear the same way, with no timer: the next report that does not carry
 // one leaves the session with an empty DETAIL.
 var idleDetails = map[string]bool{"shell": true, "interrupted": true}
+
+// applyEndedAt records when a session ended, and un-records it when one comes
+// back.
+//
+// The end time used to be written once and never cleared, so it outlived the end
+// itself: it is served to every client (`EndedAt` in the session view), and a
+// resumed session carried the timestamp of an end it had already left behind
+// (#664). A `SessionStart` on a live session finds it empty already, so the clear
+// costs nothing where there is nothing to clear.
+func applyEndedAt(sess store.Session, req api.ReportRequest) store.Session {
+	switch req.Event {
+	case "SessionEnd":
+		sess.EndedAt = req.Timestamp
+	case "SessionStart":
+		sess.EndedAt = ""
+	}
+	return sess
+}
 
 // applyStatus folds the report's status into the session: the reconciled status
 // and its owner, when it last changed, and the transient activity message.
@@ -526,7 +542,13 @@ func safeRemoteURL(raw string) string {
 func deriveStatus(event, notifType, current string) string {
 	switch event {
 	case "SessionStart":
-		if current == "" {
+		// The event says a session exists, not what it is doing, so it keeps
+		// whatever status the session already has — with one exception. `ended` is
+		// the value a SessionStart is direct evidence against: the session is
+		// starting, so it is not over, and a resume (`claude --resume` keeps the
+		// id) used to come back reading `ended` until the operator typed
+		// something (#664).
+		if current == "" || current == "ended" {
 			return "idle"
 		}
 		return current
