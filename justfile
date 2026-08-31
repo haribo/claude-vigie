@@ -163,10 +163,16 @@ code-lint-fix:
 code-test:
     go test ./...
 
-# Run tests with coverage
+# Run tests with coverage, and open the report
+#
+# This recipe reports; it does not gate. The floor lives in
+# .github/workflows/ci.yaml and is deliberately in one place — a number copied
+# here would be a second one to maintain, and the one that drifts (#670). The
+# total this prints is what that floor is set just under.
 [group("code")]
 code-test-cover:
     go test -coverprofile=coverage.out ./...
+    go tool cover -func=coverage.out | tail -1
     go tool cover -html=coverage.out -o coverage.html
 
 # Run the JavaScript tests (dashboard + GNOME indicator)

@@ -9,6 +9,33 @@ file is the single source of truth, not a second narrative.
 
 ## [Unreleased]
 
+## [0.9.0] - 2026-08-31
+
+### Changed
+
+- A session's colour now says how much attention it needs, and nothing else.
+  Reasoning and compacting turn green like working, and `stale` takes `ended`'s
+  grey in the browser with a hollow dot to tell them apart (#654).
+
+### Fixed
+
+- The session-retention setting now survives and governs. `off (keep all)` was
+  read as "never set" and overwritten with 24 h at every daemon restart, deleting
+  the sessions it was meant to keep; and a daemon started with
+  `--session-retention=0` stored a window chosen in Settings without ever
+  applying it (#656).
+- A stuck `git` no longer costs a hook its report. Looking up the session's
+  branch — done on every event, so once per tool call — was unbounded, and a
+  held `index.lock` or a stalled mount spent the hook's whole budget on it,
+  losing the status change and the heartbeat with it (#658).
+- The `interrupted` marker now actually appears. A turn killed with Ctrl-C has
+  been announced since 0.4.0, but the server blanked the marker on arrival, so an
+  interrupted session had always looked exactly like one that finished (#659).
+- `vigied token` prints the token and never invents one. Run against a daemon
+  that takes its token from `VIGIE_TOKEN`, it used to find an empty database,
+  generate a fresh secret, store it and print that — so the machine you then
+  configured was refused (#657).
+
 ## [0.8.0] - 2026-08-30
 
 ### Changed
@@ -528,7 +555,8 @@ across machines — it reads and reports session state; it never drives a sessio
 - The API binds `127.0.0.1` by default; every `/api/*` route is behind a
   constant-time shared-token check; request bodies are size-capped.
 
-[Unreleased]: https://github.com/haribo/claude-vigie/compare/v0.8.0...HEAD
+[Unreleased]: https://github.com/haribo/claude-vigie/compare/v0.9.0...HEAD
+[0.9.0]: https://github.com/haribo/claude-vigie/compare/v0.8.0...v0.9.0
 [0.8.0]: https://github.com/haribo/claude-vigie/compare/v0.7.2...v0.8.0
 [0.7.2]: https://github.com/haribo/claude-vigie/compare/v0.7.1...v0.7.2
 [0.7.1]: https://github.com/haribo/claude-vigie/compare/v0.7.0...v0.7.1

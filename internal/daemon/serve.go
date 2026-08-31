@@ -26,7 +26,7 @@ func runServe(args []string) int {
 	fs := flag.NewFlagSet("serve", flag.ContinueOnError)
 	addr := fs.String("addr", "127.0.0.1:8080", "address the server listens on (bind a reachable interface, e.g. :8080, for cross-machine clients)")
 	dbPath := fs.String("db", "vigie.db", "path to the SQLite database file")
-	retention := fs.Duration("session-retention", 24*time.Hour, "delete sessions not reported within this window (0 disables)")
+	retention := fs.Duration("session-retention", 24*time.Hour, "default window for deleting sessions not reported within it (0: no default; the stored setting still governs)")
 	metricsAddr := fs.String("metrics-addr", "127.0.0.1:9464", "ops listener for /metrics and /healthz (empty disables)")
 	if err := fs.Parse(args); err != nil {
 		return 2
@@ -83,9 +83,14 @@ func runServe(args []string) int {
 		close(idle)
 	}()
 
-	if *retention > 0 {
-		go pruneLoop(st, *retention, log)
-	}
+	// The loop starts whatever the flag says, because the flag is only the
+	// *default* window: the stored setting governs, and it can be changed from
+	// Settings while the daemon runs. Gating the goroutine on the flag meant a
+	// daemon started with `--session-retention=0` accepted a window through the
+	// API, stored it, and ignored it until someone restarted with a positive flag
+	// (#656). `decideRetention` answers "no pruning" for a zero default, so the
+	// flag still disables it — through the decision, not by removing the loop.
+	go pruneLoop(st, *retention, log)
 
 	log.Info("vigied listening", "addr", *addr, "db", *dbPath)
 	if err := srv.Serve(ln); err != nil && !errors.Is(err, http.ErrServerClosed) {
@@ -183,11 +188,30 @@ func decideRetention(stored string, storedOK bool, def time.Duration) retention 
 	return retention{window: window, prune: true}
 }
 
+// seedRetention writes the default retention on first run, so the settings API
+// has something to show rather than an empty row.
+//
+// It fires only on an *absent* key. An empty stored value is not a blank to be
+// filled: it is `off (keep all)`, the choice Settings offers, and treating the
+// two alike meant every daemon restart wrote 24 h over the operator's decision
+// and pruned the sessions it was meant to keep (#656). `GetMeta` separates them
+// — absent is `ok=false`, empty is `ok=true` — and `decideRetention` already
+// reads the distinction correctly; only this write erased it.
+//
+// A non-positive default has nothing to seed: an absent key already means "the
+// default governs", and decideRetention answers `no pruning` for it.
+func seedRetention(ctx context.Context, st *store.Store, def time.Duration) {
+	if def <= 0 {
+		return
+	}
+	if _, ok, _ := st.GetMeta(ctx, server.RetentionMetaKey); !ok {
+		_ = st.SetMeta(ctx, server.RetentionMetaKey, def.String())
+	}
+}
+
 func pruneLoop(st *store.Store, defaultRetention time.Duration, log *slog.Logger) {
 	ctx := context.Background()
-	if v, ok, _ := st.GetMeta(ctx, server.RetentionMetaKey); !ok || v == "" {
-		_ = st.SetMeta(ctx, server.RetentionMetaKey, defaultRetention.String())
-	}
+	seedRetention(ctx, st, defaultRetention)
 	lastWarning := ""
 	prune := func() {
 		v, ok, _ := st.GetMeta(ctx, server.RetentionMetaKey)

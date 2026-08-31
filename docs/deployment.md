@@ -179,6 +179,9 @@ agents, and it hands each of them the key to the room.
   one. There is no flag: a token on the command line is published to every local
   user through `/proc/PID/cmdline`, which is world-readable, whereas
   `/proc/PID/environ` is readable only by the process owner.
+  A token supplied this way is **not** written to the database, so `vigied token`
+  run from a shell that does not carry the variable has nothing to print and says
+  so. It reads; it never generates one of its own (#657).
 - **Setting it safely matters as much as the name.** `Environment=VIGIE_TOKEN=…`
   in a unit file is readable by anyone who can read that file and shows up in
   `systemctl show`. Use `EnvironmentFile=` on a `0600` file, or `LoadCredential=`.

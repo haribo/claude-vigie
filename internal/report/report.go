@@ -259,13 +259,42 @@ func systemUser() string {
 	return ""
 }
 
+// gitBranchTimeout bounds the branch lookup. A healthy `rev-parse` answers in
+// milliseconds; a second is far past anything that is still working, and far
+// short of the 5 s the hook has in total.
+const gitBranchTimeout = time.Second
+
+// gitBranchWaitDelay bounds the wait on the output pipes once the deadline has
+// fired and the process has been killed. See the comment in gitBranch.
+const gitBranchWaitDelay = 200 * time.Millisecond
+
 // gitBranch returns the current branch of the repo at dir, or "" if dir is not
 // a git repo (best-effort context, never an error).
+//
+// The call is bounded because of where it runs: every hook stamps this field,
+// `PostToolUse` is installed by default, and the hook budget vigie sets for
+// itself is 5 s. An `index.lock` held by another process, or a repository on a
+// stalled mount, would otherwise spend that budget on decoration — Claude Code
+// kills the hook and the report goes with it, transition and heartbeat included
+// (#658, the class docs/design/transcript-reads.md keeps off this path).
+//
+// A timeout is answered like any other failure: no branch. It already is
+// best-effort context, and a report without it erases nothing server-side.
 func gitBranch(dir string) string {
 	if dir == "" {
 		return ""
 	}
-	out, err := exec.Command("git", "-C", dir, "rev-parse", "--abbrev-ref", "HEAD").Output()
+	ctx, cancel := context.WithTimeout(context.Background(), gitBranchTimeout)
+	defer cancel()
+	cmd := exec.CommandContext(ctx, "git", "-C", dir, "rev-parse", "--abbrev-ref", "HEAD")
+	// The deadline alone does not bound the call. Canceling kills `git`, but
+	// `Output` waits on the stdout pipe, and a grandchild `git` spawned (a
+	// credential helper, a pager, a hook of its own) inherits that pipe and holds
+	// it open after its parent dies. WaitDelay is what closes it, and without it
+	// the timeout is advisory — the regression test hangs the full budget with the
+	// context in place and no WaitDelay.
+	cmd.WaitDelay = gitBranchWaitDelay
+	out, err := cmd.Output()
 	if err != nil {
 		return ""
 	}

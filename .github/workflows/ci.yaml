@@ -124,7 +124,12 @@ jobs:
           # the tree sat at 72.7 — seventeen points of coverage could vanish in
           # silence (#438). Raise it deliberately when coverage rises; the margin is
           # for ordinary fluctuation, not for erosion.
-          floor=70.0
+          #
+          # The rule only holds if it is applied: 70 was left standing while the
+          # tree climbed to 80.3, which is ten points of silent room — #438's own
+          # failure, arriving through drift instead of neglect (#670). Raising it
+          # is part of raising coverage, not a separate chore.
+          floor=78.0
           echo "total coverage: ${total}% (floor ${floor}%)"
           awk -v t="$total" -v f="$floor" 'BEGIN { if (t+0 < f+0) { print "::error::coverage " t "% is below the " f "% floor — add tests or lower the floor deliberately"; exit 1 } }'
 
