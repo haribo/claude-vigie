@@ -11,6 +11,9 @@ file is the single source of truth, not a second narrative.
 
 ### Fixed
 
+- A resumed session no longer reads `ended`. `claude --resume` keeps the session
+  id, and the row came back announcing the end it had just left — with its old end
+  time still attached — until the operator typed something (#664).
 - The dashboard says when the board is not current. A failing refresh used to be
   discarded, so a frozen table sat under a green `live` chip, and a first load
   against an unreachable server drew a calm, empty fleet (#673).
