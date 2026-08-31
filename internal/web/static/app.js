@@ -255,7 +255,7 @@ function notHidden(s) {
 function preferenceVisible() { return sessions.filter(notHidden); }
 
 function visibleSessions() {
-  // Same order as the TUI (internal/tui/sessionsview.go): the visibility
+  // Same order as the TUI (internal/tui/sessions.go): the visibility
   // preferences first, then the filter, then the sort.
   const list = preferenceVisible().filter((s) => matchesFilter(s, filter));
   const col = COLS.find((c) => c.key === sortKey);
