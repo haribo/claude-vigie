@@ -11,6 +11,11 @@ import (
 // maxDepth bounds the ancestor walk, so a broken /proc chain cannot loop.
 const maxDepth = 20
 
+// procRoot is where the process table is read from. It is a variable for one
+// reason: the interesting case of `Status` is a /proc that *cannot be read*, and
+// a test cannot arrange that on the real one. Nothing outside tests assigns it.
+var procRoot = "/proc"
+
 // ResolveClaude walks the ancestor chain from the current process up to the
 // nearest "claude" process and returns its mapping. It is meant to be called
 // from a hook (a descendant of claude); it errors if no claude ancestor is
@@ -33,15 +38,47 @@ func ResolveClaude() (Mapping, error) {
 	return Mapping{}, errors.New("no claude ancestor process found")
 }
 
-// Alive reports whether the mapped process is still the same live process:
-// present in /proc and with an unchanged start time (guarding against pid reuse).
-func Alive(m Mapping) bool {
+// Liveness is what /proc can say about a mapped process. The third value is the
+// point: reading /proc can fail for reasons that say nothing about the process —
+// a hardened `hidepid`, a container or namespace that does not expose the pid —
+// and treating those as death declared a whole fleet ended at the next scan
+// (#663).
+//
+// ADR-0006 promises a fallback where presence is unavailable, and it holds for
+// the path that goes through capture: nothing is written, so nothing is read.
+// `registryDead` takes its pid straight from Claude Code's registry and never
+// touches capture, so it needed the distinction to exist here.
+type Liveness int
+
+const (
+	// Unknown: /proc could not be read. It is not evidence of anything.
+	Unknown Liveness = iota
+	// Live: present, with the start time the mapping recorded.
+	Live
+	// Gone: /proc says there is no such process — or the pid was reused, which
+	// means the mapped one is gone just the same.
+	Gone
+)
+
+// Status reports what /proc can say about the mapped process, distinguishing a
+// process that is absent from one that could not be looked at.
+func Status(m Mapping) Liveness {
 	_, _, start, err := readStat(m.PID)
-	if err != nil {
-		return false
+	switch {
+	case err == nil && start == m.StartTime:
+		return Live
+	case err == nil:
+		return Gone // the pid is in use by a younger process: ours ended
+	case errors.Is(err, os.ErrNotExist):
+		return Gone
+	default:
+		return Unknown // permissions, a namespace, an unparsable file
 	}
-	return start == m.StartTime
 }
+
+// Alive reports whether the mapped process is still the same live process.
+// Callers that must not mistake "could not look" for "not there" ask Status.
+func Alive(m Mapping) bool { return Status(m) == Live }
 
 // commMax is the kernel's TASK_COMM_LEN-1: /proc/<pid>/stat's comm is truncated
 // to 15 bytes, so a binary name is matched against its first 15 bytes.
@@ -100,7 +137,7 @@ func cmdlineHasArg(pid int, arg string) bool {
 // and may itself contain spaces and parentheses, so the numeric fields are read
 // only after the final ')'.
 func readStat(pid int) (comm string, ppid int, starttime uint64, err error) {
-	data, err := os.ReadFile(fmt.Sprintf("/proc/%d/stat", pid))
+	data, err := os.ReadFile(fmt.Sprintf("%s/%d/stat", procRoot, pid))
 	if err != nil {
 		return "", 0, 0, err
 	}
