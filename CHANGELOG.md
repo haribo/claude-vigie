@@ -9,6 +9,13 @@ file is the single source of truth, not a second narrative.
 
 ## [Unreleased]
 
+### Added
+
+- The dashboard can call you. It notifies when a session starts calling — the rule
+  the terminal and the GNOME indicator already follow — and `n` jumps to the one
+  waiting longest. Off until you turn it on in Settings, and it needs an https or
+  localhost address (#667).
+
 ## [0.9.1] - 2026-09-01
 
 ### Fixed

@@ -12,7 +12,7 @@ import {
   readWatcher, fleetAlarm, fleetAlarmDetail, watcherCell,
   matchesFilter, GROUP_MODES, groupSessions, contextKnown, contextPct, contextCell, migrateV1Columns,
   IDLE_PRESETS_MS, idleLabel, hiddenByIdle, STATUSES, SORT_COMPARATORS, DEFAULT_SORT,
-  boardState, emptyMessage,
+  boardState, emptyMessage, attentionIds, enteredAttention, nextAttention,
 } from "./lib.js";
 
 // Both keys were named for the old brand. They hold live state — a signed-in
@@ -29,6 +29,7 @@ let activeTab = "sessions", detailId = null;
 // (sessions-chrome.md § 2), so a button living there would vanish the moment it
 // had been used and leave no way back (#548).
 const ENDED_KEY = "vigie_show_ended";
+const NOTIFY_KEY = "vigie_notify";
 let showEnded = localStorage.getItem(ENDED_KEY) === "1";
 // The active filter. Held here rather than read from the DOM so a repaint of the
 // table can never change it (#545).
@@ -414,6 +415,16 @@ function platformClass(p) {
   if (!p || !p.indicator || p.indicator === "none") return ["ok", "operational"];
   return { minor: ["warn", "degraded"], major: ["bad", "major outage"], critical: ["bad", "critical outage"] }[p.indicator] || ["warn", p.indicator];
 }
+// notifyRowHTML is the Settings control, and it says why it cannot work when it
+// cannot — a toggle that silently does nothing is worse than no toggle (#667).
+function notifyRowHTML() {
+  if (!notifySupported()) return `<span class="muted-note">${esc(notifyBlockedReason())}</span>`;
+  if (Notification.permission === "denied") {
+    return '<span class="muted-note">blocked for this site — allow notifications in the browser to enable</span>';
+  }
+  return `<label class="col-tog"><input type="checkbox" id="notify-toggle"${notifyOn ? " checked" : ""}> notify</label>`;
+}
+
 function renderSettings() {
   const retention = settings && settings.session_retention ? settings.session_retention : "kept forever";
   const [pcls, ptxt] = platformClass(platform);
@@ -431,11 +442,28 @@ function renderSettings() {
       <div class="set-row"><span class="k">Session retention<small>how long closed sessions are kept</small></span><span class="v">${esc(retention)}</span></div>
       <div class="set-row"><span class="k">Platform status<small>polled from status.claude.com</small></span><span class="v ${pcls === "ok" ? "ok" : ""}">● ${esc(ptxt)}</span></div>
       <div class="set-row"><span class="k">Token<small>stored in this browser, sent as a bearer token</small></span><span class="v">connected <button class="signout2" id="signout2">sign out</button></span></div>
+      <div class="set-row"><span class="k">Desktop notifications<small>when a session starts calling you — asked once, saved in this browser</small></span><span class="v">${notifyRowHTML()}</span></div>
       <div class="set-row"><span class="k">Show ended sessions<small>keep closed sessions in the table — saved in this browser</small></span><span class="v"><label class="col-tog"><input type="checkbox" id="ended-toggle"${showEnded ? " checked" : ""}> show</label></span></div>
       <div class="set-row"><span class="k">Hide idle after<small>a session unheard from for longer leaves the table — saved in this browser</small></span><span class="v"><select id="idle-select" aria-label="Hide idle after">${IDLE_PRESETS_MS.map((ms) => `<option value="${ms}"${ms === idleHideAfter ? " selected" : ""}>${esc(idleLabel(ms))}</option>`).join("")}</select></span></div>
       <div class="set-row col-picker"><span class="k">Columns<small>which columns show, and their order — saved in this browser</small></span><span class="v col-list">${colRows}</span></div>
     </div>`;
   $("signout2").addEventListener("click", signOut);
+  const nt = $("notify-toggle");
+  if (nt) {
+    nt.addEventListener("change", async (e) => {
+      if (!e.target.checked) {
+        notifyOn = false;
+        localStorage.setItem(NOTIFY_KEY, "0");
+        renderSettings();
+        return;
+      }
+      // The browser may refuse, and refusing is sticky: a toggle left on while
+      // permission is denied would promise something that cannot happen.
+      notifyOn = await enableNotifications();
+      localStorage.setItem(NOTIFY_KEY, notifyOn ? "1" : "0");
+      renderSettings();
+    });
+  }
   $("ended-toggle").addEventListener("change", (e) => {
     showEnded = Boolean(e.target.checked);
     localStorage.setItem(ENDED_KEY, showEnded ? "1" : "0");
@@ -548,6 +576,7 @@ async function loadSessions() {
   if (activeTab === "sessions" && !detailId) renderSessions();
   if (activeTab === "machines") renderMachines();
   if (usage || platform) renderBottom(); // the hidden count lives there now (#548)
+  noteAttention();
 }
 async function loadMeta() {
   try { usage = await api("/api/usage"); } catch (e) { /* optional */ }
@@ -646,6 +675,84 @@ async function refreshSessions() {
   }
 }
 
+// ---------- calling the operator ----------
+//
+// The board answers "which session needs me" only while someone is looking at
+// it. A phone or a second screen left on the dashboard is the case where nobody
+// is — and that is the case the browser exists for, since the terminal is already
+// in front of the operator. It could not say anything at all until #667.
+//
+// The rule is not invented here. Which sessions are calling is the daemon's
+// answer (`attention`, ADR-0011) plus a raised call (ADR-0010), and *when* to
+// fire is the one #665 settled across the terminal, the GNOME indicator and the
+// README: on entry into the set, once per transition.
+let notifyOn = localStorage.getItem(NOTIFY_KEY) === "1";
+let attnSeen = new Set(), attnPrimed = false;
+
+// The Notification API needs a **secure context**: https, or a localhost origin.
+// That is not a detail here — deployment.md's own example binds a reachable
+// interface over plain http, and a phone pointed at that is exactly the case this
+// feature is for. On such an origin the browser hides the API entirely, and the
+// operator must be told which of the two is missing rather than being shown a
+// toggle that does nothing (#667).
+function notifySupported() { return typeof Notification !== "undefined" && window.isSecureContext; }
+function notifyBlockedReason() {
+  if (typeof window !== "undefined" && !window.isSecureContext) {
+    return "needs https (or a localhost address) — the browser hides notifications on a plain-http origin";
+  }
+  return "not available in this browser";
+}
+
+// noteAttention folds a fresh session list into the notification state, firing
+// for each session that just entered the set.
+//
+// The bookkeeping happens whatever the settings say. Skipping it while
+// notifications are off would leave a stale set behind, so switching them on
+// would announce every session already blocked — the burst `primed` exists to
+// prevent on the first poll.
+function noteAttention() {
+  const fresh = enteredAttention(sessions, attnSeen, attnPrimed);
+  attnSeen = attentionIds(sessions);
+  attnPrimed = true;
+
+  if (!notifyOn || !notifySupported() || Notification.permission !== "granted") return;
+  // Suppressed while the tab is in front, as the terminal suppresses while it has
+  // focus: the operator is already looking. `document.hidden` is the closest the
+  // platform gets — it is false for a visible tab behind another window — and
+  // over-notifying is the safer side of that inaccuracy.
+  if (!document.hidden) return;
+
+  for (const s of fresh) {
+    const n = new Notification("vigie — " + (s.name || s.id), { body: bodyFor(s), tag: "vigie-" + s.id });
+    n.onclick = () => { window.focus(); openDetail(s.id); n.close(); };
+  }
+}
+
+// The body says *why*, because a stalled turn, an API error and a raised call all
+// want different things from the operator — the same reasoning the GNOME
+// indicator's notification body follows.
+function bodyFor(s) {
+  if (hasCall(s)) return s.call_message ? String(s.call_message) : "calling you";
+  return s.status ? String(s.status) : "needs you";
+}
+
+// jumpToAttention is the browser's `n`: the session blocked longest, or the
+// oldest raised call ahead of it.
+function jumpToAttention() {
+  const id = nextAttention(sessions);
+  if (!id) return;
+  if (activeTab !== "sessions") switchTab("sessions");
+  openDetail(id);
+}
+
+async function enableNotifications() {
+  if (!notifySupported()) return false;
+  // requestPermission must be called from a user gesture, which is why this hangs
+  // off the toggle rather than firing on load.
+  const p = Notification.permission === "granted" ? "granted" : await Notification.requestPermission();
+  return p === "granted";
+}
+
 // ---------- auth / gate ----------
 function onUnauthorized() { teardown(); localStorage.removeItem(TOKEN_KEY); token = ""; showGate(true); }
 function teardown() { if (liveCtrl) liveCtrl.abort(); liveCtrl = null; clearTimeout(liveRetry); stopTicker(); clearInterval(metaTimer); metaTimer = null; }
@@ -670,7 +777,15 @@ async function start() {
 }
 
 // ---------- wire up ----------
-document.addEventListener("keydown", (e) => { if (e.key === "Escape" && detailId) closeDetail(); });
+document.addEventListener("keydown", (e) => {
+  if (e.key === "Escape" && detailId) { closeDetail(); return; }
+  // `n` jumps to the session that has been waiting longest, as it does in the
+  // terminal (#261). Ignored while typing, or the filter box could never contain
+  // the letter.
+  const t = e.target;
+  const typing = t && (t.tagName === "INPUT" || t.tagName === "SELECT" || t.tagName === "TEXTAREA" || t.isContentEditable);
+  if (e.key === "n" && !typing && !e.ctrlKey && !e.metaKey && !e.altKey) { e.preventDefault(); jumpToAttention(); }
+});
 $("gate-form").addEventListener("submit", (e) => {
   e.preventDefault();
   const v = $("token-input").value.trim(); if (!v) return;

@@ -48,7 +48,7 @@ A fleet is *N* client machines all reporting to one daemon.
 | Call | `vigie` | `call` | Run *inside* a session to raise a call for the operator ([ADR-0010](adr/0010-session-raised-operator-call.md)); cleared when that session resumes or ends. Claude learns the command from a personal Agent Skill vigie installs and refreshes ([design](design/call-discoverability.md)) |
 | Watcher | `vigie` | `watch` | Background service: refreshes its own hooks at startup ([ADR-0009](adr/0009-watcher-managed-hooks.md)), scans local transcripts, derives status from process presence + activity, reports every session (covering ones the hooks miss), and holds the usage lease to fetch subscription usage |
 | Terminal client | `vigie` | `tui` | Live dashboard in the terminal (Bubble Tea) |
-| Web dashboard | `vigied` | `serve` | Read-only browser client, served at `GET /` (static assets embedded via `go:embed`). Mirrors the TUI's content and hierarchy, not its gestures — see below |
+| Web dashboard | `vigied` | `serve` | Read-only browser client, served at `GET /` (static assets embedded via `go:embed`). Mirrors the TUI's content and hierarchy, not its gestures — see below. Notifies on entry into the attention set and offers the same jump-to-next, opt-in from Settings and requiring a secure context (#667) |
 | GNOME indicator | — | — | Top-bar indicator for GNOME Shell (`gnome-extension/`): polls `GET /api/sessions` and shows how many sessions are calling for the operator, with a desktop notification on each new one. Ships and versions separately from the binaries |
 
 The **web dashboard** is the second client, served by the daemon itself (no build
