@@ -11,6 +11,9 @@ file is the single source of truth, not a second narrative.
 
 ### Fixed
 
+- The terminal notifies whenever a session starts calling for you, not only when
+  it was working a moment earlier. A permission prompt arriving after a finished
+  turn used to be audible on the desktop and silent in the terminal (#665).
 - A resumed session no longer reads `ended`. `claude --resume` keeps the session
   id, and the row came back announcing the end it had just left — with its old end
   time still attached — until the operator typed something (#664).
