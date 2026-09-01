@@ -17,7 +17,11 @@ this document exists:
 - Rows are **accumulated, never recomputed.** The source they came from (session
   rows, events, samples) is pruned; nothing can rebuild a day.
 - A wrong value is therefore **permanent**, and it poisons every aggregate built
-  on top of it — Week, Month, Year, Total, in the TUI and the web dashboard alike.
+  on top of it — every period either client offers. The two do not offer the same
+  ones: the terminal buckets history (twelve ISO weeks, stacked by model) and the
+  dashboard sums a rolling window (the last 7 days, as one figure). They shared
+  the word `Week` until #666, which is why this line used to name the periods as
+  if there were one set.
 
 A rollup writing into such a table must be conservative by construction: it may
 under-count a day, never double-count one.
