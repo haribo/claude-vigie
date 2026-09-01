@@ -61,17 +61,24 @@ var (
 )
 
 // clearNotifications closes the in-flight agents named by a completed
-// <task-notification>. The notification rides in a user line whose content is a
-// plain string; a non-string content (e.g. a tool_result array) carries none.
-func (p *pendingAgents) clearNotifications(raw json.RawMessage) {
+// <task-notification>, and reports whether the line carried any notification at
+// all. The notification rides in a user line whose content is a plain string; a
+// non-string content (e.g. a tool_result array) carries none.
+//
+// The boolean matters as much as the closing. A notification looks exactly like a
+// typed prompt — a user line of plain text — and the caller now treats a real
+// prompt as closing every older subagent (#662). Without this, the notification
+// announcing one agent's completion would retire its still-running siblings.
+func (p *pendingAgents) clearNotifications(raw json.RawMessage) (carried bool) {
 	if len(raw) == 0 {
-		return
+		return false
 	}
 	var s string
 	if json.Unmarshal(raw, &s) != nil {
-		return // content is not a string → no injected notification
+		return false // content is not a string → no injected notification
 	}
 	for _, blk := range notifBlockRe.FindAllStringSubmatch(s, -1) {
+		carried = true
 		body := blk[1]
 		if !completedRe.MatchString(body) {
 			continue // still running (or resumed) — leave it in flight
@@ -80,6 +87,29 @@ func (p *pendingAgents) clearNotifications(raw json.RawMessage) {
 			delete(p.desc, m[1])
 		}
 	}
+	return carried
+}
+
+// closeTurn drops every in-flight agent, because the turn they were launched in
+// is over.
+//
+// A subagent whose completion never arrives — Claude Code killed mid-flight, an
+// undocumented format that drifted — otherwise keeps the session reading
+// `working` at every pause between turns, for the rest of the transcript, and
+// vigie is observe-only (ADR-0005) so nothing the operator does can clear it. A
+// prompt they typed is proof the session moved on, so an agent from before it
+// cannot be what the current turn is waiting on.
+//
+// This is #483's rule for tool calls, applied to the type that was left out
+// (#662). The residual error runs the same safe way: it can retire an agent that
+// is genuinely still running, which under-reports work in progress rather than
+// inventing it.
+func (p *pendingAgents) closeTurn() {
+	if len(p.desc) == 0 {
+		return
+	}
+	p.desc = map[string]string{}
+	p.order = p.order[:0]
 }
 
 // resolve returns the number of in-flight agents and a capped "doing" line, e.g.

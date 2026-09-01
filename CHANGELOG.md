@@ -9,6 +9,12 @@ file is the single source of truth, not a second narrative.
 
 ## [Unreleased]
 
+### Fixed
+
+- A subagent whose completion never arrives no longer pins its session to
+  `working`. The next prompt you type closes it, as it already closed a tool call
+  left hanging (#662).
+
 ## [0.10.0] - 2026-09-01
 
 ### Added
