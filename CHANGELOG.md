@@ -14,6 +14,9 @@ file is the single source of truth, not a second narrative.
 - The terminal notifies whenever a session starts calling for you, not only when
   it was working a moment earlier. A permission prompt arriving after a finished
   turn used to be audible on the desktop and silent in the terminal (#665).
+- The dashboard's Stats periods say which window they are — `24h`, `7d`, `30d`,
+  `1y`, `all`. `Week` meant the last seven days summed here and twelve stacked
+  weeks in the terminal, with nothing saying which you were reading (#666).
 - A resumed session no longer reads `ended`. `claude --resume` keeps the session
   id, and the row came back announcing the end it had just left — with its old end
   time still attached — until the operator typed something (#664).

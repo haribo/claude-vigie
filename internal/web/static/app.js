@@ -43,7 +43,7 @@ const IDLE_KEY = "vigie_idle_hide";
 let idleHideAfter = IDLE_PRESETS_MS.includes(Number(localStorage.getItem(IDLE_KEY))) ? Number(localStorage.getItem(IDLE_KEY)) : 0;
 let groupBy = GROUP_MODES.includes(localStorage.getItem(GROUP_KEY) || "") ? localStorage.getItem(GROUP_KEY) : "off";
 let sortKey = DEFAULT_SORT.key, sortDir = DEFAULT_SORT.dir;   // 1 = the comparator's own order
-let statsPeriod = "Week", statsLoaded = false, settingsLoaded = false;
+let statsPeriod = "7d", statsLoaded = false, settingsLoaded = false;
 let liveCtrl = null, liveRetry = null, tickTimer = null, metaTimer = null;
 // When the stream last delivered any bytes, keep-alive comments included. It is
 // what the silence watchdog measures; 0 means nothing has been heard yet.
@@ -339,10 +339,32 @@ function renderMachines() {
 async function loadStats() {
   try { stats = await api("/api/stats"); statsLoaded = true; renderStats(); } catch (e) { /* stats optional */ }
 }
-const PERIOD_DAYS = { Day: 1, Week: 7, Month: 30, Year: 365, Total: Infinity };
+// The dashboard sums a rolling window; the terminal buckets history. Both offered
+// a button called `Week`, and it meant the last seven days as one figure here and
+// twelve ISO weeks stacked by model there — same word, same tab, two numbers, and
+// neither window said which one you were reading (#666).
+//
+// The labels now name the window they are, so the two stop contradicting each
+// other on a word. They converge properly when the dashboard grows the terminal's
+// bucketed chart, which is the browser's own piece of work (#667), not a rename.
+//
+// The field is `id` rather than the obvious `key`, on purpose:
+// `TestDashboardSharesTheColumnSet` scrapes this file for objects keyed that way
+// and reads every one it finds as a table column, so a second array of the same
+// shape reports as a dashboard column the TUI lacks. Naming the field differently
+// keeps the two apart — and this comment avoids spelling the pattern out, having
+// been caught by it once.
+const PERIODS = [
+  { id: "24h", days: 1, phrase: "the last 24 hours" },
+  { id: "7d", days: 7, phrase: "the last 7 days" },
+  { id: "30d", days: 30, phrase: "the last 30 days" },
+  { id: "1y", days: 365, phrase: "the last year" },
+  { id: "all", days: Infinity, phrase: "all time" },
+];
+const periodOf = (id) => PERIODS.find((p) => p.id === id) || PERIODS[1];
 function renderStats() {
   if (!stats) { $("tab-stats").innerHTML = '<div class="muted-note">No stats yet.</div>'; return; }
-  const cutoff = Date.now() - PERIOD_DAYS[statsPeriod] * 86400000;
+  const cutoff = Date.now() - periodOf(statsPeriod).days * 86400000;
   const daily = (stats.daily || []).filter((d) => { const t = Date.parse(d.day + "T00:00:00Z"); return Number.isNaN(t) || t >= cutoff; });
   const out = daily.reduce((n, d) => n + (d.output_tokens || 0), 0);
   const work = daily.reduce((n, d) => n + (d.working_seconds || 0), 0);
@@ -350,7 +372,7 @@ function renderStats() {
   const idle = daily.reduce((n, d) => n + (d.idle_seconds || 0), 0);
   const active = work + wait + idle;
   const machines = new Set(sessions.map((s) => s.machine)).size;
-  const periods = Object.keys(PERIOD_DAYS).map((p) => `<button class="period ${p === statsPeriod ? "active" : ""}" data-p="${p}">${p}</button>`).join("");
+  const periods = PERIODS.map((p) => `<button class="period ${p.id === statsPeriod ? "active" : ""}" data-p="${p.id}">${p.id}</button>`).join("");
   const top = (stats.top_sessions || []).slice(0, 5).map((s, i) =>
     `<div class="top"><span class="rk">${i + 1}</span><span class="nm">${esc(s.name)}</span><span class="mc">${esc(s.machine)}</span><span class="tk">${humanTokens(s.output_tokens)}</span></div>`).join("")
     || '<div class="muted-note">No sessions ranked yet.</div>';
@@ -365,7 +387,7 @@ function renderStats() {
     </div>
     <div class="stat-cols">
       <div class="card"><h3>Top sessions — output</h3>${top}</div>
-      <div class="card"><h3>Time by status (this ${statsPeriod.toLowerCase()})</h3>
+      <div class="card"><h3>Time by status (${periodOf(statsPeriod).phrase})</h3>
         <div class="timebar"><i class="st-working" data-w="${pct(work)}"></i><i class="st-waiting" data-w="${pct(wait)}"></i><i class="st-idle" data-w="${pct(idle)}"></i></div>
         <div class="timeleg">
           <span class="b st-working"><span class="dot"></span><b>${trim(work / 3600)}h</b> working</span>
