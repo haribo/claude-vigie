@@ -16,6 +16,7 @@ import {
   GROUP_MODES, groupKeyOf, groupSessions, IDLE_PRESETS_MS, idleLabel, hiddenByIdle,
   contextCell, contextKnown, contextPct, migrateV1Columns, V1_COLUMN_KEYS, STATUSES,
   SORT_COMPARATORS, DEFAULT_SORT, boardState, emptyMessage,
+  attentionIds, enteredAttention, nextAttention,
 } from "../../internal/web/static/lib.js";
 
 // Every shared case list is read the same way; the interesting part is what each
@@ -651,4 +652,38 @@ test("the empty table says which of the three silences it is", () => {
   assert.equal(emptyMessage(0, true, true, false), "Cannot reach the server.");
   // Reached it before, cannot now: the emptiness is real but the list is not current.
   assert.equal(emptyMessage(0, false, true, true), "No sessions in view — and the list is not current.");
+});
+
+// #667. The dashboard grew the two things that let it call the operator: which
+// sessions have just started calling, and which one to go to first.
+
+test("the jump order matches the shared fixture, case for case", async () => {
+  const f = await fixture("attention-order-cases.json");
+  assert.ok(f.cases.length > 0, "the shared fixture carries no cases");
+  for (const c of f.cases) {
+    assert.equal(nextAttention(c.sessions), c.want, c.name);
+  }
+});
+
+test("opening the dashboard is silent, and each entry notifies once", () => {
+  const s = (id, attention, call_at) => ({ id, attention, call_at });
+  const blocked = [s("a", true), s("b", false)];
+
+  // First poll: nothing fires, however much of the fleet is already blocked.
+  assert.deepEqual(enteredAttention(blocked, new Set(), false), []);
+
+  // Armed now. `b` joins the set, `a` was already in it.
+  let seen = attentionIds(blocked);
+  assert.deepEqual(enteredAttention([s("a", true), s("b", true)], seen, true).map((x) => x.id), ["b"]);
+
+  // Held state does not re-notify.
+  seen = attentionIds([s("a", true), s("b", true)]);
+  assert.deepEqual(enteredAttention([s("a", true), s("b", true)], seen, true), []);
+
+  // Leaving the set re-arms it.
+  seen = attentionIds([s("a", false), s("b", true)]);
+  assert.deepEqual(enteredAttention([s("a", true), s("b", true)], seen, true).map((x) => x.id), ["a"]);
+
+  // A raised call counts as calling even with no attention status (ADR-0010).
+  assert.deepEqual(enteredAttention([s("c", false, "2026-09-01T10:00:00Z")], new Set(), true).map((x) => x.id), ["c"]);
 });
