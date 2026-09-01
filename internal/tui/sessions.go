@@ -211,8 +211,14 @@ type sessionsView struct {
 	groupBy      groupBy
 	prevStatus   map[string]string // last status per session, for notify transitions (#260)
 	prevCall     map[string]bool   // last call state per session, for notify transitions (#389)
-	blinkOn      bool              // marker on its visible half-cycle (#389)
-	blinkTicking bool              // a blink tick is in flight (never stack two)
+	// prevAttention is the remembered answer to "did this session need the
+	// operator", so a notification fires on *entry* into the set rather than on one
+	// particular way in. Kept as its own map rather than re-derived from
+	// prevStatus: the daemon decides attention (ADR-0011), and deriving it here
+	// again is the copy that ADR removes (#665).
+	prevAttention map[string]bool
+	blinkOn       bool // marker on its visible half-cycle (#389)
+	blinkTicking  bool // a blink tick is in flight (never stack two)
 }
 
 func (m model) handleSessionsKey(msg tea.KeyMsg) model {
