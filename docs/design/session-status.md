@@ -175,7 +175,14 @@ list, typically an older Claude Code:
   for every slow tool (#530).
 
   **The pairing is scoped to the turn: a real user prompt closes every older
-  unresolved `tool_use`.** A result that never arrives — Claude Code killed while
+  unresolved `tool_use` — and every subagent still in flight (#662).** The two
+  are the same rule on two types. An async subagent is closed by a
+  `<task-notification>` naming its launch, and when that never arrives the
+  session read `working` at every pause for the rest of the transcript; the
+  30-minute liveness cap bounds it only against silence, which a session the
+  operator keeps using never reaches. A line carrying a notification is not a
+  prompt for this purpose, however much it looks like one: treating it as one
+  would retire the siblings of the agent it announces. A result that never arrives — Claude Code killed while
   a tool was in flight — otherwise pins the session to `stalled` for the rest of
   its life, at every pause between turns, and no operator action can clear it
   (vigie is observe-only, [ADR-0005](../adr/0005-observe-only.md)). A prompt is
