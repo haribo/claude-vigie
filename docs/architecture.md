@@ -167,7 +167,7 @@ All `/api/*` routes require the shared token in the `Authorization` header.
 | POST | `/api/watcher/heartbeat` | A watcher's liveness claim, independent of session reports ([design](design/watcher-liveness.md)) |
 | GET | `/api/version` | The daemon's build, so a client can flag a drift ([design](design/version-consistency.md)) |
 | GET | `/api/status` | Claude platform health (server-polled from status.claude.com) |
-| GET | `/api/stats` | Analytics rollups + top sessions |
+| GET | `/api/stats` | Analytics rollups + top sessions. Tokens accrue from any report ([design](design/token-rollup.md)); the status durations only from hooks ([design](design/status-time.md)) |
 | GET · POST | `/api/settings` | Read · update server settings (session retention) |
 
 `/healthz` (liveness) and `/metrics` (Prometheus) are served on a **separate ops
@@ -197,5 +197,6 @@ exposing the daemon safely (TLS front, localhost bind, token handling), see
 
 SQLite, a single file managed by the server (see
 [ADR-0002](adr/0002-single-go-binary-with-sqlite.md)). Holds current session
-state and historical usage samples. Zero external database to deploy — the whole
-system is one binary plus a `.db` file.
+state and historical usage samples. Zero external database to deploy — the server
+is one binary plus a `.db` file, with the client shipping separately
+([ADR-0003](adr/0003-split-client-and-daemon-binaries.md)).

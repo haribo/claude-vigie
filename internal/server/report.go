@@ -115,18 +115,24 @@ func (s *Server) rollupTokens(ctx context.Context, _, sess store.Session, req ap
 	// regression made the next report look like a whole lifetime of fresh output,
 	// permanently, since stats_daily is never recomputed (#432,
 	// docs/design/token-rollup.md).
-	delta, err := s.store.RaiseTokenMark(ctx, sess.ID, sess.Usage.OutputTokens)
+	//
+	// The mark and the daily write commit together (#669). Separately, a mark that
+	// advanced over a failed write said the growth had been counted when it had
+	// not — permanently, since stats_daily is never recomputed. Together, a failure
+	// leaves the mark where it was and the next report counts the same growth.
+	delta, err := s.store.RollUpTokens(ctx, sess.ID, sess.Usage.OutputTokens,
+		dayOf(req.Timestamp, s.now()), sess.Model)
 	if err != nil {
-		s.log.Error("raising token mark", "error", err)
+		s.log.Error("rolling up tokens", "error", err, "session", sess.ID)
 		return
 	}
 	if delta <= 0 {
 		return
 	}
+	// After the commit, not before: the metric counts what landed. It used to be
+	// incremented between the two writes, so a failed daily write left the metric
+	// ahead of the table it reports on.
 	metricOutputTokens.WithLabelValues(modelLabel(sess.Model)).Add(float64(delta)) // bounded: see modelFamilies (#528)
-	if err := s.store.AddDailyTokens(ctx, dayOf(req.Timestamp, s.now()), sess.Model, delta); err != nil {
-		s.log.Error("rolling up daily tokens", "error", err)
-	}
 }
 
 // rollupStatusInterval closes the interval since the session's previous event by
@@ -249,9 +255,7 @@ func applyReport(sess store.Session, isNew bool, req api.ReportRequest) store.Se
 	sess = applyCall(sess, req)
 
 	sess = applyStatus(sess, req)
-	if req.Event == "SessionEnd" {
-		sess.EndedAt = req.Timestamp
-	}
+	sess = applyEndedAt(sess, req)
 	if req.RemoteControl != nil {
 		sess.RemoteControl = *req.RemoteControl       // detected /rc state (read-only)
 		sess.RemoteURL = safeRemoteURL(req.RemoteURL) // resume URL travels with the /rc flag; "" clears it (#515)
@@ -313,6 +317,24 @@ func reportDetail(req api.ReportRequest) string {
 // Both clear the same way, with no timer: the next report that does not carry
 // one leaves the session with an empty DETAIL.
 var idleDetails = map[string]bool{"shell": true, "interrupted": true}
+
+// applyEndedAt records when a session ended, and un-records it when one comes
+// back.
+//
+// The end time used to be written once and never cleared, so it outlived the end
+// itself: it is served to every client (`EndedAt` in the session view), and a
+// resumed session carried the timestamp of an end it had already left behind
+// (#664). A `SessionStart` on a live session finds it empty already, so the clear
+// costs nothing where there is nothing to clear.
+func applyEndedAt(sess store.Session, req api.ReportRequest) store.Session {
+	switch req.Event {
+	case "SessionEnd":
+		sess.EndedAt = req.Timestamp
+	case "SessionStart":
+		sess.EndedAt = ""
+	}
+	return sess
+}
 
 // applyStatus folds the report's status into the session: the reconciled status
 // and its owner, when it last changed, and the transient activity message.
@@ -526,7 +548,13 @@ func safeRemoteURL(raw string) string {
 func deriveStatus(event, notifType, current string) string {
 	switch event {
 	case "SessionStart":
-		if current == "" {
+		// The event says a session exists, not what it is doing, so it keeps
+		// whatever status the session already has — with one exception. `ended` is
+		// the value a SessionStart is direct evidence against: the session is
+		// starting, so it is not over, and a resume (`claude --resume` keeps the
+		// id) used to come back reading `ended` until the operator typed
+		// something (#664).
+		if current == "" || current == "ended" {
 			return "idle"
 		}
 		return current

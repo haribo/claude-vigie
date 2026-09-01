@@ -7,19 +7,19 @@ import (
 	"fmt"
 )
 
-// RaiseTokenMark records that a session's cumulative output total is now `total`
-// and returns how much of it had not been counted yet.
+// RollUpTokens raises the session's mark and adds the counted growth to the
+// (day, model) bucket, in one transaction, returning what was counted.
 //
-// The rollup writes into stats_daily, which is never pruned and never recomputed,
-// so a wrong value there is permanent. Counting the growth of the session row —
-// a counter the rollup does not own — meant that any regression made the next
-// report look like the session's entire lifetime of fresh output. Comparing
-// against a mark of its own makes a regression contribute nothing, whatever
-// caused it, and makes real growth count exactly once (#432,
-// docs/design/token-rollup.md).
+// The two used to be separate calls. `stats_daily` is never pruned and never
+// recomputed, so a mark that advanced while the daily write failed lost that
+// growth for good: the mark said it had been counted, and nothing had. Rare — the
+// insert fails only on a write error — and invisible, because nothing recorded
+// which day needed `vigied stats-repair` pointed at it (#669).
 //
-// A total at or below the mark returns 0 and leaves the mark alone.
-func (s *Store) RaiseTokenMark(ctx context.Context, sessionID string, total int64) (int64, error) {
+// Together, a failure leaves the mark where it was and the next report counts the
+// same growth again. That is the property worth having: the mark's meaning is
+// "already in stats_daily", and it should never be true ahead of the fact.
+func (s *Store) RollUpTokens(ctx context.Context, sessionID string, total int64, day, model string) (int64, error) {
 	if sessionID == "" || total <= 0 {
 		return 0, nil
 	}
@@ -38,6 +38,7 @@ func (s *Store) RaiseTokenMark(ctx context.Context, sessionID string, total int6
 	if total <= counted {
 		return 0, nil // already counted, or a regression
 	}
+	delta := total - counted
 
 	if _, err := tx.ExecContext(ctx,
 		`INSERT INTO session_token_mark (session_id, counted) VALUES (?, ?)
@@ -45,8 +46,11 @@ func (s *Store) RaiseTokenMark(ctx context.Context, sessionID string, total int6
 		sessionID, total); err != nil {
 		return 0, fmt.Errorf("raising token mark for %s: %w", sessionID, err)
 	}
+	if err := addDailyTokens(ctx, tx, day, model, delta); err != nil {
+		return 0, err
+	}
 	if err := tx.Commit(); err != nil {
 		return 0, fmt.Errorf("commit: %w", err)
 	}
-	return total - counted, nil
+	return delta, nil
 }

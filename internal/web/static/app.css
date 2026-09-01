@@ -60,6 +60,12 @@ code { color: var(--muted); }
 @keyframes ping { 0% { box-shadow: 0 0 0 0 var(--accent-soft); } 70% { box-shadow: 0 0 0 6px transparent; } 100% { box-shadow: 0 0 0 0 transparent; } }
 @media (prefers-reduced-motion: reduce) { .chip.conn.live .dot { animation: none; } }
 .chip.conn.down { color: var(--waiting); }
+/* The board is on screen but not current — the stream may be fine, the refresh is
+   not (#673). It takes `down`'s amber rather than the grey the `stale` *status*
+   uses: #654 settled that colour says how much attention a thing needs, not which
+   mechanism failed, and grey is the colour of nothing to do. The two are told
+   apart by their text, which is the part that names the mechanism. */
+.chip.conn.stale { color: var(--waiting); }
 .chip.signout:hover { color: var(--error); border-color: color-mix(in srgb, var(--error) 40%, var(--border)); }
 
 /* ---------- tab bar ---------- */

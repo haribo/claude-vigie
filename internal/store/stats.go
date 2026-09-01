@@ -18,13 +18,19 @@ type DailyStat struct {
 	IdleSeconds    int64
 }
 
-// AddDailyTokens adds a positive output-token delta to the (day, model) bucket.
+// execer is what both a *sql.DB and a *sql.Tx satisfy, so the statement below has
+// one home whether it runs on its own or inside `RollUpTokens`'s transaction.
+type execer interface {
+	ExecContext(ctx context.Context, query string, args ...any) (sql.Result, error)
+}
+
+// addDailyTokens adds a positive output-token delta to the (day, model) bucket.
 // Non-positive deltas are ignored.
-func (s *Store) AddDailyTokens(ctx context.Context, day, model string, delta int64) error {
+func addDailyTokens(ctx context.Context, db execer, day, model string, delta int64) error {
 	if delta <= 0 {
 		return nil
 	}
-	_, err := s.db.ExecContext(ctx,
+	_, err := db.ExecContext(ctx,
 		`INSERT INTO stats_daily (day, model, output_tokens) VALUES (?, ?, ?)
 		 ON CONFLICT(day, model) DO UPDATE SET output_tokens = output_tokens + excluded.output_tokens`,
 		day, model, delta)
@@ -60,6 +66,17 @@ func (s *Store) AddDailyStatusSeconds(ctx context.Context, day, model, status st
 		return fmt.Errorf("adding daily %s seconds: %w", status, err)
 	}
 	return nil
+}
+
+// AddDailyTokens adds a delta on its own connection.
+//
+// No production code calls it: `RollUpTokens` is the only path tokens take into
+// this table (#669). It stays because it is the store's public way to write that
+// bucket, and `internal/daemon`'s stats-repair tests seed through it from another
+// package, where the unexported helper is out of reach. Seeding them through
+// `RollUpTokens` instead would write token marks those tests are not about.
+func (s *Store) AddDailyTokens(ctx context.Context, day, model string, delta int64) error {
+	return addDailyTokens(ctx, s.db, day, model, delta)
 }
 
 // ListDailyStats returns rows with day >= sinceDay (inclusive; "" for all),

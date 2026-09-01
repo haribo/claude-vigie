@@ -159,7 +159,7 @@ export function rank(session) {
 // case: every character of the pattern in order, gaps allowed. `wapp` matches
 // `web-app`. It is deliberately not a substring match and not a regex.
 //
-// This is a hand port of `fuzzyMatch` in internal/tui/model.go, and a copied rule
+// This is a hand port of `fuzzyMatch` in internal/tui/sessions.go, and a copied rule
 // is what #421, #422 and #466 all were. So it is not trusted: a shared fixture
 // (test/fixtures/fuzzy-cases.json) is run against both implementations, the Go
 // one in internal/tui and this one under node. Iterating the lowered string by
@@ -189,7 +189,7 @@ export function sessionHaystack(s) {
 
 // matchesFilter applies the active filter to one session. `rc` as the whole
 // pattern is a special token selecting remote-controlled sessions rather than a
-// text match — `internal/tui/sessionsview.go` does the same, and an operator who
+// text match — `internal/tui/sessions.go` does the same, and an operator who
 // learns it in one window must find it in the other.
 export function matchesFilter(s, filter) {
   if (!filter) return true;
@@ -309,7 +309,7 @@ export function groupKeyOf(s, mode) {
 // sort inside each one.
 //
 // The TUI sorts by the active key first, then *stably* re-sorts by group key
-// (internal/tui/sessionsview.go), so groups come out in key order while the rows
+// (internal/tui/sessions.go), so groups come out in key order while the rows
 // inside a group keep the chosen sort. JavaScript's sort has been stable since
 // ES2019, so the same two-step works here. Doing it in one comparison would lose
 // the inner order, which is the mistake this comment exists to prevent.
@@ -376,6 +376,39 @@ export const REFRESH_MS = 5000;
 // correct and simply never runs, because the loop it guards has not returned
 // (#457).
 export const SILENCE_MS = 30000;
+
+// boardState decides what the connection chip says, from the two things that can
+// go wrong independently: the event stream, and the refresh that keeps the table
+// true.
+//
+// They are not the same failure and one used to hide the other. The chip tracked
+// the stream alone, so a live stream over a failing `/api/sessions` — a restarting
+// server, a proxy hiccup, a 500 — left it green while the table froze on data that
+// aged by the minute, indistinguishable from a fleet that simply had not changed
+// (#673).
+//
+// Freshness wins when the two disagree: a stream that is up buys nothing if what
+// it triggers cannot be fetched. The terminal has always drawn this line — a
+// failed poll keeps the sessions on screen *and says they are not current*
+// (internal/tui/sessions.go, #456) — and this is the browser saying it too.
+export function boardState(streamLive, refreshFailed) {
+  if (refreshFailed) return { cls: "stale", text: "not current" };
+  return streamLive ? { cls: "live", text: "live" } : { cls: "down", text: "reconnecting…" };
+}
+
+// emptyMessage is what the sessions table says when it has no row to draw, or
+// null when it has rows and needs no message.
+//
+// Three silences, not one. A filter that matches nothing is the operator's own
+// doing; an empty fleet is an answer; no answer at all is neither, and it used to
+// borrow the empty fleet's words — you typed your token against an unreachable
+// server and the board showed you a calm, empty table (#673).
+export function emptyMessage(visibleCount, hasFilter, refreshFailed, everLoaded) {
+  if (visibleCount > 0) return null;
+  if (refreshFailed && !everLoaded) return "Cannot reach the server.";
+  if (refreshFailed) return "No sessions in view — and the list is not current.";
+  return hasFilter ? "No sessions match the filter." : "No sessions in view.";
+}
 
 // streamIsSilent reports whether nothing has been heard since lastHeardAt.
 // A stream nothing has ever been heard from is *not* silent: that is a connection

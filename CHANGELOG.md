@@ -9,6 +9,30 @@ file is the single source of truth, not a second narrative.
 
 ## [Unreleased]
 
+## [0.9.1] - 2026-09-01
+
+### Fixed
+
+- The terminal notifies whenever a session starts calling for you, not only when
+  it was working a moment earlier. A permission prompt arriving after a finished
+  turn used to be audible on the desktop and silent in the terminal (#665).
+- The dashboard's Stats periods say which window they are — `24h`, `7d`, `30d`,
+  `1y`, `all`. `Week` meant the last seven days summed here and twelve stacked
+  weeks in the terminal, with nothing saying which you were reading (#666).
+- Stats says where its durations come from. A machine covered only by the
+  watcher accrues tokens and never a second of time — only the reporting hooks
+  close a status interval — and the empty panel used to read as an idle fleet
+  (#668).
+- A resumed session no longer reads `ended`. `claude --resume` keeps the session
+  id, and the row came back announcing the end it had just left — with its old end
+  time still attached — until the operator typed something (#664).
+- A write error while rolling up tokens no longer costs a day its figure. The
+  high-water mark could advance over a failed daily write, and `stats_daily` is
+  never recomputed, so that output was gone for good (#669).
+- The dashboard says when the board is not current. A failing refresh used to be
+  discarded, so a frozen table sat under a green `live` chip, and a first load
+  against an unreachable server drew a calm, empty fleet (#673).
+
 ## [0.9.0] - 2026-08-31
 
 ### Changed
@@ -555,7 +579,8 @@ across machines — it reads and reports session state; it never drives a sessio
 - The API binds `127.0.0.1` by default; every `/api/*` route is behind a
   constant-time shared-token check; request bodies are size-capped.
 
-[Unreleased]: https://github.com/haribo/claude-vigie/compare/v0.9.0...HEAD
+[Unreleased]: https://github.com/haribo/claude-vigie/compare/v0.9.1...HEAD
+[0.9.1]: https://github.com/haribo/claude-vigie/compare/v0.9.0...v0.9.1
 [0.9.0]: https://github.com/haribo/claude-vigie/compare/v0.8.0...v0.9.0
 [0.8.0]: https://github.com/haribo/claude-vigie/compare/v0.7.2...v0.8.0
 [0.7.2]: https://github.com/haribo/claude-vigie/compare/v0.7.1...v0.7.2

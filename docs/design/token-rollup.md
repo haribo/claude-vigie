@@ -17,7 +17,11 @@ this document exists:
 - Rows are **accumulated, never recomputed.** The source they came from (session
   rows, events, samples) is pruned; nothing can rebuild a day.
 - A wrong value is therefore **permanent**, and it poisons every aggregate built
-  on top of it — Week, Month, Year, Total, in the TUI and the web dashboard alike.
+  on top of it — every period either client offers. The two do not offer the same
+  ones: the terminal buckets history (twelve ISO weeks, stacked by model) and the
+  dashboard sums a rolling window (the last 7 days, as one figure). They shared
+  the word `Week` until #666, which is why this line used to name the periods as
+  if there were one set.
 
 A rollup writing into such a table must be conservative by construction: it may
 under-count a day, never double-count one.
@@ -115,6 +119,15 @@ reproduction.
 The mark is never pruned, for the same reason `stats_daily` is not: it is what
 makes that table's history correct. Its cost is one row per session ever seen —
 a session id and an integer.
+
+**The mark and the daily bucket move together, in one transaction.** The mark
+means *this much is already in `stats_daily`*, and raising it in a call of its own
+let that become true ahead of the fact: the mark advanced, the daily write failed,
+and because the table is never recomputed the growth was gone for good — silently,
+with nothing recording which day `vigied stats-repair` should be pointed at. Rare,
+since the insert fails only on a write error, and permanent when it happens. In
+one transaction a failure leaves the mark where it was, and the next report counts
+the same growth again (#669).
 
 ### 4.1 Also: one report per session per scan
 

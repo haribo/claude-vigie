@@ -12,6 +12,7 @@ import {
   readWatcher, fleetAlarm, fleetAlarmDetail, watcherCell,
   matchesFilter, GROUP_MODES, groupSessions, contextKnown, contextPct, contextCell, migrateV1Columns,
   IDLE_PRESETS_MS, idleLabel, hiddenByIdle, STATUSES, SORT_COMPARATORS, DEFAULT_SORT,
+  boardState, emptyMessage,
 } from "./lib.js";
 
 // Both keys were named for the old brand. They hold live state — a signed-in
@@ -42,7 +43,7 @@ const IDLE_KEY = "vigie_idle_hide";
 let idleHideAfter = IDLE_PRESETS_MS.includes(Number(localStorage.getItem(IDLE_KEY))) ? Number(localStorage.getItem(IDLE_KEY)) : 0;
 let groupBy = GROUP_MODES.includes(localStorage.getItem(GROUP_KEY) || "") ? localStorage.getItem(GROUP_KEY) : "off";
 let sortKey = DEFAULT_SORT.key, sortDir = DEFAULT_SORT.dir;   // 1 = the comparator's own order
-let statsPeriod = "Week", statsLoaded = false, settingsLoaded = false;
+let statsPeriod = "7d", statsLoaded = false, settingsLoaded = false;
 let liveCtrl = null, liveRetry = null, tickTimer = null, metaTimer = null;
 // When the stream last delivered any bytes, keep-alive comments included. It is
 // what the silence watchdog measures; 0 means nothing has been heard yet.
@@ -255,7 +256,7 @@ function notHidden(s) {
 function preferenceVisible() { return sessions.filter(notHidden); }
 
 function visibleSessions() {
-  // Same order as the TUI (internal/tui/sessionsview.go): the visibility
+  // Same order as the TUI (internal/tui/sessions.go): the visibility
   // preferences first, then the filter, then the sort.
   const list = preferenceVisible().filter((s) => matchesFilter(s, filter));
   const col = COLS.find((c) => c.key === sortKey);
@@ -290,8 +291,8 @@ function renderSessions() {
     + g.sessions.map(row).join("")).join("");
   // The TUI says which of the two silences this is, and so must this: an empty
   // fleet and a filter that matched nothing look identical otherwise.
-  const empty = visibleSessions().length ? ""
-    : `<div class="empty">${filter ? "No sessions match the filter." : "No sessions in view."}</div>`;
+  const msg = emptyMessage(visibleSessions().length, Boolean(filter), refreshFailed, everLoaded);
+  const empty = msg ? `<div class="empty">${esc(msg)}</div>` : "";
   const html = `<div class="table-wrap"><div class="table-scroll"><table><thead><tr>${heads}</tr></thead><tbody>${rows}</tbody></table></div>${empty}</div>`;
   if (!paint("tab-sessions", html)) return; // nothing on screen would change; listeners are still bound
   $("tab-sessions").querySelectorAll("th[data-sort]").forEach((th) => th.addEventListener("click", () => {
@@ -338,10 +339,37 @@ function renderMachines() {
 async function loadStats() {
   try { stats = await api("/api/stats"); statsLoaded = true; renderStats(); } catch (e) { /* stats optional */ }
 }
-const PERIOD_DAYS = { Day: 1, Week: 7, Month: 30, Year: 365, Total: Infinity };
+// The dashboard sums a rolling window; the terminal buckets history. Both offered
+// a button called `Week`, and it meant the last seven days as one figure here and
+// twelve ISO weeks stacked by model there — same word, same tab, two numbers, and
+// neither window said which one you were reading (#666).
+//
+// The labels now name the window they are, so the two stop contradicting each
+// other on a word. They converge properly when the dashboard grows the terminal's
+// bucketed chart, which is the browser's own piece of work (#667), not a rename.
+//
+// The field is `id` rather than the obvious `key`, on purpose:
+// `TestDashboardSharesTheColumnSet` scrapes this file for objects keyed that way
+// and reads every one it finds as a table column, so a second array of the same
+// shape reports as a dashboard column the TUI lacks. Naming the field differently
+// keeps the two apart — and this comment avoids spelling the pattern out, having
+// been caught by it once.
+const PERIODS = [
+  { id: "24h", days: 1, phrase: "the last 24 hours" },
+  { id: "7d", days: 7, phrase: "the last 7 days" },
+  { id: "30d", days: 30, phrase: "the last 30 days" },
+  { id: "1y", days: 365, phrase: "the last year" },
+  { id: "all", days: Infinity, phrase: "all time" },
+];
+const periodOf = (id) => PERIODS.find((p) => p.id === id) || PERIODS[1];
 function renderStats() {
-  if (!stats) { $("tab-stats").innerHTML = '<div class="muted-note">No stats yet.</div>'; return; }
-  const cutoff = Date.now() - PERIOD_DAYS[statsPeriod] * 86400000;
+  // Not just "no stats yet": a machine covered only by the watcher accrues tokens
+  // and never a second of time, because only hooks close a status interval
+  // (docs/design/status-time.md § 2). Waiting and installing the hooks are
+  // different actions, and the panel used to describe the second as the first
+  // (#668).
+  if (!stats) { $("tab-stats").innerHTML = '<div class="muted-note">No stats yet — tokens accrue from any report; time needs the reporting hooks (<code>vigie hooks install</code>).</div>'; return; }
+  const cutoff = Date.now() - periodOf(statsPeriod).days * 86400000;
   const daily = (stats.daily || []).filter((d) => { const t = Date.parse(d.day + "T00:00:00Z"); return Number.isNaN(t) || t >= cutoff; });
   const out = daily.reduce((n, d) => n + (d.output_tokens || 0), 0);
   const work = daily.reduce((n, d) => n + (d.working_seconds || 0), 0);
@@ -349,7 +377,7 @@ function renderStats() {
   const idle = daily.reduce((n, d) => n + (d.idle_seconds || 0), 0);
   const active = work + wait + idle;
   const machines = new Set(sessions.map((s) => s.machine)).size;
-  const periods = Object.keys(PERIOD_DAYS).map((p) => `<button class="period ${p === statsPeriod ? "active" : ""}" data-p="${p}">${p}</button>`).join("");
+  const periods = PERIODS.map((p) => `<button class="period ${p.id === statsPeriod ? "active" : ""}" data-p="${p.id}">${p.id}</button>`).join("");
   const top = (stats.top_sessions || []).slice(0, 5).map((s, i) =>
     `<div class="top"><span class="rk">${i + 1}</span><span class="nm">${esc(s.name)}</span><span class="mc">${esc(s.machine)}</span><span class="tk">${humanTokens(s.output_tokens)}</span></div>`).join("")
     || '<div class="muted-note">No sessions ranked yet.</div>';
@@ -364,7 +392,7 @@ function renderStats() {
     </div>
     <div class="stat-cols">
       <div class="card"><h3>Top sessions — output</h3>${top}</div>
-      <div class="card"><h3>Time by status (this ${statsPeriod.toLowerCase()})</h3>
+      <div class="card"><h3>Time by status (${periodOf(statsPeriod).phrase})</h3>
         <div class="timebar"><i class="st-working" data-w="${pct(work)}"></i><i class="st-waiting" data-w="${pct(wait)}"></i><i class="st-idle" data-w="${pct(idle)}"></i></div>
         <div class="timeleg">
           <span class="b st-working"><span class="dot"></span><b>${trim(work / 3600)}h</b> working</span>
@@ -556,7 +584,7 @@ async function connectLive() {
       lastHeardAt = Date.now(); // any bytes, the keep-alive comment included, prove it is alive
       buf += dec.decode(value, { stream: true });
       let idx;
-      while ((idx = buf.indexOf("\n\n")) >= 0) { const frame = buf.slice(0, idx); buf = buf.slice(idx + 2); if (frame.includes("event: sessions")) loadSessions().catch(() => {}); }
+      while ((idx = buf.indexOf("\n\n")) >= 0) { const frame = buf.slice(0, idx); buf = buf.slice(idx + 2); if (frame.includes("event: sessions")) refreshSessions(); }
     }
     throw new Error("stream ended");
   } catch (e) {
@@ -586,11 +614,37 @@ function tick() {
     setConn(false);
     connectLive(); // aborts the silent stream on its way in
   }
-  loadSessions().catch(() => {});
+  refreshSessions();
 }
 function startTicker() { clearInterval(tickTimer); tickTimer = setInterval(tick, REFRESH_MS); }
 function stopTicker() { clearInterval(tickTimer); tickTimer = null; }
-function setConn(live) { const el = $("conn"); el.className = "chip conn " + (live ? "live" : "down"); el.querySelector(".txt").textContent = live ? "live" : "reconnecting…"; }
+// streamLive and refreshFailed are the two things the chip reads. They fail
+// independently — see `boardState` in lib.js for why conflating them hid the
+// worse of the two (#673).
+let streamLive = false, refreshFailed = false, everLoaded = false;
+function setConn(live) { streamLive = live; paintConn(); }
+function setRefreshFailed(failed) { refreshFailed = failed; paintConn(); }
+function paintConn() {
+  const { cls, text } = boardState(streamLive, refreshFailed);
+  const el = $("conn");
+  el.className = "chip conn " + cls;
+  el.querySelector(".txt").textContent = text;
+}
+
+// refreshSessions is loadSessions with its outcome recorded rather than discarded. Every
+// caller wants the same thing from a failure — say the board is not current, keep
+// what is on screen — so none of them handles it, and none of them can forget to
+// (#673, and internal/tui/sessions.go for the rule it borrows).
+async function refreshSessions() {
+  try {
+    await loadSessions();
+    everLoaded = true;
+    setRefreshFailed(false);
+  } catch (e) {
+    // 401 is not staleness: `api` has already torn down and shown the gate.
+    if (String(e && e.message) !== "unauthorized") setRefreshFailed(true);
+  }
+}
 
 // ---------- auth / gate ----------
 function onUnauthorized() { teardown(); localStorage.removeItem(TOKEN_KEY); token = ""; showGate(true); }
@@ -603,7 +657,12 @@ async function start() {
   hideGate(); setConn(false);
   statsLoaded = false; settingsLoaded = false;
   renderTabs();
-  await loadSessions();
+  // A first load that fails must not read as an empty fleet, which is what
+  // discarding it did: the gate closed, the table drew nothing, and nothing said
+  // the server had never answered (#673). The stream and the ticker still start —
+  // the failure may be a restart, and recovering is their job.
+  await refreshSessions();
+  renderSessions();
   loadMeta();
   metaTimer = setInterval(loadMeta, 60000);
   startTicker();
@@ -615,7 +674,7 @@ document.addEventListener("keydown", (e) => { if (e.key === "Escape" && detailId
 $("gate-form").addEventListener("submit", (e) => {
   e.preventDefault();
   const v = $("token-input").value.trim(); if (!v) return;
-  token = v; localStorage.setItem(TOKEN_KEY, token); start().catch(() => {});
+  token = v; localStorage.setItem(TOKEN_KEY, token); start();
 });
 $("signout").addEventListener("click", signOut);
 $("group-select").addEventListener("change", (e) => {
@@ -630,4 +689,4 @@ $("filter-input").addEventListener("input", (e) => {
 
 renderTabs();
 renderGroupSelect();
-if (token) start().catch(() => {}); else showGate(false);
+if (token) start(); else showGate(false);

@@ -12,11 +12,15 @@ import (
 	"github.com/haribo/claude-vigie/internal/api"
 )
 
-// The Sessions tab's own behavior lives here (#379): the state transitions the
-// tab owns — filtering, sorting/grouping selection, cursor and detail movement —
-// operate on sessionsView alone. Anything that needs the terminal geometry (the
-// viewport offset) stays on the model, which re-scrolls after a transition; this
-// file holds no rendering.
+// The Sessions tab lives here (#379), behavior and rendering both: the state
+// transitions the tab owns — filtering, sorting/grouping selection, cursor and
+// detail movement — operate on sessionsView alone, and the views that draw them
+// follow below.
+//
+// What stays on the model is the terminal geometry: the viewport offset belongs
+// to the window rather than to the tab, and the model re-scrolls after a
+// transition. This comment used to end "this file holds no rendering", which
+// stopped being true 290 lines above `viewSessions` (#671).
 
 // visible returns the sessions to show: filtered, then sorted, then grouped, with
 // ended and idle-aged sessions hidden per the persistent view prefs.
@@ -207,8 +211,14 @@ type sessionsView struct {
 	groupBy      groupBy
 	prevStatus   map[string]string // last status per session, for notify transitions (#260)
 	prevCall     map[string]bool   // last call state per session, for notify transitions (#389)
-	blinkOn      bool              // marker on its visible half-cycle (#389)
-	blinkTicking bool              // a blink tick is in flight (never stack two)
+	// prevAttention is the remembered answer to "did this session need the
+	// operator", so a notification fires on *entry* into the set rather than on one
+	// particular way in. Kept as its own map rather than re-derived from
+	// prevStatus: the daemon decides attention (ADR-0011), and deriving it here
+	// again is the copy that ADR removes (#665).
+	prevAttention map[string]bool
+	blinkOn       bool // marker on its visible half-cycle (#389)
+	blinkTicking  bool // a blink tick is in flight (never stack two)
 }
 
 func (m model) handleSessionsKey(msg tea.KeyMsg) model {

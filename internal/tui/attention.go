@@ -55,30 +55,43 @@ func nextAttention(sessions []api.SessionView) string {
 }
 
 // withNotifiedTransitions folds the new session list into the model, firing a
-// desktop notification for each session that just left `working` for an attention
-// state (#260). Edge-triggered off the remembered previous status — one
-// notification per transition, re-armed on the next `working`. A session with no
-// observed `working` predecessor (empty prevStatus at startup) never notifies, so
-// launching the TUI is silent. Suppressed while the TUI has focus (the operator is
-// already looking) or notifications are opted out.
+// desktop notification for each session that just *entered* the attention set, or
+// raised a call (#260). Edge-triggered off the remembered previous state — one
+// notification per transition, re-armed when the session leaves the set again.
+//
+// It used to fire only on `working` → attention, which made the terminal the odd
+// one out: the GNOME indicator notifies on any entry, and the README describes
+// that. A permission prompt arriving after a turn had finished — the session was
+// `idle`, not `working` — was audible on the desktop and silent in the terminal,
+// on the one signal the product exists to deliver (#665).
+//
+// The narrow rule looked like it was buying silence at startup. It was not: that
+// comes from `known`, which skips any session seen for the first time, and is
+// untouched here. The `working` predecessor bought nothing and cost a real
+// notification.
+//
+// Suppressed while the TUI has focus (the operator is already looking) or
+// notifications are opted out.
 func (m model) withNotifiedTransitions(next []api.SessionView) model {
-	prev, prevCall := m.sess.prevStatus, m.sess.prevCall
+	prev, prevCall, prevAttention := m.sess.prevStatus, m.sess.prevCall, m.sess.prevAttention
 	m.sess.prevStatus = make(map[string]string, len(next))
 	m.sess.prevCall = make(map[string]bool, len(next))
+	m.sess.prevAttention = make(map[string]bool, len(next))
 	for _, s := range next {
 		_, known := prev[s.ID] // a session first seen at startup never notifies
-		calling := hasCall(s)
+		calling, attention := hasCall(s), isAttention(s)
 		if !m.focus.suppressesNotifications() && m.prefs.notify {
 			switch {
 			case known && calling && !prevCall[s.ID]:
 				// A raised call is exactly what this notification is for (#260).
 				notifyFn(s.Name, "calling you")
-			case prev[s.ID] == "working" && isAttention(s):
+			case known && attention && !prevAttention[s.ID]:
 				notifyFn(s.Name, s.Status)
 			}
 		}
 		m.sess.prevStatus[s.ID] = s.Status
 		m.sess.prevCall[s.ID] = calling
+		m.sess.prevAttention[s.ID] = attention
 	}
 	return m
 }
