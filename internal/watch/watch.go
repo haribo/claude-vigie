@@ -688,8 +688,8 @@ func statusFor(sessionID, lastStopReason string, age time.Duration) string {
 	m, ok, err := presence.Load(sessionID)
 	hasMapping := err == nil && ok
 	switch {
-	case hasMapping && !presence.Alive(m):
-		return "ended"
+	case hasMapping && presence.Status(m) == presence.Gone:
+		return "ended" // Gone, never merely unreadable (#663)
 	case activelyWorking(lastStopReason, age):
 		return "working"
 	case hasMapping:

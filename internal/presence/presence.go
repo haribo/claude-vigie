@@ -122,7 +122,11 @@ func GC(olderThan time.Duration, now time.Time) (int, error) {
 		}
 		sessionID := strings.TrimSuffix(e.Name(), ".json")
 		m, ok, err := Load(sessionID)
-		if err != nil || !ok || Alive(m) {
+		// Only a mapping whose process we could *look at* and found gone is
+		// collectable. Deleting one we simply could not read would remove the
+		// evidence the session is alive, and the watcher then derives `ended` from
+		// its absence — the same failure as #663, one step further along.
+		if err != nil || !ok || Status(m) != Gone {
 			continue
 		}
 		fi, err := e.Info()

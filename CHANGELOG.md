@@ -14,6 +14,10 @@ file is the single source of truth, not a second narrative.
 - A subagent whose completion never arrives no longer pins its session to
   `working`. The next prompt you type closes it, as it already closed a tool call
   left hanging (#662).
+- A `/proc` that cannot be read no longer reports every session as ended. A
+  hardened `hidepid`, a container or a namespace that hides the pid used to look
+  exactly like a dead process, and the whole fleet went dark at the next scan
+  (#663).
 
 ## [0.10.0] - 2026-09-01
 

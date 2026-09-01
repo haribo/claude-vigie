@@ -56,6 +56,13 @@ both are known.
   *enhancement*: where it is unavailable (non-Linux, or a hook not run under
   Claude Code), capture no-ops and the watcher falls back to transcript-only
   heuristics — a session with no mapping and no activity is presumed `ended`.
+- **That fallback covers the capture path, and only it.** Where `/proc` exists but
+  refuses to answer — a hardened `hidepid`, a container or namespace that does not
+  expose the pid — nothing is missing for capture to no-op on, and a read that
+  fails is not evidence of a dead process. The liveness answer is therefore
+  three-valued: present, gone, or *unreadable*. Only `gone` ends a session, and
+  only `gone` collects a mapping. Conflating the third with the second reported
+  every session Claude Code listed as `ended` at the next scan (#663).
 - **Hooks must not fail the session.** Presence capture is best-effort; the hook
   ignores its errors and always exits 0, so a fleet problem never blocks Claude.
 - **Observe-only.** Reading `/proc` and a mapping file is pure observation,
