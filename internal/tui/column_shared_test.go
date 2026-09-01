@@ -78,22 +78,7 @@ func TestDashboardSharesTheColumnSet(t *testing.T) {
 	if err != nil {
 		t.Fatalf("reading app.js: %v", err)
 	}
-	var got []string
-	for _, line := range strings.Split(string(b), "\n") {
-		const marker = `{ key: "`
-		i := strings.Index(line, marker)
-		if i < 0 {
-			continue
-		}
-		rest := line[i+len(marker):]
-		if j := strings.Index(rest, `"`); j >= 0 {
-			got = append(got, rest[:j])
-		}
-	}
-	if len(got) == 0 {
-		t.Fatal("no `{ key: \"…\"` found in app.js — the extraction is broken, not the code")
-	}
-
+	got := dashboardColumnKeys(t, string(b))
 	want := columnKeys()
 	have := map[string]bool{}
 	for _, k := range got {
@@ -117,5 +102,97 @@ func TestDashboardSharesTheColumnSet(t *testing.T) {
 		if !known[k] && !webExtraColumns[k] {
 			t.Errorf("the dashboard has a column %q the TUI does not — either port it or declare it a gesture", k)
 		}
+	}
+}
+
+// keysFromColsBlock extracts the keys of the dashboard's column table, or nil
+// when the table is not there.
+//
+// It reads `const COLS = [ … ];` and nothing else. Scanning the whole file
+// instead meant any object of the same shape anywhere in it was reported as a
+// column the TUI lacks — including, once, the comment that explained the
+// previous collision (#692). Bounding the scan makes everything outside the
+// table out of scope by construction rather than by luck of naming.
+func keysFromColsBlock(src string) []string {
+	const open = "const COLS = ["
+	i := strings.Index(src, open)
+	if i < 0 {
+		return nil
+	}
+	block := src[i+len(open):]
+	// The table closes on a line that is exactly `];`, at column zero — every
+	// nested literal inside it is indented, so this cannot cut the block short.
+	if j := strings.Index(block, "\n];"); j >= 0 {
+		block = block[:j]
+	} else {
+		return nil // opened and never closed: the extraction cannot trust what follows
+	}
+	var got []string
+	for _, line := range strings.Split(block, "\n") {
+		const marker = "{ key: \""
+		i := strings.Index(line, marker)
+		if i < 0 {
+			continue
+		}
+		rest := line[i+len(marker):]
+		if j := strings.Index(rest, "\""); j >= 0 {
+			got = append(got, rest[:j])
+		}
+	}
+	return got
+}
+
+// dashboardColumnKeys is keysFromColsBlock with the verdict: an extraction that
+// finds nothing has stopped working and must say so, not pass on an empty set.
+func dashboardColumnKeys(t *testing.T, src string) []string {
+	t.Helper()
+	got := keysFromColsBlock(src)
+	if len(got) == 0 {
+		t.Fatal("no column table found in app.js — the extraction is broken, not the code")
+	}
+	return got
+}
+
+// #692. The extraction used to read the whole file, so any object of the same
+// shape anywhere in app.js was reported as a dashboard column the TUI lacks.
+//
+// That is not hypothetical: #689 added a small table of stats periods in the
+// ordinary shape and the guard failed with `the dashboard has a column "24h"`.
+// Renaming its field cleared it — and the guard then matched the *comment*
+// explaining the rename, because the comment spelled the pattern out.
+//
+// The failure names a defect that does not exist and prescribes a fix that is
+// wrong ("either port it or declare it a gesture", about something that is not a
+// column). The cost is the next person's: they add a keyed array, are told they
+// broke column parity, and either contort their code or weaken this guard.
+func TestTheColumnScrapeReadsOnlyTheColumnTable(t *testing.T) {
+	src := `const SOMETHING_ELSE = [
+  { key: "24h", days: 1 },
+  { key: "7d", days: 7 },
+];
+
+// A comment that spells the pattern out: { key: "trap" } — prose is not code.
+
+const COLS = [
+  { key: "name", label: "Session" },
+  { key: "status", label: "Status" },
+];
+
+const LATER = [
+  { key: "decoy", label: "not a column" },
+];
+`
+	got := dashboardColumnKeys(t, src)
+	want := []string{"name", "status"}
+	if len(got) != len(want) || got[0] != want[0] || got[1] != want[1] {
+		t.Errorf("extracted %v, want %v — anything outside the COLS table is not a column", got, want)
+	}
+}
+
+// The no-match case must stay loud: an extraction that has stopped finding the
+// table has to say so rather than pass on an empty set.
+func TestTheColumnScrapeFailsLoudlyWithNoTable(t *testing.T) {
+	if keysFromColsBlock("const NOTHING = [];\n") != nil {
+		t.Error("found column keys in a source that declares no COLS table")
 	}
 }
