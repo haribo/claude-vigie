@@ -1,6 +1,7 @@
 package tui
 
 import (
+	"sort"
 	"testing"
 
 	"github.com/haribo/claude-vigie/internal/api"
@@ -29,7 +30,8 @@ func TestNotifyTransitions(t *testing.T) {
 	t.Cleanup(func() { notifyFn = orig })
 
 	base := func() model {
-		return model{prefs: prefs{notify: true}, focus: focusOff, sess: sessionsView{prevStatus: map[string]string{}}}
+		return model{prefs: prefs{notify: true}, focus: focusOff,
+			sess: sessionsView{prevStatus: map[string]string{}, prevAttention: map[string]bool{}}}
 	}
 	// The daemon marks a blocked session as needing attention (ADR-0011, #617), so
 	// the helper does too: a fixture that omits it describes an answer the server
@@ -39,20 +41,34 @@ func TestNotifyTransitions(t *testing.T) {
 		return api.SessionView{ID: id, Title: id, Name: id, Status: st, Attention: status.NeedsAttention(st)}
 	}
 
-	// First apply arms prevStatus; no working predecessor → nothing fires.
+	// First apply arms the remembered state; a session seen for the first time never
+	// notifies, so launching the TUI is silent whatever the fleet is doing.
 	m := base().withNotifiedTransitions([]api.SessionView{sess("a", "working"), sess("b", "idle")})
 	if len(fired) != 0 {
 		t.Fatalf("startup fired %v, want none", fired)
 	}
-	// a: working → waiting fires; b: idle → waiting does NOT (no working predecessor).
+	// Both enter the attention set, so both fire.
+	//
+	// This assertion used to read "b: idle → waiting does NOT (no working
+	// predecessor)". That narrow rule is what #665 removed: it made the terminal
+	// the only client that stayed quiet for a permission prompt arriving after a
+	// turn had finished, while the GNOME indicator and the README both say any
+	// entry into the set calls the operator. Startup silence never depended on it.
 	m = m.withNotifiedTransitions([]api.SessionView{sess("a", "waiting"), sess("b", "waiting")})
-	if len(fired) != 1 || fired[0] != "a:waiting" {
-		t.Fatalf("fired %v, want only a:waiting", fired)
+	sort.Strings(fired)
+	if len(fired) != 2 || fired[0] != "a:waiting" || fired[1] != "b:waiting" {
+		t.Fatalf("fired %v, want both a:waiting and b:waiting", fired)
 	}
 	// Still waiting on the next tick → no re-notify (edge-triggered).
 	m = m.withNotifiedTransitions([]api.SessionView{sess("a", "waiting"), sess("b", "waiting")})
-	if len(fired) != 1 {
+	if len(fired) != 2 {
 		t.Errorf("re-notified on a held state: %v", fired)
+	}
+	// Leaving the set re-arms it: the next entry fires again.
+	m = m.withNotifiedTransitions([]api.SessionView{sess("a", "working"), sess("b", "waiting")})
+	m = m.withNotifiedTransitions([]api.SessionView{sess("a", "error"), sess("b", "waiting")})
+	if len(fired) != 3 || fired[len(fired)-1] != "a:error" {
+		t.Errorf("fired %v, want a:error after a returned to the set", fired)
 	}
 
 	// Focus suppresses; a fresh working→error transition must stay silent.

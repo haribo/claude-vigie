@@ -29,10 +29,11 @@ func Run(cfg *config.Config) error {
 		serverURL:     cfg.ServerURL,
 		prefs:         p,
 		sess: sessionsView{
-			sortKey:      p.sortKey, // restore the persisted table order (#237)
-			sortReversed: p.sortReversed,
-			groupBy:      p.groupBy,
-			prevStatus:   map[string]string{},
+			sortKey:       p.sortKey, // restore the persisted table order (#237)
+			sortReversed:  p.sortReversed,
+			groupBy:       p.groupBy,
+			prevStatus:    map[string]string{},
+			prevAttention: map[string]bool{},
 		},
 		fetchSeq: 1, // Init issues generation 1
 		events:   events,
