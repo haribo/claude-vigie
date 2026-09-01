@@ -354,6 +354,51 @@ export function needsAttention(session) {
   return hasCall(session) || Boolean(session.attention);
 }
 
+// attentionIds is the set of sessions currently calling for the operator, so a
+// notification can fire on the transition *into* that set rather than on every
+// poll. The GNOME indicator has had the same helper since #260; the dashboard
+// grew one with #667.
+export function attentionIds(sessions) {
+  return new Set((sessions || []).filter(needsAttention).map((s) => s.id));
+}
+
+// enteredAttention returns the sessions that were not calling last time and are
+// now — the ones worth a notification. `seen` is the previous `attentionIds`.
+//
+// `primed` is what keeps opening the dashboard silent: on the very first poll
+// there is no previous set, and every session already blocked would otherwise
+// ring at once. The terminal draws the same line, with the same reasoning, from
+// the other side (a session it has never seen never notifies).
+export function enteredAttention(sessions, seen, primed) {
+  if (!primed) return [];
+  return (sessions || []).filter((s) => needsAttention(s) && !seen.has(s.id));
+}
+
+// nextAttention is the id of the session the operator should be sent to first,
+// or "" when nothing needs them. It is the rule behind `n` in the terminal
+// (#261) and the jump in the dashboard (#667).
+//
+// A raised call jumps ahead of every inferred attention state: the session said
+// so itself, where waiting/error/stalled are deductions (ADR-0010, #389). Among
+// calls, the oldest call wins; otherwise the session blocked longest wins.
+//
+// It sorts on `status_changed_at`, never on when the session was last seen: the
+// watcher refreshes that every tick, which would flatten the queue into an
+// arbitrary order. This is a hand port of `nextAttention` in
+// internal/tui/attention.go, proved against test/fixtures/attention-order-cases.json
+// by both suites.
+export function nextAttention(sessions) {
+  const all = sessions || [];
+  const called = all.filter(hasCall);
+  if (called.length) {
+    return called.slice().sort((a, b) => String(a.call_at).localeCompare(String(b.call_at)))[0].id;
+  }
+  const q = all.filter(needsAttention);
+  if (!q.length) return "";
+  return q.slice().sort((a, b) =>
+    String(a.status_changed_at || "").localeCompare(String(b.status_changed_at || "")))[0].id;
+}
+
 export function attentionCount(sessions) {
   return (sessions || []).filter(needsAttention).length;
 }

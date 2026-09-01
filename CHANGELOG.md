@@ -9,6 +9,15 @@ file is the single source of truth, not a second narrative.
 
 ## [Unreleased]
 
+## [0.10.0] - 2026-09-01
+
+### Added
+
+- The dashboard can call you. It notifies when a session starts calling — the rule
+  the terminal and the GNOME indicator already follow — and `n` jumps to the one
+  waiting longest. Off until you turn it on in Settings, and it needs an https or
+  localhost address (#667).
+
 ## [0.9.1] - 2026-09-01
 
 ### Fixed
@@ -579,7 +588,8 @@ across machines — it reads and reports session state; it never drives a sessio
 - The API binds `127.0.0.1` by default; every `/api/*` route is behind a
   constant-time shared-token check; request bodies are size-capped.
 
-[Unreleased]: https://github.com/haribo/claude-vigie/compare/v0.9.1...HEAD
+[Unreleased]: https://github.com/haribo/claude-vigie/compare/v0.10.0...HEAD
+[0.10.0]: https://github.com/haribo/claude-vigie/compare/v0.9.1...v0.10.0
 [0.9.1]: https://github.com/haribo/claude-vigie/compare/v0.9.0...v0.9.1
 [0.9.0]: https://github.com/haribo/claude-vigie/compare/v0.8.0...v0.9.0
 [0.8.0]: https://github.com/haribo/claude-vigie/compare/v0.7.2...v0.8.0

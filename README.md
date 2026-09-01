@@ -27,7 +27,10 @@
 
 - **Every session, every machine, one board** — nine live statuses, grouped and filtered as you like.
 - **A session can call you** when its work is done.
-- **Desktop notifications** when a session starts calling for you — waiting on input, stalled on a tool, in error, or raising a call (libnotify) — and `n` to jump straight to it.
+- **Desktop notifications** when a session starts calling for you — waiting on
+  input, stalled on a tool, in error, or raising a call — and `n` to jump straight
+  to it. In the terminal (libnotify), on the GNOME top bar, and in the browser
+  (opt-in from Settings; the browser requires an https or localhost address).
 - **Terminal and browser** — a TUI, and a read-only web dashboard served by the daemon itself. Same board and same answers; each suits its own medium.
 - **Per-session insight** — tokens, context fill, reasoning effort, permission mode, `/rc` link.
 - **Usage and history** — subscription usage, plus daily rollups of tokens and of where your time went.

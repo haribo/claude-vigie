@@ -1,0 +1,60 @@
+{
+  "_comment": [
+    "Which session the operator is sent to first, when several need them (#261, #667).",
+    "The terminal has had this since #261, behind `n`. The dashboard grew it with",
+    "#667, and the ordering is the one rule the two must state identically: a queue",
+    "served in two different orders is worse than one window not having a queue.",
+    "Two rules, in this order. A raised call jumps ahead of every inferred attention",
+    "state, because the session said so itself where waiting/error/stalled are",
+    "deductions (ADR-0010, #389); among calls, the oldest `call_at` wins. Otherwise",
+    "the oldest `status_changed_at` among the attention states wins — how long the",
+    "session has been blocked, not how recently it was seen, since the watcher",
+    "refreshes `last_seen_at` every tick and would flatten the queue.",
+    "`attention` is the daemon's answer (ADR-0011), never re-derived by a client.",
+    "internal/tui/attention_shared_test.go and test/js/dashboard.test.mjs read this",
+    "file and must agree case for case. `want` is the id, or \"\" for nothing to jump to."
+  ],
+  "cases": [
+    {
+      "name": "nothing needs the operator",
+      "sessions": [
+        { "id": "a", "status": "working", "attention": false, "status_changed_at": "2026-09-01T10:00:00Z" },
+        { "id": "b", "status": "idle", "attention": false, "status_changed_at": "2026-09-01T09:00:00Z" }
+      ],
+      "want": ""
+    },
+    {
+      "name": "the one that has been blocked longest, not the one seen longest ago",
+      "sessions": [
+        { "id": "recent", "status": "waiting", "attention": true, "status_changed_at": "2026-09-01T11:00:00Z" },
+        { "id": "oldest", "status": "error", "attention": true, "status_changed_at": "2026-09-01T08:00:00Z" },
+        { "id": "middle", "status": "stalled", "attention": true, "status_changed_at": "2026-09-01T09:30:00Z" }
+      ],
+      "want": "oldest"
+    },
+    {
+      "name": "a raised call jumps ahead of an older inferred state",
+      "sessions": [
+        { "id": "blocked-since-dawn", "status": "waiting", "attention": true, "status_changed_at": "2026-09-01T06:00:00Z" },
+        { "id": "called", "status": "working", "attention": false, "call_at": "2026-09-01T11:59:00Z" }
+      ],
+      "want": "called"
+    },
+    {
+      "name": "among calls, the oldest call wins",
+      "sessions": [
+        { "id": "called-late", "status": "idle", "attention": false, "call_at": "2026-09-01T11:00:00Z" },
+        { "id": "called-early", "status": "idle", "attention": false, "call_at": "2026-09-01T10:00:00Z" }
+      ],
+      "want": "called-early"
+    },
+    {
+      "name": "a session both calling and blocked is still a call",
+      "sessions": [
+        { "id": "other", "status": "error", "attention": true, "status_changed_at": "2026-09-01T07:00:00Z" },
+        { "id": "both", "status": "waiting", "attention": true, "status_changed_at": "2026-09-01T08:00:00Z", "call_at": "2026-09-01T11:00:00Z" }
+      ],
+      "want": "both"
+    }
+  ]
+}
