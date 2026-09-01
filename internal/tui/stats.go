@@ -217,7 +217,13 @@ func (m model) renderStats() string {
 
 	daily := m.stats.Daily
 	if len(daily) == 0 {
-		b.WriteString(dimStyle.Render("No activity yet — stats accumulate as sessions report."))
+		// "stats accumulate as sessions report" was true of a fleet that had just
+		// started and false of one covered only by the watcher, where the durations
+		// never accumulate at all — only hooks close a status interval
+		// (status-time.md § 2). The two want different things from the operator:
+		// waiting, versus installing the hooks (#668).
+		b.WriteString(dimStyle.Render("No activity yet — tokens accrue from any report;") + "\n")
+		b.WriteString(dimStyle.Render("time needs the reporting hooks (`vigie hooks install`)."))
 		return b.String()
 	}
 

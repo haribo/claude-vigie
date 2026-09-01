@@ -363,7 +363,12 @@ const PERIODS = [
 ];
 const periodOf = (id) => PERIODS.find((p) => p.id === id) || PERIODS[1];
 function renderStats() {
-  if (!stats) { $("tab-stats").innerHTML = '<div class="muted-note">No stats yet.</div>'; return; }
+  // Not just "no stats yet": a machine covered only by the watcher accrues tokens
+  // and never a second of time, because only hooks close a status interval
+  // (docs/design/status-time.md § 2). Waiting and installing the hooks are
+  // different actions, and the panel used to describe the second as the first
+  // (#668).
+  if (!stats) { $("tab-stats").innerHTML = '<div class="muted-note">No stats yet — tokens accrue from any report; time needs the reporting hooks (<code>vigie hooks install</code>).</div>'; return; }
   const cutoff = Date.now() - periodOf(statsPeriod).days * 86400000;
   const daily = (stats.daily || []).filter((d) => { const t = Date.parse(d.day + "T00:00:00Z"); return Number.isNaN(t) || t >= cutoff; });
   const out = daily.reduce((n, d) => n + (d.output_tokens || 0), 0);
