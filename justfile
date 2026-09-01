@@ -1,3 +1,15 @@
+# Every recipe runs against the toolchain CI runs, not whatever `go` the machine
+# happens to have. Go's default (`GOTOOLCHAIN=auto`) uses the installed one as
+# long as it satisfies go.mod's minimum, so a machine one release ahead silently
+# checks the tree against a different compiler — and every local gate then lies:
+# `gofmt` wanted an indentation CI does not, and `golangci-lint` could not run at
+# all, panicking on stdlib export data it was not built to read. Five findings in
+# one session (misspell, gosec, cyclop) reached their author only from CI (#691).
+#
+# Bump this with `go-version` in .github/workflows/ci.yaml. The two are one
+# decision: a local gate is worth running only if it answers the same question.
+export GOTOOLCHAIN := "go1.26.5"
+
 # Default: list all commands
 default:
     @just --list
@@ -108,7 +120,10 @@ code-check:
     #!/usr/bin/env bash
     set -euo pipefail
     echo "==> gofmt"
-    output=$(gofmt -l .)
+    # The pinned toolchain's gofmt, not the one on PATH: PATH's belongs to the
+    # machine's Go and formats to its rules, which is the discrepancy #691 is about.
+    gofmt="$(go env GOROOT)/bin/gofmt"
+    output=$("$gofmt" -l .)
     if [ -n "$output" ]; then echo "gofmt: $output"; exit 1; fi
     echo "==> goimports"
     output=$(./bin/goimports -l .)
