@@ -17,6 +17,10 @@ file is the single source of truth, not a second narrative.
 - The dashboard's Stats periods say which window they are — `24h`, `7d`, `30d`,
   `1y`, `all`. `Week` meant the last seven days summed here and twelve stacked
   weeks in the terminal, with nothing saying which you were reading (#666).
+- Stats says where its durations come from. A machine covered only by the
+  watcher accrues tokens and never a second of time — only the reporting hooks
+  close a status interval — and the empty panel used to read as an idle fleet
+  (#668).
 - A resumed session no longer reads `ended`. `claude --resume` keeps the session
   id, and the row came back announcing the end it had just left — with its old end
   time still attached — until the operator typed something (#664).
