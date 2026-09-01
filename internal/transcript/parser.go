@@ -72,10 +72,16 @@ func (p *Parser) foldLine(raw []byte) {
 		// it itself. It marks those isMeta (system reminders, skill preambles, the
 		// "Continue from where you left off." resume), and they land in the middle
 		// of live tool calls, so closing on them would break stalled detection.
-		if answered := p.pending.clearToolResults(l.Message.Content); !answered && !l.IsMeta {
+		answered := p.pending.clearToolResults(l.Message.Content)
+		notified := p.agents.clearNotifications(l.Message.Content) // <task-notification> closes an agent (#344)
+		// A real prompt closes the turn every older tool call *and* subagent
+		// belonged to (#483, #662). A line carrying a notification is not one,
+		// however much it looks like plain text: it would retire the siblings of
+		// the agent it announces.
+		if !answered && !notified && !l.IsMeta {
 			p.pending.closeTurn()
+			p.agents.closeTurn()
 		}
-		p.agents.clearNotifications(l.Message.Content)          // <task-notification> closes an agent (#344)
 		p.info.Interrupted = isInterruptLine(l.Message.Content) // synthetic interrupt marker, else a real prompt clears it (#351)
 	case "system":
 		if l.Subtype == "compact_boundary" && l.Timestamp != "" {
