@@ -29,6 +29,13 @@ import (
 // The defense was written for #235, before `stalled` existed (#256). Nothing
 // widened it when it did, which is the argument for defending against the
 // *class* rather than a hand-kept list.
+//
+// `stalled` itself is gone (ADR-0012), and with it the single-status case that
+// reproduced #508 — the server now refuses a report carrying that word at all.
+// What the file keeps is the guard the incident actually argued for: every status
+// the watcher can only *infer* from a frozen transcript, asserted as a class. The
+// history above stays because the lesson is about hand-kept lists, not about the
+// status that exposed it.
 
 // waitingFixture posts a Notification (→ waiting) and returns a reporter and a
 // status reader for that session, on an injected clock.
@@ -83,26 +90,12 @@ func watchReport(status, timestamp string) api.ReportRequest {
 	}
 }
 
-// The reported failure, at the width it happens: the transcript froze when the
-// prompt appeared, so the watcher's report predates the waiting it would replace.
-func TestAPermissionWaitingSurvivesAnInferredStalled(t *testing.T) {
-	report, status, advance := waitingFixture(t)
-	frozen := time.Date(2026, 8, 16, 11, 59, 30, 0, time.UTC).Format(time.RFC3339)
-
-	advance(50 * time.Second) // past stalledAfter
-	report(watchReport("stalled", frozen))
-
-	if got := status(); got != "waiting" {
-		t.Errorf("status = %q, want waiting — the operator is the blocker, not a hung tool", got)
-	}
-}
-
 // The same for every status the watcher can only *infer* while the transcript is
 // frozen. A hand-kept list is what failed here, so the guard is asserted against
 // the whole class rather than the one status that was reported.
 func TestAPermissionWaitingSurvivesEveryInferredStatus(t *testing.T) {
 	frozen := time.Date(2026, 8, 16, 11, 59, 30, 0, time.UTC).Format(time.RFC3339)
-	for _, inferred := range []string{"working", "thinking", "compacting", "stalled", "idle"} {
+	for _, inferred := range []string{"working", "thinking", "compacting", "idle"} {
 		t.Run(inferred, func(t *testing.T) {
 			report, status, advance := waitingFixture(t)
 			advance(50 * time.Second)

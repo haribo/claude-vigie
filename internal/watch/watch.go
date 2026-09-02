@@ -505,28 +505,24 @@ func superseded(id string, regByProc map[procID]string) bool {
 
 // refineStatus applies the transcript-derived refinements on top of the registry
 // status and picks the matching "doing" message: thinking, then compacting
-// (#342), then the tool-based background/stalled/subagent rules (#256/#344).
+// (#342), then the tool-based background/subagent rules (#256/#344).
 func refineStatus(base, activity, id string, info *transcript.Info, activityAge time.Duration, now time.Time) (string, string) {
 	base = withThinking(base, info.Thinking)
 	base = withCompacting(base, compactingNow(id, info, now)) // opaque `working` during compaction → `compacting`
 	prevBase := base
-	base = refineWithTools(base, info, activityAge) // background keeps working; a hung tool stalls
+	base = refineWithTools(base, info, activityAge) // an outstanding tool call keeps the session working
 	switch {
 	case base == "compacting":
 		activity = "compacting context"
 	case base == "idle" && info.Interrupted:
 		activity = "interrupted" // the operator killed the turn; still idle (#351)
-	case base == "stalled" && activity == "":
-		activity = "stopped at " + info.PendingTool
+	case base == "working" && activity == "" && info.PendingTool != "":
+		activity = "running " + info.PendingTool
 	case prevBase == "idle" && base == "working" && info.AgentsActive > 0 && activityAge < agentWindow:
 		activity = info.AgentActivity // the work is running in a subagent
 	}
 	return base, activity
 }
-
-// stalledAfter is how long a quiet session with an unanswered foreground tool
-// call must sit before it reads as stalled rather than idle.
-const stalledAfter = 45 * time.Second
 
 // agentWindow bounds how long an in-flight subagent keeps its parent working
 // without any parent-transcript activity. It is the liveness cap: past it, a
@@ -536,10 +532,18 @@ const stalledAfter = 45 * time.Second
 const agentWindow = 30 * time.Minute
 
 // refineWithTools reclassifies a quiet/idle session using the transcript's
-// unresolved tool calls (#256): a still-running background task keeps it working,
-// and a foreground tool that never got a result — with the session quiet — is a
-// stalled turn, not a silent idle. Only an idle base is touched, so
-// working/waiting/error/ended are never overridden.
+// unresolved tool calls (#256). A tool call with no result is a session waiting on
+// a command — foreground or backgrounded, a build or a subagent — and that is
+// `working`. Only an idle base is touched, so working/waiting/error/ended are
+// never overridden.
+//
+// It used to return `stalled` once a foreground call had been outstanding past a
+// threshold. That claimed the turn was parked on a hung tool, which vigie has no
+// grounds for: the pairing proves a call is outstanding, never that it is hung,
+// and the verdict came from a timer over a duration only the operator can
+// interpret. How long the call has been outstanding is on the row — SEEN counts
+// from the `tool_use` line, and DETAIL names the tool
+// ([ADR-0012](../../docs/adr/0012-retire-the-stalled-status.md)).
 func refineWithTools(base string, info *transcript.Info, activityAge time.Duration) string {
 	if base != "idle" {
 		return base
@@ -550,8 +554,8 @@ func refineWithTools(base string, info *transcript.Info, activityAge time.Durati
 	if info.AgentsActive > 0 && activityAge < agentWindow {
 		return "working" // an async subagent is still running (#344)
 	}
-	if info.PendingTool != "" && activityAge >= stalledAfter {
-		return "stalled" // a foreground tool hung; the turn is parked
+	if info.PendingTool != "" {
+		return "working" // Claude is waiting on a command
 	}
 	return base
 }
@@ -653,7 +657,7 @@ const compactWindow = 5 * time.Minute
 
 // withCompacting refines an active status to "compacting" while the session is
 // summarizing its context. Like withThinking it only touches a live turn
-// (working/thinking); it never overrides waiting/error/ended/stalled/idle (#342).
+// (working/thinking); it never overrides waiting/error/ended/idle (#342).
 func withCompacting(status string, compacting bool) string {
 	if compacting && (status == "working" || status == "thinking") {
 		return "compacting"

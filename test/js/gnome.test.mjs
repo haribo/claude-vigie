@@ -78,14 +78,16 @@ test("needsAttention tolerates a missing session", () => {
 
 // The body has to say why: a stalled turn, an API error and a raised call all want
 // different things, and one wording for all three would misinform.
-test("the reason distinguishes the four signals", () => {
+test("the reason distinguishes the three signals", () => {
   assert.equal(attentionReason({ status: "idle", call_at: "t", call_message: "build done" }), "build done");
   assert.equal(attentionReason({ status: "idle", call_at: "t" }), "called you",
     "a call with no message is still a call");
   assert.match(attentionReason({ status: "waiting" }), /waiting/);
-  assert.match(attentionReason({ status: "stalled" }), /stalled/);
   assert.match(attentionReason({ status: "error" }), /error/);
   assert.equal(attentionReason({ status: "working" }), "");
+  // `stalled` left the vocabulary with ADR-0012; a status the indicator no longer
+  // knows must fall through silently rather than name a cause it cannot support.
+  assert.equal(attentionReason({ status: "stalled" }), "");
 });
 
 test("a call outranks the status it rides on", () => {

@@ -7,22 +7,24 @@ import (
 	"github.com/haribo/claude-vigie/internal/transcript"
 )
 
-// #530. session-status.md § 2 said the tool_use↔tool_result pairing "replaces the
-// old blind 5-minute window". It does not — it completes it, and the design has
-// been amended to say so.
+// What the watcher reports for a transcript frozen on an unanswered `tool_use`.
 //
-// The window is the grace period: a tool call may legitimately run that long.
-// Removing it would drop the session to an idle base after 10 s, and the pairing
-// would then report `stalled` at 45 s for every build, test suite or long search
-// — a false positive on one of the statuses that call the operator.
+// #530 pinned this as a two-part rule: a five-minute grace period during which a
+// slow tool read `working`, then `stalled` once the window elapsed. The header of
+// this file used to explain why the window mattered — that without it "a build, a
+// test suite or a long search" would be called hung within 45 s.
 //
-// What the pairing adds is what happens *after* the window: a turn stopped on a
-// tool used to fall to `idle`, so a hung tool looked exactly like a finished
-// turn. This pins both halves, so the code and the spec cannot drift apart again
-// in silence.
+// That reasoning was right and its conclusion was half-measured. ADR-0012 removed
+// the verdict entirely rather than delaying it: the pairing proves a call is
+// outstanding, never that it is hung, and only the operator knows whether twelve
+// minutes is normal for what they asked. So there is no threshold left to keep the
+// window clear of — `TestTheWindowOutlastsTheStalledThreshold` guarded an
+// invariant between two constants, one of which is gone, and went with it.
+//
+// `toolWindow` itself remains: it governs `activelyWorking`, which decides the
+// base for a transcript with no parsed pending call.
 
-// statusAt is what the watcher reports for a transcript frozen on an unanswered
-// tool_use, at a given age.
+// statusAt is what the watcher reports for a frozen transcript at a given age.
 func statusAt(age time.Duration, info *transcript.Info) string {
 	base := "idle"
 	if activelyWorking(info.LastStopReason, age) {
@@ -31,31 +33,23 @@ func statusAt(age time.Duration, info *transcript.Info) string {
 	return refineWithTools(base, info, age)
 }
 
-func TestASlowToolIsWorkingAndAHungOneIsStalled(t *testing.T) {
+// A command reads `working` for as long as it runs. This is ADR-0012's claim, at
+// the seam where the old threshold lived.
+func TestAnOutstandingToolIsWorkingAtEveryAge(t *testing.T) {
 	frozen := &transcript.Info{PendingTool: "Bash", LastStopReason: "tool_use"}
 
-	for _, age := range []time.Duration{5 * time.Second, 30 * time.Second, time.Minute, 3 * time.Minute} {
+	for _, age := range []time.Duration{
+		5 * time.Second, 30 * time.Second, time.Minute, 3 * time.Minute,
+		toolWindow + time.Minute, time.Hour, 6 * time.Hour,
+	} {
 		if got := statusAt(age, frozen); got != "working" {
-			t.Errorf("at %s a tool still within its window reads %q, want working — a build would be reported as hung", age, got)
+			t.Errorf("at %s a command still outstanding reads %q, want working — an e2e suite is not a fault", age, got)
 		}
 	}
-	if got := statusAt(toolWindow+time.Minute, frozen); got != "stalled" {
-		t.Errorf("past the window a tool that never answered reads %q, want stalled — it would look like a finished turn", got)
-	}
 }
 
-// The grace period is what separates the two, so it must stay clear of the
-// threshold the pairing uses: with toolWindow below stalledAfter there would be
-// no window at all.
-func TestTheWindowOutlastsTheStalledThreshold(t *testing.T) {
-	if toolWindow <= stalledAfter {
-		t.Errorf("toolWindow %s is not longer than stalledAfter %s — every slow tool would be reported as hung", toolWindow, stalledAfter)
-	}
-}
-
-// A background task is not a hung tool at any age: it legitimately runs long, and
-// that is decided by the pairing rather than by the window.
-func TestABackgroundTaskIsNeverStalled(t *testing.T) {
+// A background task was never a hung tool at any age, and still is not.
+func TestABackgroundTaskIsWorkingAtEveryAge(t *testing.T) {
 	bg := &transcript.Info{BackgroundActive: true, LastStopReason: "tool_use"}
 	for _, age := range []time.Duration{time.Second, toolWindow + time.Hour} {
 		if got := statusAt(age, bg); got != "working" {

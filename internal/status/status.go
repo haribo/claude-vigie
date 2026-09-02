@@ -38,7 +38,6 @@ var All = []string{
 	"thinking",
 	"compacting",
 	"waiting",
-	"stalled",
 	"idle",
 	"error",
 	"stale",
@@ -66,7 +65,6 @@ func Known(s string) bool {
 // the TUI, and produced a NaN comparator in the web dashboard, which stops sorting
 // altogether rather than sorting badly.
 var Order = []string{
-	"stalled",
 	"working",
 	"thinking",
 	"compacting",
@@ -90,12 +88,19 @@ func Rank(s string) int {
 }
 
 // Attention are the statuses that call for the operator: the session is blocked
-// and needs a human — it is waiting on input, it errored, or a tool hung.
+// and needs a human — it is waiting on input, or it errored.
+//
+// `stalled` used to be a third. It claimed a turn was parked on a hung tool, and
+// vigie had no grounds for the claim: the tool pairing proves a call is
+// outstanding, never that it is hung, and the verdict came from a timer over a
+// duration only the operator can interpret. A session running an hour-long test
+// suite was announced as a fault. Removed by
+// [ADR-0012](../../docs/adr/0012-retire-the-stalled-status.md).
 //
 // A raised call is not here because it is not a status: it rides alongside one
 // (ADR-0010). Anything deciding whether to interrupt the operator has to consider
 // both, which is why this is a list to consult rather than a rule to reimplement.
-var Attention = []string{"waiting", "error", "stalled"}
+var Attention = []string{"waiting", "error"}
 
 // NeedsAttention reports whether a status is one the operator should be told
 // about.

@@ -6,7 +6,7 @@
      running, calling, at rest, over. `stale` and `ended` share the grey on purpose;
      what separates them is the hollow dot, not a second grey. */
   --working: #16a34a; --thinking: #16a34a; --compacting: #16a34a;
-  --waiting: #b45309; --stalled: #ea580c; --error: #dc2626;
+  --waiting: #b45309; --error: #dc2626;
   --idle: #2563eb; --stale: #94a3b8; --ended: #94a3b8;
   --shadow: 0 1px 2px rgba(15, 23, 42, 0.06), 0 8px 24px rgba(15, 23, 42, 0.06);
   --mono: ui-monospace, "SF Mono", "JetBrains Mono", "Cascadia Code", Menlo, Consolas, monospace;
@@ -17,7 +17,7 @@
     --border-strong: #273549; --text: #e2e8f0; --muted: #8595ac; --faint: #64748b;
     --accent: #38bdf8; --accent-soft: rgba(56, 189, 248, 0.12);
     --working: #4ade80; --thinking: #4ade80; --compacting: #4ade80;
-    --waiting: #fbbf24; --stalled: #fb923c; --error: #f87171;
+    --waiting: #fbbf24; --error: #f87171;
     --idle: #60a5fa; --stale: #64748b; --ended: #64748b;
     --shadow: 0 1px 2px rgba(0, 0, 0, 0.4), 0 12px 32px rgba(0, 0, 0, 0.35);
   }
@@ -25,7 +25,7 @@
 .st-working { --st: var(--working); } .st-thinking { --st: var(--thinking); }
 .st-compacting { --st: var(--compacting); }
 .st-waiting { --st: var(--waiting); } .st-idle { --st: var(--idle); }
-.st-error { --st: var(--error); } .st-ended { --st: var(--ended); } .st-stalled { --st: var(--stalled); }
+.st-error { --st: var(--error); } .st-ended { --st: var(--ended); }
 .st-stale { --st: var(--stale); }
 
 * { box-sizing: border-box; }
