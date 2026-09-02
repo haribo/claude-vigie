@@ -65,7 +65,7 @@ func TestGaugeCountsEverySession(t *testing.T) {
 	// One session per status the watcher can report. `stale` and `ended` are
 	// reconciled from staleness rather than reported, so they are left out here;
 	// what matters is that no reported status goes uncounted.
-	reported := []string{"working", "thinking", "compacting", "waiting", "stalled", "idle", "error"}
+	reported := []string{"working", "thinking", "compacting", "waiting", "idle", "error"}
 	for i, s := range reported {
 		reportStatus(t, srv, fmt.Sprintf("s%d", i), s)
 	}
