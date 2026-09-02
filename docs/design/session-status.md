@@ -133,6 +133,16 @@ and the heuristic below is not consulted at all:
   its `waitingFor` reason into DETAIL. An unrecognised value degrades to `idle`: a
   live session is never a false `ended`. The enum is closed
   ([ADR-0008](../adr/0008-compacting-status.md));
+- **`shell` names two situations, and the transcript separates them.** Its
+  original reading is the operator dropped to a shell prompt inside Claude —
+  alive, producing nothing, a real rest (#280). But Claude Code also reports
+  `shell` while a Bash tool executes: measured on a live session, the registry sat
+  at `shell` for 78 s of a two-minute window across a foreground command. So
+  `shell` **with an unanswered `tool_use`** is `working`, and DETAIL keeps the
+  transcript's own message — which tool is running is more use than the word
+  `shell`. Reading both as `idle` showed a session doing nothing while its build
+  ran, and fed the same build to the tool pairing, which called it `stalled` after
+  45 s (#661);
 - the registry's `{PID, procStart}` says the backing process is gone → `ended`.
 
 **The transcript heuristic covers the rest** — a session the registry does not
