@@ -78,15 +78,14 @@ Top first:
 
 | # | Status | Why here |
 |---|--------|----------|
-| 1 | `stalled` | A hung tool. The exception to "most active": nothing is happening, and that is the point. |
-| 2 | `working` | A turn is running. |
-| 3 | `thinking` | A turn is running, inside extended thinking. |
-| 4 | `compacting` | A turn is running, summarizing its context ([ADR-0008](../adr/0008-compacting-status.md)). |
-| 5 | `waiting` | Stopped, and the operator is the blocker. |
-| 6 | `idle` | Alive, between turns. |
-| 7 | `error` | Live but not producing: a transient API error it will retry through. |
-| 8 | `stale` | No fresh signal and no watcher — the state is unknown, not known-inactive. |
-| 9 | `ended` | Over. |
+| 1 | `working` | A turn is running. |
+| 2 | `thinking` | A turn is running, inside extended thinking. |
+| 3 | `compacting` | A turn is running, summarizing its context ([ADR-0008](../adr/0008-compacting-status.md)). |
+| 4 | `waiting` | Stopped, and the operator is the blocker. |
+| 5 | `idle` | Alive, between turns. |
+| 6 | `error` | Live but not producing: a transient API error it will retry through. |
+| 7 | `stale` | No fresh signal and no watcher — the state is unknown, not known-inactive. |
+| 8 | `ended` | Over. |
 
 **This is not a new order.** Ranks 1–8 are the order the web dashboard already
 encoded, and the five the TUI ranked agree with it pairwise; only `compacting` was
@@ -95,7 +94,7 @@ every existing pairwise relation was deliberate — the defect was the omissions
 the ordering.
 
 **`error` sits low on purpose, and it is worth naming the tension.** It is one of
-the three statuses the TUI notifies on (`waiting`, `error`, `stalled`), so it
+the statuses the TUI notifies on (`waiting`, `error`), so it
 demands attention; yet the key sorts by *activity*, and an errored session is
 producing nothing. Attention is carried by the notification and the colour, not by
 the sort. A reader who expects attention-first ordering should read this row as the
