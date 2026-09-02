@@ -454,6 +454,26 @@ func resolveStatus(reg map[string]sessionRecord, regByProc map[procID]string, id
 	case known:
 		base = withError(mapRegistryStatus(rec.Status), info.LastAPIError)
 		switch {
+		case rec.Status == "shell" && base == "idle" && info.PendingTool != "":
+			// `shell` names two situations Claude Code does not distinguish: the
+			// operator dropped to a shell prompt — alive, producing nothing, a real
+			// rest (#280) — and a Bash tool executing, which is work in progress.
+			// Measured on a live session, the registry sat at `shell` for 78 s of a
+			// two-minute window while a foreground command ran (#661).
+			//
+			// The transcript separates them: an unanswered `tool_use` means Claude is
+			// waiting on a command. Reading that as `idle` reported a session doing
+			// nothing while its build ran — and since `idle` is the base the tool
+			// pairing acts on, the same build was reported `stalled` after 45 s, the
+			// false positive session-status.md § 2 says the five-minute window exists
+			// to prevent.
+			//
+			// DETAIL keeps the transcript's own message: which tool is running is more
+			// use to the operator than the word `shell`.
+			//
+			// `base == "idle"` guards a live API error, which withError has already
+			// established and which outranks this.
+			base = "working"
 		case rec.Status == "shell":
 			activity = "shell" // dropped to a shell: status stays idle, DETAIL says so (#280)
 		case base == "waiting" && activity == "" && rec.WaitingFor != "":

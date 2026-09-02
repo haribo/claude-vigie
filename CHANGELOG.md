@@ -11,6 +11,10 @@ file is the single source of truth, not a second narrative.
 
 ### Fixed
 
+- A session running a command reads `working`, not `idle`. Claude Code reports
+  `shell` both when you drop to a shell prompt and while a command executes, and
+  vigie read both as resting — so a build showed as doing nothing, then as a hung
+  tool after 45 seconds (#661).
 - A subagent whose completion never arrives no longer pins its session to
   `working`. The next prompt you type closes it, as it already closed a tool call
   left hanging (#662).
