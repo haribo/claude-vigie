@@ -14,7 +14,6 @@ var (
 	cAmber   = lipgloss.AdaptiveColor{Light: "#b45309", Dark: "#fbbf24"}
 	cBlue    = lipgloss.AdaptiveColor{Light: "#2563eb", Dark: "#60a5fa"}
 	cRed     = lipgloss.AdaptiveColor{Light: "#dc2626", Dark: "#f87171"}
-	cOrange  = lipgloss.AdaptiveColor{Light: "#ea580c", Dark: "#fb923c"} // stalled — a hung tool
 	cTeal    = lipgloss.AdaptiveColor{Light: "#0d9488", Dark: "#2dd4bf"} // plan mode (#304)
 	cSel     = lipgloss.AdaptiveColor{Light: "#e0f2fe", Dark: "#16273c"} // selected-row fill
 )

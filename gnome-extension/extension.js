@@ -2,7 +2,7 @@
 //
 // A read-only client of a vigied server: it polls GET /api/sessions and
 // surfaces how many sessions are calling for the operator — waiting on input,
-// stalled on a tool, in error, or raising a call. It never writes into or
+// in error, or raising a call. It never writes into or
 // drives a session (observe-only, see docs/adr/0005-observe-only.md).
 
 import GObject from 'gi://GObject';
@@ -24,7 +24,6 @@ const STATUS_LABEL = {
     thinking: 'Thinking',
     compacting: 'Compacting context',
     waiting: 'Waiting for input',
-    stalled: 'Stalled on a tool',
     idle: 'Idle',
     error: 'API error',
     stale: 'Unknown (no watcher)',
@@ -113,7 +112,7 @@ class VigieIndicator extends PanelMenu.Button {
     _update(sessions) {
         if (!Array.isArray(sessions))
             sessions = [];
-        // Everything that calls for the operator, not just `waiting`: a stalled
+        // Everything that calls for the operator, not just `waiting`: an errored
         // turn and a session's own call are the other two, and they are why this
         // indicator exists (#466).
         const calling = sessions.filter(needsAttention).length;
@@ -133,7 +132,7 @@ class VigieIndicator extends PanelMenu.Button {
     }
 
     // _notifyNewlyCalling fires a notification for each session that entered the
-    // attention set since the last poll — waiting, stalled, error, or a call it
+    // attention set since the last poll — waiting, error, or a call it
     // raised itself (edge-triggered, one per transition). The first poll only
     // seeds the set, so launching the extension never notifies for sessions that
     // were already calling. Observe-only: it reads and reports.
@@ -149,7 +148,7 @@ class VigieIndicator extends PanelMenu.Button {
         this._primed = true;
     }
 
-    // The body says *why*: a stalled turn, an API error and a raised call all want
+    // The body says *why*: a permission prompt, an API error and a raised call all want
     // different things from the operator, and a notification that says only
     // "waiting for input" for all three is misleading.
     _notifyCalling(s) {

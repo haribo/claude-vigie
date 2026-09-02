@@ -10,8 +10,8 @@ import (
 )
 
 // #509. aggregateMachines counted four statuses in a hand-written switch;
-// `thinking`, `compacting`, `stalled`, `error` and `stale` fell through. They
-// still incremented SESS, so a machine running three stalled sessions rendered
+// `thinking`, `compacting`, `error` and `stale` fell through. They
+// still incremented SESS, so a machine running three thinking sessions rendered
 //
 //	3 sessions   working 0   waiting 0   idle 0   ended 0
 //
@@ -111,7 +111,7 @@ func TestAFleetWithinTheColumnsAddsNothing(t *testing.T) {
 	if row == "" {
 		t.Fatalf("no machine row found:\n%s", out)
 	}
-	for _, absent := range []string{"stalled", "thinking", "compacting", "error", "stale"} {
+	for _, absent := range []string{"thinking", "compacting", "error", "stale"} {
 		if strings.Contains(row, absent) {
 			t.Errorf("the row mentions %q though no session has it:\n%s", absent, row)
 		}
