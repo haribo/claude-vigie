@@ -9,6 +9,12 @@ file is the single source of truth, not a second narrative.
 
 ## [Unreleased]
 
+### Removed
+
+- The `stalled` status is gone; a session waiting on a command now reads
+  `working`. vigie can see how long a command has been running, never whether it
+  is stuck — an hour-long test suite was being announced as a fault (#704).
+
 ### Fixed
 
 - A session running a command reads `working`, not `idle`. Claude Code reports
