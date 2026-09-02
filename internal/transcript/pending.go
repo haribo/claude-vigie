@@ -3,7 +3,7 @@ package transcript
 import "encoding/json"
 
 // pendingTools tracks tool_use blocks awaiting a tool_result across a transcript,
-// so the watcher can tell a genuinely-hung tool (a stalled turn) from a finished
+// so the watcher can tell a session waiting on a command from a finished
 // one (#256). The pairing is tool_use.id ↔ tool_result.tool_use_id.
 type pendingTools struct {
 	meta  map[string]toolMeta
@@ -75,7 +75,7 @@ func (p *pendingTools) clearToolResults(raw json.RawMessage) (answered bool) {
 //
 // A tool_result that never arrives — Claude Code killed while the tool was in
 // flight — otherwise leaves its tool_use in the map for the rest of the
-// transcript, and the session reads `stalled` at every pause between turns for
+// transcript, and the session reads as still working at every pause between turns for
 // the rest of its life. Nothing can clear it: vigie is observe-only towards the
 // session (ADR-0005), so a permanent false "the operator is needed here" is worse
 // than a missed one. A prompt proves the session moved on, so a call from before
@@ -94,7 +94,7 @@ func (p *pendingTools) closeTurn() {
 }
 
 // resolve returns the most recent unresolved foreground tool's name (for the
-// stalled/executing message) and whether any unresolved tool is a background task
+// DETAIL message) and whether any unresolved tool is a background task
 // (which keeps the session working).
 func (p *pendingTools) resolve() (pendingTool string, backgroundActive bool) {
 	for _, m := range p.meta {

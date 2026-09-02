@@ -71,7 +71,7 @@ func (p *Parser) foldLine(raw []byte) {
 		// turn any older tool call belonged to (#483) — unless Claude Code wrote
 		// it itself. It marks those isMeta (system reminders, skill preambles, the
 		// "Continue from where you left off." resume), and they land in the middle
-		// of live tool calls, so closing on them would break stalled detection.
+		// of live tool calls, so closing on them would lose a command still running.
 		answered := p.pending.clearToolResults(l.Message.Content)
 		notified := p.agents.clearNotifications(l.Message.Content) // <task-notification> closes an agent (#344)
 		// A real prompt closes the turn every older tool call *and* subagent

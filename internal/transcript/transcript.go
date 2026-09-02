@@ -53,7 +53,8 @@ type Info struct {
 	Activity string
 	// PendingTool is the name of the most recent foreground tool_use with no
 	// matching tool_result — a tool genuinely still awaiting a result. Empty when
-	// every tool_use has been answered. Used to detect a stalled turn (#256).
+	// every tool_use has been answered. Used to tell a session waiting on a command
+	// from one between turns (#256, ADR-0012).
 	PendingTool string
 	// BackgroundActive is true when an unresolved tool_use is a backgrounded Bash
 	// (run_in_background) — a real background task still running, which legitimately

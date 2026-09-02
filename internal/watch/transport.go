@@ -5,7 +5,7 @@
 // It is here rather than in watch.go because that file carried five jobs at once
 // — the scan loop, transcript reading, status derivation, this transport, and the
 // usage loop — and the one that matters is the status derivation: the rules that
-// decide whether a session is working, waiting or stalled, and where #190, #201,
+// decide whether a session is working, waiting or idle, and where #190, #201,
 // #233 and #512 all lived. `docs/code.md` asks for one responsibility per
 // function and one purpose per package; a file mixing HTTP plumbing into that
 // machine is the part of it that was cheapest to undo (#582).
