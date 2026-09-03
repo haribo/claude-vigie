@@ -5,6 +5,12 @@ they are doing, and how many tokens they consume. This is the top-level map;
 observable behavior is specced under [`design/`](design/) and decisions under
 [`adr/`](adr/).
 
+**Claude Code, and nothing else.** Every layer below assumes it: naming reads the
+transcript Claude Code writes, liveness follows its process, and a subagent
+refines its parent rather than becoming a session. Reports from another harness
+are refused at the client — the decision, and the alternative it rules out, are in
+[ADR-0013](adr/0013-only-claude-code-may-report.md).
+
 ## Overview
 
 ```

@@ -23,6 +23,19 @@
   </picture>
 </p>
 
+## Scope
+
+**vigie supervises Claude Code, and nothing else.** Its whole model is Claude
+Code's: a session is named from the transcript Claude Code writes, it is alive
+while Claude Code's process is, and a subagent is part of its parent rather than a
+session of its own.
+
+Another CLI that reads `~/.claude/settings.json` and runs the hooks it finds there
+will call `vigie report` too. Those reports are refused: vigie could not name such
+a session, could not tell when it ended, and would count each of its subagents as
+a session — so the fleet count, the one question this board answers, would stop
+meaning anything ([ADR-0013](docs/adr/0013-only-claude-code-may-report.md)).
+
 ## Features
 
 - **Every session, every machine, one board** — nine live statuses, grouped and filtered as you like.
