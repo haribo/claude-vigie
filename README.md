@@ -38,7 +38,7 @@ meaning anything ([ADR-0013](docs/adr/0013-only-claude-code-may-report.md)).
 
 ## Features
 
-- **Every session, every machine, one board** — nine live statuses, grouped and filtered as you like.
+- **Every session, every machine, one board** — eight live statuses, grouped and filtered as you like.
 - **A session can call you** when its work is done.
 - **Desktop notifications** when a session starts calling for you — waiting on
   input, in error, or raising a call — and `n` to jump straight

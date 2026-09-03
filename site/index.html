@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>vigie — the lookout for your Claude Code sessions</title>
-  <meta name="description" content="vigie is an observe-only monitor for Claude Code sessions across every machine — who's working, who's waiting on you, who stalled. Self-hosted, two static binaries, MIT.">
+  <meta name="description" content="vigie is an observe-only monitor for Claude Code sessions across every machine — who's working, who's waiting on you, who needs an answer. Self-hosted, two static binaries, MIT.">
   <meta name="theme-color" content="#100d08">
   <link rel="icon" type="image/svg+xml" href="assets/favicon.svg">
   <meta property="og:type" content="website">
@@ -19,7 +19,7 @@
     --ink: #f0e9d8; --muted: #a49877; --faint: #6f6650;
     --amber: #d9663f; --amber-deep: #b8502e; --amber-pale: #f0a883;
     --s-working: #d9663f; --s-compacting: #22d3ee; --s-waiting: #fbbf24;
-    --s-stalled: #fb7185; --s-idle: #64748b; --s-ended: #545056;
+    --s-idle: #64748b; --s-ended: #545056;
     /* diagram (how-it-works.svg) chrome — flips with theme */
     --dg-node: #17130c; --dg-ink: #f0e9d8; --dg-muted: #a49877; --dg-line: #322817;
     --scope-glow: rgba(217,102,63,0.5);
@@ -122,7 +122,6 @@
   .pill.working { color: var(--s-working); background: color-mix(in srgb, var(--s-working) 14%, transparent); } .pill.working i { background: var(--s-working); }
   .pill.compacting { color: var(--s-compacting); background: color-mix(in srgb, var(--s-compacting) 14%, transparent); } .pill.compacting i { background: var(--s-compacting); }
   .pill.waiting { color: var(--s-waiting); background: color-mix(in srgb, var(--s-waiting) 15%, transparent); } .pill.waiting i { background: var(--s-waiting); }
-  .pill.stalled { color: var(--s-stalled); background: color-mix(in srgb, var(--s-stalled) 14%, transparent); } .pill.stalled i { background: var(--s-stalled); }
   .pill.idle { color: var(--s-idle); background: color-mix(in srgb, var(--s-idle) 16%, transparent); } .pill.idle i { background: var(--s-idle); }
   .pill.ended { color: var(--s-ended); background: color-mix(in srgb, var(--s-ended) 22%, transparent); } .pill.ended i { background: var(--s-ended); }
 
@@ -236,11 +235,10 @@
         </div>
         <div class="does">
           <h3>Status at a glance</h3>
-          <p>Who's working, waiting on you, or quietly stalled.</p>
+          <p>Who's working, waiting on you, or quietly done.</p>
           <div class="legend">
             <span class="pill working"><i></i>working</span>
             <span class="pill waiting"><i></i>waiting</span>
-            <span class="pill stalled"><i></i>stalled</span>
             <span class="pill compacting"><i></i>compacting</span>
             <span class="pill idle"><i></i>idle</span>
             <span class="pill ended"><i></i>ended</span>
