@@ -10,7 +10,7 @@ import (
 
 // isAttention reports whether a session's state calls for the operator — it is
 // blocked and needs a human: waiting on input, errored, or hung on a tool
-// (stalled, #256).
+// (#256).
 //
 // The daemon decides it (ADR-0011, #617). The set used to live in
 // internal/status precisely so the TUI and the GNOME indicator could not
@@ -29,7 +29,7 @@ func isAttention(s api.SessionView) bool { return s.Attention }
 // nothing needs attention.
 func nextAttention(sessions []api.SessionView) string {
 	// A raised call jumps ahead of every inferred attention state: the session
-	// said so itself, where waiting/error/stalled are deductions (ADR-0010, #389).
+	// said so itself, where waiting and error are deductions (ADR-0010, #389).
 	var called []api.SessionView
 	for _, s := range sessions {
 		if hasCall(s) {

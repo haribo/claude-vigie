@@ -96,7 +96,12 @@ func registryDead(rec sessionRecord) bool {
 	if rec.PID <= 0 || rec.ProcStart == 0 {
 		return false
 	}
-	return !presence.Alive(presence.Mapping{PID: rec.PID, StartTime: rec.ProcStart})
+	// Gone, not "not Live". An unreadable /proc — hidepid, a namespace that does
+	// not expose the pid — used to answer the same as an absent one, and this
+	// short-circuits everything: every session Claude Code listed read `ended` on
+	// the next scan (#663). The uncertainty arrives through the value here rather
+	// than through a missing record, and it deserves the same answer: not dead.
+	return presence.Status(presence.Mapping{PID: rec.PID, StartTime: rec.ProcStart}) == presence.Gone
 }
 
 // mapRegistryStatus maps Claude's registry status onto a fleet status. "shell"

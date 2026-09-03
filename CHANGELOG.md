@@ -9,6 +9,38 @@ file is the single source of truth, not a second narrative.
 
 ## [Unreleased]
 
+## [0.11.0] - 2026-09-03
+
+### Changed
+
+- vigie reports Claude Code sessions and only those. Another CLI reading
+  `~/.claude/settings.json` ran the same hooks, and its sessions arrived as rows
+  with a hash for a name that never ended; those reports are now refused, and the
+  terminal says so at launch if any were (#709).
+
+### Removed
+
+- The `stalled` status is gone; a session waiting on a command now reads
+  `working`. vigie can see how long a command has been running, never whether it
+  is stuck — an hour-long test suite was being announced as a fault (#704).
+
+### Fixed
+
+- A session you leave open is no longer announced as ended. The watcher stopped
+  looking at any session quiet for a day, and the server read that silence as a
+  closed session — while the process was still running (#660).
+- A session running a command reads `working`, not `idle`. Claude Code reports
+  `shell` both when you drop to a shell prompt and while a command executes, and
+  vigie read both as resting — so a build showed as doing nothing, then as a hung
+  tool after 45 seconds (#661).
+- A subagent whose completion never arrives no longer pins its session to
+  `working`. The next prompt you type closes it, as it already closed a tool call
+  left hanging (#662).
+- A `/proc` that cannot be read no longer reports every session as ended. A
+  hardened `hidepid`, a container or a namespace that hides the pid used to look
+  exactly like a dead process, and the whole fleet went dark at the next scan
+  (#663).
+
 ## [0.10.0] - 2026-09-01
 
 ### Added
@@ -588,7 +620,8 @@ across machines — it reads and reports session state; it never drives a sessio
 - The API binds `127.0.0.1` by default; every `/api/*` route is behind a
   constant-time shared-token check; request bodies are size-capped.
 
-[Unreleased]: https://github.com/haribo/claude-vigie/compare/v0.10.0...HEAD
+[Unreleased]: https://github.com/haribo/claude-vigie/compare/v0.11.0...HEAD
+[0.11.0]: https://github.com/haribo/claude-vigie/compare/v0.10.0...v0.11.0
 [0.10.0]: https://github.com/haribo/claude-vigie/compare/v0.9.1...v0.10.0
 [0.9.1]: https://github.com/haribo/claude-vigie/compare/v0.9.0...v0.9.1
 [0.9.0]: https://github.com/haribo/claude-vigie/compare/v0.8.0...v0.9.0

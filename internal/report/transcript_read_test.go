@@ -35,6 +35,7 @@ func withWatcher(t *testing.T, live bool) {
 
 func runStop(t *testing.T) api.ReportRequest {
 	t.Helper()
+	asClaudeCode(t, "s1")
 	var got api.ReportRequest
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		_ = json.NewDecoder(r.Body).Decode(&got)
@@ -112,6 +113,7 @@ func TestOmittedFieldsAreAbsentNotEmpty(t *testing.T) {
 // change relies on: only turn/session boundaries ever read the file, so the most
 // frequent hook of all stays free.
 func TestPostToolUseNeverReadsTheTranscript(t *testing.T) {
+	asClaudeCode(t, "s1")
 	n := countingParse(t)
 	withWatcher(t, false)
 

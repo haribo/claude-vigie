@@ -19,14 +19,13 @@ Every session shows exactly one status. What each tells the operator:
 | `thinking` | Claude is reasoning inside a turn — extended thinking, before it outputs text or a tool call. A sub-state of an active turn. |
 | `compacting` | Claude is **summarizing its context** to free space — a ~90–170 s silent sub-state of an active turn. Opened by the `PreCompact` hook, closed by the transcript's `compact_boundary` ([ADR-0008](../adr/0008-compacting-status.md), #342). |
 | `waiting`  | Claude has stopped and is **waiting on the human** (a prompt or permission). |
-| `stalled`  | A turn is **parked on a hung tool** — a `tool_use` never got its `tool_result` and the session has gone quiet. Distinct from idle: the turn is unfinished, not between turns. |
 | `idle`     | The session is open and alive but between turns — nobody is acting.     |
 | `error`    | The session hit a live Claude API error (500 / 529 / 429). Transient — clears when it recovers. The HTTP code is a DETAIL refinement, not part of the status (§ 2, #584). |
 | `stale`    | No recent report **and the machine has no watcher**, so the true state is unknown. Shown (grey, dotted `◌`) instead of a false `ended`: *no news* ≠ *dead*. Resolves once a watcher runs there (#284/#285). |
 | `ended`    | The session is over (closed, or its process is gone).                   |
 
-`waiting`, `stalled` and `error` are the three statuses that call the operator, and a session can raise a call of its own on top of any status ([ADR-0010](../adr/0010-session-raised-operator-call.md)). `waiting`
-means *the operator is the blocker*; `stalled` means *a tool hung and the turn is
+`waiting` and `error` are the two statuses that call the operator, and a session can raise a call of its own on top of any status ([ADR-0010](../adr/0010-session-raised-operator-call.md)). `waiting`
+means *the operator is the blocker*; `error` means *the platform is
 stuck*. Both are what the dashboard exists to surface — the sessions that need a
 human right now.
 
@@ -49,7 +48,6 @@ Four families, four colours:
 | --- | --- | --- | --- |
 | **Running** — nothing to do | `working`, `thinking`, `compacting` | `#16a34a` | `#4ade80` |
 | **Calling** — it needs a human | `waiting` | `#b45309` | `#fbbf24` |
-| | `stalled` | `#ea580c` | `#fb923c` |
 | | `error` | `#dc2626` | `#f87171` |
 | **At rest** — between turns | `idle` | `#2563eb` | `#60a5fa` |
 | **Over** — nothing more will happen | `stale`, `ended` | `#94a3b8` | `#64748b` |
@@ -133,6 +131,16 @@ and the heuristic below is not consulted at all:
   its `waitingFor` reason into DETAIL. An unrecognised value degrades to `idle`: a
   live session is never a false `ended`. The enum is closed
   ([ADR-0008](../adr/0008-compacting-status.md));
+- **`shell` names two situations, and the transcript separates them.** Its
+  original reading is the operator dropped to a shell prompt inside Claude —
+  alive, producing nothing, a real rest (#280). But Claude Code also reports
+  `shell` while a Bash tool executes: measured on a live session, the registry sat
+  at `shell` for 78 s of a two-minute window across a foreground command. So
+  `shell` **with an unanswered `tool_use`** is `working`, and DETAIL keeps the
+  transcript's own message — which tool is running is more use than the word
+  `shell`. Reading both as `idle` showed a session doing nothing while its build
+  ran, and fed the same build to the tool pairing, which called it `stalled` after
+  45 s (#661);
 - the registry's `{PID, procStart}` says the backing process is gone → `ended`.
 
 **The transcript heuristic covers the rest** — a session the registry does not
@@ -155,37 +163,42 @@ list, typically an older Claude Code:
 - last assistant block is a `thinking` block → `thinking` (reasoning before any
   text/tool output); a later text/tool line clears it. A heuristic: at rest a
   finished turn ends with text/tool, so this reads true only mid-turn.
-- a foreground `tool_use` with no matching `tool_result` (paired by id) while the
-  session is otherwise quiet and idle → `stalled` (the tool hung, the turn is
-  parked). An unresolved *background* Bash (`run_in_background`) instead keeps the
-  session `working` — a real background task, not a hang.
+- a `tool_use` with no matching `tool_result` (paired by id) keeps the session
+  `working`: Claude is waiting on that command, whether it is a foreground call or
+  a backgrounded Bash (`run_in_background`).
 
-  **The pairing does not replace the 5-minute tool window, it completes it.** The
-  window is the grace period: a tool call may legitimately run that long, so the
-  session reads `working` throughout — without it a build, a test suite or a long
-  search would all be reported as a hung tool within 45 s, a false positive on one
-  of the statuses that call the operator. What the pairing adds is what happens
-  *after* the window: before it, a turn stopped on a tool simply fell to `idle`
-  once the window elapsed, so a hung tool looked exactly like a finished turn. Now
-  it reads `stalled`.
+  **How long it has been waiting is shown, not judged.** The transcript freezes on
+  the `tool_use` line while a command runs, so the SEEN column counts from exactly
+  that moment, and DETAIL names the tool. The row reads `● working · 12m · Bash:
+  run the e2e suite`, and the operator — who asked for the command — knows whether
+  twelve minutes is normal for it.
 
-  Measured on a transcript frozen on an unanswered `tool_use`: `working` at 5 s,
-  30 s, 1 min and 3 min; `stalled` at 6 min. An earlier version of this section
-  said the pairing *replaced* the window, which would have meant `stalled` at 45 s
-  for every slow tool (#530).
+  This replaced a `stalled` status that claimed the turn was *parked on a hung
+  tool*. vigie had no grounds for the claim: the pairing proves a call is
+  outstanding, never that it is hung, and the verdict came from a timer over a
+  duration nothing here can interpret. An hour-long test suite was announced as a
+  fault. Removed by [ADR-0012](../adr/0012-retire-the-stalled-status.md), which
+  records what is lost with it.
 
   **The pairing is scoped to the turn: a real user prompt closes every older
-  unresolved `tool_use`.** A result that never arrives — Claude Code killed while
-  a tool was in flight — otherwise pins the session to `stalled` for the rest of
+  unresolved `tool_use` — and every subagent still in flight (#662).** The two
+  are the same rule on two types. An async subagent is closed by a
+  `<task-notification>` naming its launch, and when that never arrives the
+  session read `working` at every pause for the rest of the transcript; the
+  30-minute liveness cap bounds it only against silence, which a session the
+  operator keeps using never reaches. A line carrying a notification is not a
+  prompt for this purpose, however much it looks like one: treating it as one
+  would retire the siblings of the agent it announces. A result that never arrives — Claude Code killed while
+  a tool was in flight — otherwise pins the session to `working` for the rest of
   its life, at every pause between turns, and no operator action can clear it
   (vigie is observe-only, [ADR-0005](../adr/0005-observe-only.md)). A prompt is
   proof the session moved on, so a tool call from before it cannot be what the
-  current turn is parked on. Only a prompt the *operator* typed counts: Claude
+  current turn is waiting on. Only a prompt the *operator* typed counts: Claude
   Code injects `user` lines of its own for system reminders, skill preambles and
   the "Continue from where you left off." resume, and marks them `isMeta` — those
   land in the middle of a live tool call and must not close it (#483).
 
-The watcher can see `working`, `thinking`, `compacting`, `idle`, `stalled`,
+The watcher can see `working`, `thinking`, `compacting`, `idle`,
 `ended`, `error` — and `waiting`, but only where the registry states it. What it
 **cannot** do is *infer* `waiting`: to the watcher a permission prompt and a
 running tool are the same frozen transcript, which is the whole subject of § 3.
@@ -250,14 +263,14 @@ watcher only ever sees a quiet-but-alive session as `idle`, so its `idle` must
 **A `waiting` is only cleared once the transcript moves.** To the watcher, "a
 tool is running" and "a permission prompt is blocking" look identical — a turn
 stopped on a tool call with a frozen transcript. So **any** status it infers from
-that silence — `working`, `thinking`, `compacting`, `stalled` — may not clear a
+that silence — `working`, `thinking`, `compacting` — may not clear a
 hook `waiting` until the transcript has actually changed past when waiting was
 posted (the report's timestamp is the transcript mtime). `error` and `ended` are
 positive observations and still win.
 
 The rule is stated as a *deny* list, and the code implements it as one: it was
-once an allow list naming three statuses, so `stalled` fell through it when that
-status was added and a permission prompt read as a hung tool for the rest of the
+once an allow list naming three statuses, so a status added afterwards fell
+through it — a permission prompt then read as a hung tool for the rest of the
 session. A status added later is held by default — a late release costs less than
 naming the wrong cause (#508).
 
@@ -315,7 +328,6 @@ trust it:
 | `error`    | watcher (`isApiErrorMessage` in the transcript) | **Reliable signal, sampled.** The flag is unambiguous, but surfaced only at the next scan, not instantly (Claude Code has no error hook). |
 | `thinking` | watcher only (last content block is a `thinking` block) | **Best-effort heuristic.** No hook signals reasoning; it is inferred from the transcript, sampled every ~2 s, invisible in a hooks-only deployment, and can briefly mis-read when a `tool_use` block follows the thinking block. |
 | `compacting` | hook `PreCompact` opens it; watcher closes it on `compact_boundary` | **Reliable at both ends, sampled at the close.** The open is a hook, so it is instant; the close is read from the transcript at the next scan. Invisible in a hooks-only deployment, since nothing would close it. |
-| `stalled`  | watcher only (unresolved `tool_use`↔`tool_result` + quiet) | **Reliable signal, sampled.** The pairing is exact (an id match), not a timeout guess. It surfaces once the tool window has elapsed — a tool call is allowed to run that long before silence means anything (§ 2), so the signal is deliberately late rather than wrong. Self-healing: a tool whose result never arrives is closed by the next operator prompt rather than pinning the session (§ 2). Invisible in a hooks-only deployment. |
 
 **Decision on `thinking` (#207): kept, as an explicit best-effort refinement.**
 Dropping it would lose a genuine, if imperfect, signal; hardening it to real-time

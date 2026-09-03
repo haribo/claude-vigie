@@ -51,7 +51,7 @@ else lives one keystroke away.
 
 Three tests, all of which a permanent element must pass:
 
-1. **It is not already on screen.** `● working 3 · ● idle 1 · ● stalled 1` is the
+1. **It is not already on screen.** `● working 3 · ● idle 1 · ● waiting 1` is the
    exact aggregate of the STATUS column; the active sort is already readable from
    the arrow in the column header; `hidden 25` and `● ended 25` say the same
    thing twice on the same line.
@@ -326,7 +326,7 @@ is an alternative that gets proposed again.
 | Rejected | Why |
 | --- | --- |
 | **A consolidated variant** keeping every element and removing only the packaging | 7 rows, nothing lost — and no decision taken. A tidy-up, not a hierarchy. The scopes stay mixed at the same rank. |
-| **An attention band** listing `call`/`waiting`/`stalled`/`error` above the table | The calling sessions would appear twice, and a band that appears and disappears makes the table jump. |
+| **An attention band** listing `call`/`waiting`/`error` above the table | The calling sessions would appear twice, and a band that appears and disappears makes the table jump. |
 | **A permanent sentence beside the pill** | The corner must never change width, and the modal is the single home for anything about state. |
 | **A transient reveal** on the transition | Same, plus it is missed by an operator who was not looking at that moment — which is the whole population the pulse exists for. |
 | **The Machines tab as the modal's host** | Half of these facts are global, and it costs the operator their place in the table. |

@@ -298,9 +298,22 @@ func (s *scanner) scan(root, machine string, maxAge time.Duration, now time.Time
 		if err != nil {
 			continue
 		}
+		// The window bounds how much disk history is re-read on every scan; it must
+		// not decide whether a session is alive. A session Claude Code still lists
+		// is one whose process is running — the registry carries its pid — and
+		// skipping it left the server with nothing to report, which it reads on a
+		// watched machine as `ended`. A session open on the operator's screen was
+		// announced as over (#660).
+		//
+		// The exception is bounded by the registry, so the extra parses are bounded
+		// by live Claude processes rather than by the hundreds of transcripts a
+		// working machine accumulates. The id is the file's own name, so this costs
+		// no parse to decide.
 		age := now.Sub(fi.ModTime())
 		if age > maxAge {
-			continue
+			if _, listed := reg[strings.TrimSuffix(filepath.Base(p), ".jsonl")]; !listed {
+				continue
+			}
 		}
 		info, err := s.parse(p, fi, fresh)
 		if err != nil {
@@ -322,10 +335,15 @@ func (s *scanner) scan(root, machine string, maxAge time.Duration, now time.Time
 		// this session last really do something". A live Claude appends
 		// untimestamped metadata (last-prompt, bridge-session) roughly hourly,
 		// bumping mtime without any activity; LastActivity ignores those lines, so
-		// SEEN and the age-based status stay truthful. The mtime still gates the
-		// scan window above (the hourly churn keeps a live session in range, so it
-		// stays visible as idle — never expired while its process lives). Fall back
-		// to mtime when no dated line exists yet (a brand-new transcript).
+		// SEEN and the age-based status stay truthful. Fall back to mtime when no
+		// dated line exists yet (a brand-new transcript).
+		//
+		// This comment used to add that the churn kept a live session inside the
+		// scan window, "never expired while its process lives". That was the
+		// argument for letting the window gate liveness, and it does not hold: the
+		// metadata lines above are written when something *happens* — a prompt, a
+		// mode change, a bridge sync — so a session nobody touches writes none.
+		// The window no longer decides, the registry does (#660).
 		lastActivity := fi.ModTime()
 		if t, err := time.Parse(time.RFC3339, info.LastActivity); err == nil {
 			lastActivity = t
@@ -454,6 +472,26 @@ func resolveStatus(reg map[string]sessionRecord, regByProc map[procID]string, id
 	case known:
 		base = withError(mapRegistryStatus(rec.Status), info.LastAPIError)
 		switch {
+		case rec.Status == "shell" && base == "idle" && info.PendingTool != "":
+			// `shell` names two situations Claude Code does not distinguish: the
+			// operator dropped to a shell prompt — alive, producing nothing, a real
+			// rest (#280) — and a Bash tool executing, which is work in progress.
+			// Measured on a live session, the registry sat at `shell` for 78 s of a
+			// two-minute window while a foreground command ran (#661).
+			//
+			// The transcript separates them: an unanswered `tool_use` means Claude is
+			// waiting on a command. Reading that as `idle` reported a session doing
+			// nothing while its build ran — and since `idle` is the base the tool
+			// pairing acts on, the same build was reported `stalled` after 45 s, the
+			// false positive session-status.md § 2 says the five-minute window exists
+			// to prevent.
+			//
+			// DETAIL keeps the transcript's own message: which tool is running is more
+			// use to the operator than the word `shell`.
+			//
+			// `base == "idle"` guards a live API error, which withError has already
+			// established and which outranks this.
+			base = "working"
 		case rec.Status == "shell":
 			activity = "shell" // dropped to a shell: status stays idle, DETAIL says so (#280)
 		case base == "waiting" && activity == "" && rec.WaitingFor != "":
@@ -485,28 +523,24 @@ func superseded(id string, regByProc map[procID]string) bool {
 
 // refineStatus applies the transcript-derived refinements on top of the registry
 // status and picks the matching "doing" message: thinking, then compacting
-// (#342), then the tool-based background/stalled/subagent rules (#256/#344).
+// (#342), then the tool-based background/subagent rules (#256/#344).
 func refineStatus(base, activity, id string, info *transcript.Info, activityAge time.Duration, now time.Time) (string, string) {
 	base = withThinking(base, info.Thinking)
 	base = withCompacting(base, compactingNow(id, info, now)) // opaque `working` during compaction → `compacting`
 	prevBase := base
-	base = refineWithTools(base, info, activityAge) // background keeps working; a hung tool stalls
+	base = refineWithTools(base, info, activityAge) // an outstanding tool call keeps the session working
 	switch {
 	case base == "compacting":
 		activity = "compacting context"
 	case base == "idle" && info.Interrupted:
 		activity = "interrupted" // the operator killed the turn; still idle (#351)
-	case base == "stalled" && activity == "":
-		activity = "stopped at " + info.PendingTool
+	case base == "working" && activity == "" && info.PendingTool != "":
+		activity = "running " + info.PendingTool
 	case prevBase == "idle" && base == "working" && info.AgentsActive > 0 && activityAge < agentWindow:
 		activity = info.AgentActivity // the work is running in a subagent
 	}
 	return base, activity
 }
-
-// stalledAfter is how long a quiet session with an unanswered foreground tool
-// call must sit before it reads as stalled rather than idle.
-const stalledAfter = 45 * time.Second
 
 // agentWindow bounds how long an in-flight subagent keeps its parent working
 // without any parent-transcript activity. It is the liveness cap: past it, a
@@ -516,10 +550,18 @@ const stalledAfter = 45 * time.Second
 const agentWindow = 30 * time.Minute
 
 // refineWithTools reclassifies a quiet/idle session using the transcript's
-// unresolved tool calls (#256): a still-running background task keeps it working,
-// and a foreground tool that never got a result — with the session quiet — is a
-// stalled turn, not a silent idle. Only an idle base is touched, so
-// working/waiting/error/ended are never overridden.
+// unresolved tool calls (#256). A tool call with no result is a session waiting on
+// a command — foreground or backgrounded, a build or a subagent — and that is
+// `working`. Only an idle base is touched, so working/waiting/error/ended are
+// never overridden.
+//
+// It used to return `stalled` once a foreground call had been outstanding past a
+// threshold. That claimed the turn was parked on a hung tool, which vigie has no
+// grounds for: the pairing proves a call is outstanding, never that it is hung,
+// and the verdict came from a timer over a duration only the operator can
+// interpret. How long the call has been outstanding is on the row — SEEN counts
+// from the `tool_use` line, and DETAIL names the tool
+// ([ADR-0012](../../docs/adr/0012-retire-the-stalled-status.md)).
 func refineWithTools(base string, info *transcript.Info, activityAge time.Duration) string {
 	if base != "idle" {
 		return base
@@ -530,8 +572,8 @@ func refineWithTools(base string, info *transcript.Info, activityAge time.Durati
 	if info.AgentsActive > 0 && activityAge < agentWindow {
 		return "working" // an async subagent is still running (#344)
 	}
-	if info.PendingTool != "" && activityAge >= stalledAfter {
-		return "stalled" // a foreground tool hung; the turn is parked
+	if info.PendingTool != "" {
+		return "working" // Claude is waiting on a command
 	}
 	return base
 }
@@ -633,7 +675,7 @@ const compactWindow = 5 * time.Minute
 
 // withCompacting refines an active status to "compacting" while the session is
 // summarizing its context. Like withThinking it only touches a live turn
-// (working/thinking); it never overrides waiting/error/ended/stalled/idle (#342).
+// (working/thinking); it never overrides waiting/error/ended/idle (#342).
 func withCompacting(status string, compacting bool) string {
 	if compacting && (status == "working" || status == "thinking") {
 		return "compacting"
@@ -688,8 +730,8 @@ func statusFor(sessionID, lastStopReason string, age time.Duration) string {
 	m, ok, err := presence.Load(sessionID)
 	hasMapping := err == nil && ok
 	switch {
-	case hasMapping && !presence.Alive(m):
-		return "ended"
+	case hasMapping && presence.Status(m) == presence.Gone:
+		return "ended" // Gone, never merely unreadable (#663)
 	case activelyWorking(lastStopReason, age):
 		return "working"
 	case hasMapping:

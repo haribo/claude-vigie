@@ -23,12 +23,25 @@
   </picture>
 </p>
 
+## Scope
+
+**vigie supervises Claude Code, and nothing else.** Its whole model is Claude
+Code's: a session is named from the transcript Claude Code writes, it is alive
+while Claude Code's process is, and a subagent is part of its parent rather than a
+session of its own.
+
+Another CLI that reads `~/.claude/settings.json` and runs the hooks it finds there
+will call `vigie report` too. Those reports are refused: vigie could not name such
+a session, could not tell when it ended, and would count each of its subagents as
+a session — so the fleet count, the one question this board answers, would stop
+meaning anything ([ADR-0013](docs/adr/0013-only-claude-code-may-report.md)).
+
 ## Features
 
 - **Every session, every machine, one board** — nine live statuses, grouped and filtered as you like.
 - **A session can call you** when its work is done.
 - **Desktop notifications** when a session starts calling for you — waiting on
-  input, stalled on a tool, in error, or raising a call — and `n` to jump straight
+  input, in error, or raising a call — and `n` to jump straight
   to it. In the terminal (libnotify), on the GNOME top bar, and in the browser
   (opt-in from Settings; the browser requires an https or localhost address).
 - **Terminal and browser** — a TUI, and a read-only web dashboard served by the daemon itself. Same board and same answers; each suits its own medium.

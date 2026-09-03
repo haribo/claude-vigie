@@ -7,8 +7,12 @@ import (
 	"github.com/haribo/claude-vigie/internal/transcript"
 )
 
+// An outstanding tool call means Claude is waiting on a command, and that is
+// `working` — for as long as it takes. The table used to assert a threshold past
+// which the same observation became `stalled`; ADR-0012 removed that verdict,
+// because the pairing proves a call is outstanding and never that it is hung.
 func TestRefineWithTools(t *testing.T) {
-	long := stalledAfter + time.Second
+	long := time.Hour
 	cases := []struct {
 		name string
 		base string
@@ -16,8 +20,8 @@ func TestRefineWithTools(t *testing.T) {
 		age  time.Duration
 		want string
 	}{
-		{"idle + hung foreground tool + inactive → stalled", "idle", transcript.Info{PendingTool: "Bash"}, long, "stalled"},
-		{"idle + hung tool but still fresh → idle", "idle", transcript.Info{PendingTool: "Bash"}, 5 * time.Second, "idle"},
+		{"idle + an outstanding tool → working, whatever the age", "idle", transcript.Info{PendingTool: "Bash"}, long, "working"},
+		{"idle + an outstanding tool, freshly started → working", "idle", transcript.Info{PendingTool: "Bash"}, 5 * time.Second, "working"},
 		{"idle + running background task → working", "idle", transcript.Info{BackgroundActive: true}, long, "working"},
 		{"idle + nothing pending → idle", "idle", transcript.Info{}, long, "idle"},
 		{"working is never reclassified", "working", transcript.Info{PendingTool: "Bash"}, long, "working"},

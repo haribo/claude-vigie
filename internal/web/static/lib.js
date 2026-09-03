@@ -252,7 +252,7 @@ export function hiddenByIdle(s, afterMs, nowMs) {
 // name it: a Go test used to pull the literal out of app.js with a regular
 // expression, because a module-private constant is reachable no other way. Both
 // sides now read test/fixtures/status-vocabulary.json (#633).
-export const STATUSES = ["working", "thinking", "compacting", "waiting", "stalled", "idle", "error", "stale", "ended"];
+export const STATUSES = ["working", "thinking", "compacting", "waiting", "idle", "error", "stale", "ended"];
 
 // How the sessions table sorts, and what it opens on.
 //
@@ -379,7 +379,7 @@ export function enteredAttention(sessions, seen, primed) {
 // (#261) and the jump in the dashboard (#667).
 //
 // A raised call jumps ahead of every inferred attention state: the session said
-// so itself, where waiting/error/stalled are deductions (ADR-0010, #389). Among
+// so itself, where waiting and error are deductions (ADR-0010, #389). Among
 // calls, the oldest call wins; otherwise the session blocked longest wins.
 //
 // It sorts on `status_changed_at`, never on when the session was last seen: the

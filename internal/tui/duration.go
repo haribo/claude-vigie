@@ -37,3 +37,8 @@ func relativeAge(rfc string, now time.Time) string {
 	}
 	return humanizeDuration(d)
 }
+
+// HumanizeDuration is humanizeDuration, exported for the client's preflight
+// notice about refused reports (ADR-0013). An age is worded the same wherever the
+// operator reads it; a second formatter would be one more rule to keep in step.
+func HumanizeDuration(d time.Duration) string { return humanizeDuration(d) }

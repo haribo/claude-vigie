@@ -4,7 +4,7 @@ import "testing"
 
 // #483. A tool_use whose tool_result never arrives — Claude Code killed while the
 // tool was in flight — used to stay pending for the rest of the transcript, so the
-// session read `stalled` at every pause between turns, forever, with no way for
+// session read as blocked at every pause between turns, forever, with no way for
 // the operator to clear it (ADR-0005).
 //
 // The lines below are the shapes actually observed in the transcript that exposed
@@ -30,7 +30,7 @@ const (
 func TestARealPromptClosesAnOrphanToolCall(t *testing.T) {
 	info := parseLines(t, orphanUse, resumeLine, replyText, realPrompt, laterUse, laterResult)
 	if info.PendingTool != "" {
-		t.Errorf("PendingTool = %q after a prompt and a completed turn; the session would read stalled forever", info.PendingTool)
+		t.Errorf("PendingTool = %q after a prompt and a completed turn; it would describe the session forever", info.PendingTool)
 	}
 }
 

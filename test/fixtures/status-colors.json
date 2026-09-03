@@ -11,7 +11,9 @@
     "Read by internal/tui/status_color_test.go, which checks both sides: the Go",
     "palette by calling it, and the stylesheet by reading its custom properties. The",
     "node suite cannot evaluate a CSS variable without a DOM, so one reader covers",
-    "both rather than none."
+    "both rather than none.",
+    "`stalled` left the vocabulary with ADR-0012, and its hue with it. The calling",
+    "family is now waiting and error."
   ],
   "families": {
     "running": "nothing to do — a turn is in progress",
@@ -43,12 +45,6 @@
       "family": "calling",
       "light": "#b45309",
       "dark": "#fbbf24"
-    },
-    {
-      "status": "stalled",
-      "family": "calling",
-      "light": "#ea580c",
-      "dark": "#fb923c"
     },
     {
       "status": "error",

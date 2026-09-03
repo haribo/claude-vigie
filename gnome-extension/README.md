@@ -47,7 +47,7 @@ Open the extension preferences (via *Extensions* app, or
 - The radar icon shows a **count badge** and turns to the attention color when at
   least one session is calling for you.
 - A **notification** fires when a session **starts calling for you** — it began
-  `waiting` on input, a tool hung (`stalled`), it hit an API error, or the session
+  `waiting` on input, it hit an API error, or the session
   raised a call of its own ([ADR-0010](../docs/adr/0010-session-raised-operator-call.md)).
   The body says which. Edge-triggered — once per transition, not every poll. The
   first poll after launch only seeds state, so enabling the extension never
@@ -55,7 +55,7 @@ Open the extension preferences (via *Extensions* app, or
 - Clicking the icon opens a dropdown listing sessions grouped by status, with
   project, machine, and branch. Every status the server can return is shown, in
   the order [`session-status.md`](../docs/design/session-status.md) § 1 lists them:
-  `working`, `thinking`, `compacting`, `waiting`, `stalled`, `idle`, `error`,
+  `working`, `thinking`, `compacting`, `waiting`, `idle`, `error`,
   `stale`, `ended`. A status this extension does not recognise is appended rather
   than dropped, so one added on the server side arrives unstyled instead of taking
   its sessions off the screen (#422).

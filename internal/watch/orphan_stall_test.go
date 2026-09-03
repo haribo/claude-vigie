@@ -14,6 +14,11 @@ import (
 // "stalled — stopped at Monitor", at every pause, for the rest of the day. The
 // transcript below is the observed shape of that failure; the assertion is the
 // status the operator should have seen.
+//
+// `stalled` is gone (ADR-0012) and the assertion still stands: a tool call the
+// operator has moved past must not go on describing the session. It would now
+// read `working` forever rather than `stalled` forever — a different wrong
+// answer, and the prompt-closes-the-turn rule is what prevents both.
 func TestASessionDoesNotStallOnADeadToolCall(t *testing.T) {
 	lines := []string{
 		// The tool call that was in flight when Claude Code died. No tool_result
@@ -36,8 +41,8 @@ func TestASessionDoesNotStallOnADeadToolCall(t *testing.T) {
 		t.Fatalf("Parse: %v", err)
 	}
 
-	// Quiet well past the threshold — the state the session sat in all day.
-	if got := refineWithTools("idle", info, stalledAfter+time.Hour); got != "idle" {
-		t.Errorf("status = %q, want idle (pending %q) — a dead tool call still calls the operator", got, info.PendingTool)
+	// Quiet for hours — the state the session sat in all day.
+	if got := refineWithTools("idle", info, time.Hour); got != "idle" {
+		t.Errorf("status = %q, want idle (pending %q) — a tool call the operator moved past still describes the session", got, info.PendingTool)
 	}
 }

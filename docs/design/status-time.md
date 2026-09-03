@@ -14,7 +14,7 @@ sparklines, the dashboard as a proportion.
 
 The three are not a partition of the wall clock. They are the sum of the intervals
 the fleet was *observed* in each state, and a state with no bucket — `ended`,
-`stale`, `error`, `stalled`, `compacting`, `thinking` — contributes nothing to any
+`stale`, `error`, `compacting`, `thinking` — contributes nothing to any
 of them. The bar shows where the observed time went, not where the day went.
 
 ## 2. Only hooks close an interval

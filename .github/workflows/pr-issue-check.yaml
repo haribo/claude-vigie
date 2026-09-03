@@ -21,12 +21,25 @@ jobs:
             exit 0
           fi
 
-          # Check for issue closing keywords in PR body
-          # See: https://docs.github.com/en/issues/tracking-your-work-with-issues/using-issues/linking-a-pull-request-to-an-issue
-          if echo "$PR_BODY" | grep -qiE '(close[sd]?|fix(e[sd])?|resolve[sd]?)\s+#[0-9]+'; then
+          # Two forms, because a PR either finishes an issue or advances it.
+          #
+          # The closing keywords are GitHub's own:
+          # https://docs.github.com/en/issues/tracking-your-work-with-issues/using-issues/linking-a-pull-request-to-an-issue
+          #
+          # `Part of #N` is the repository's, for work delivered in stages — a
+          # change that needs an ADR, or one the operator asked to see in pieces.
+          # It closes nothing: `/gh-merge-develop` acts only on the keywords above,
+          # and docs/git-workflow.md says so. This check used to accept only those,
+          # so the one thing a contributor could not say was "this does not finish
+          # it" — the escape being to write `Closes` and reopen the issue after the
+          # merge, which leaves the tracker describing something that did not
+          # happen (#703).
+          #
+          # test/docs/pr_issue_ref_test.go reads this pattern and pins both halves.
+          if echo "$PR_BODY" | grep -qiE '(close[sd]?|fix(e[sd])?|resolve[sd]?|part of)\s+#[0-9]+'; then
             echo "Issue reference found."
             exit 0
           fi
 
-          echo "::error::PR must reference a GitHub issue in the body (e.g. 'Closes #12'). See docs/git-workflow.md for details."
+          echo "::error::PR must reference a GitHub issue in the body — 'Closes #12' when it finishes one, 'Part of #12' when it advances one. See docs/git-workflow.md."
           exit 1

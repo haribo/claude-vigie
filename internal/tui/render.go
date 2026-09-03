@@ -447,8 +447,6 @@ func statusStyle(status string) lipgloss.Style {
 		return lipgloss.NewStyle().Foreground(cGreen)
 	case "error":
 		return lipgloss.NewStyle().Foreground(cRed)
-	case "stalled":
-		return lipgloss.NewStyle().Foreground(cOrange) // a foreground tool hung
 	default:
 		return dimStyle // ended / unknown
 	}

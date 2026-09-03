@@ -728,7 +728,7 @@ function noteAttention() {
   }
 }
 
-// The body says *why*, because a stalled turn, an API error and a raised call all
+// The body says *why*, because a permission prompt, an API error and a raised call all
 // want different things from the operator — the same reasoning the GNOME
 // indicator's notification body follows.
 function bodyFor(s) {
