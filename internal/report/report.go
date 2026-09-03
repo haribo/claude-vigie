@@ -69,6 +69,14 @@ func Run(event string, stdin io.Reader) error {
 		return errors.New("hook payload missing session_id or event")
 	}
 
+	// Only Claude Code reports (ADR-0013). Refused before anything else runs: a
+	// foreign harness must leave no presence mapping, no compaction marker and no
+	// row — see requireClaudeCode for why the check cannot live on the server.
+	if err := requireClaudeCode(p.SessionID); err != nil {
+		recordRefusal()
+		return err
+	}
+
 	// Record/clear the session→process mapping so the watcher can tell a live
 	// session from a closed one. Best-effort: a hook must never fail a session.
 	recordPresence(event, p.SessionID)
