@@ -37,6 +37,10 @@ Every change starts with a GitHub issue, except trivial changes (typo, formattin
   GitHub only does that when a PR merges into the default branch, and that is
   `main` — a feature PR merges into `develop`. `/gh-merge-develop` closes the
   issue itself, naming the merge commit. `Part of #N` deliberately closes nothing
+  — use it for work delivered in stages, where one issue takes several PRs. Both
+  forms satisfy `pr-issue-check.yaml`; a body naming no issue at all does not. The
+  check accepted only the closing keywords until #703, so the one thing a
+  contributor could not say was "this does not finish it"
 
 ```
 issue #12 → branch feat/12-web-dashboard → PR "Closes #12" → squash merge
