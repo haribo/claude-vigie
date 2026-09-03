@@ -17,6 +17,7 @@ import (
 // TestRunPreCompactWritesMarker is the #342 open signal: a PreCompact hook drops
 // a compaction marker for the watcher and sends no server report.
 func TestRunPreCompactWritesMarker(t *testing.T) {
+	asClaudeCode(t, "s9")
 	t.Setenv("HOME", t.TempDir())
 	payload := `{"session_id":"s9","hook_event_name":"PreCompact","trigger":"auto"}`
 	if err := Run("PreCompact", strings.NewReader(payload)); err != nil {
@@ -43,6 +44,7 @@ func writeConfig(t *testing.T, serverURL string) {
 }
 
 func TestRunPostsReport(t *testing.T) {
+	asClaudeCode(t, "s1")
 	var got api.ReportRequest
 	var gotAuth string
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -69,6 +71,7 @@ func TestRunPostsReport(t *testing.T) {
 }
 
 func TestRunStopSendsAggregatedUsage(t *testing.T) {
+	asClaudeCode(t, "s1")
 	// Isolate HOME: since #420 the transcript is read only when no local watcher
 	// mark is fresh there, so without this the result would depend on whether the
 	// developer's own machine happens to be running a watcher.
@@ -136,6 +139,7 @@ func TestHookActivity(t *testing.T) {
 }
 
 func TestRunReportsHookContract(t *testing.T) {
+	asClaudeCode(t, "s1")
 	var got api.ReportRequest
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		_ = json.NewDecoder(r.Body).Decode(&got)

@@ -47,6 +47,7 @@ func hangingDaemon(t *testing.T) (url string, connections func() int) {
 // bound is what a loaded CI runner makes flaky, while "opened no connection" is
 // the invariant the design states and cannot pass by accident.
 func TestTheHookStopsPostingToAnUnreachableDaemon(t *testing.T) {
+	asClaudeCode(t, "s1")
 	url, connections := hangingDaemon(t)
 	writeConfig(t, url)
 	shortenPostTimeout(t)
@@ -67,6 +68,7 @@ func TestTheHookStopsPostingToAnUnreachableDaemon(t *testing.T) {
 // shutdown. Nothing clears it on recovery, so the window expiring is what makes
 // the arrangement self-healing (§ 4).
 func TestTheHookPostsAgainOnceTheMarkGoesStale(t *testing.T) {
+	asClaudeCode(t, "s2")
 	url, connections := hangingDaemon(t)
 	writeConfig(t, url)
 	shortenPostTimeout(t)
@@ -90,6 +92,7 @@ func TestTheHookPostsAgainOnceTheMarkGoesStale(t *testing.T) {
 // daemon is reachable and refused the report for its content, which must not
 // suppress the next one (§ 2).
 func TestAnAnsweringDaemonIsNeverMarkedUnreachable(t *testing.T) {
+	asClaudeCode(t, "s3")
 	var mu sync.Mutex
 	var hits int
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
