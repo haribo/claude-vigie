@@ -2,7 +2,7 @@
 
 ## Status
 
-Proposed.
+Accepted (#709).
 
 ## Context
 
