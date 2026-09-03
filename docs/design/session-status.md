@@ -123,9 +123,29 @@ hooks aren't installed). It derives status from three signals — Claude Code's 
 **session registry**, whether the session's **process is alive**, and whether its
 **transcript is changing**.
 
+**The watcher answers in four steps, in this order.** The first that applies wins.
+Every question about why a session shows what it shows is answered by finding
+which step it stopped at:
+
+1. **The registry lists it, and its process is gone** → `ended`. A confidently
+   dead process, never a `/proc` that merely could not be read
+   ([ADR-0013](../adr/0013-only-claude-code-may-report.md) is about who may
+   report; #663 is about this distinction).
+2. **The registry lists it** → the registry's own status decides (below).
+3. **It left the registry, replaced in place on the same process** — the `/clear`
+   case → `ended` (#367).
+4. **Otherwise** → the transcript heuristic (below).
+
+**Then, whichever step answered, the transcript refinements run.** They never
+change a step's verdict into a different session state; they add what only the
+transcript can see: `thinking`, `compacting`, `interrupted`, a subagent still
+running, and a command still outstanding. This section used to say the heuristic
+"is not consulted at all" on the registry path, which was false — and it cost
+#661, where a build reported by the registry as `shell` was passed to the tool
+rule and came back as a hung tool.
+
 **The registry wins where it covers the session** (#254). Claude Code maintains
-it for its live sessions, so it states what the transcript can only be read for,
-and the heuristic below is not consulted at all:
+it for its live sessions, so it states what the transcript can only be read for:
 
 - `busy` → `working`; `idle` or `shell` → `idle`; `waiting` → `waiting`, carrying
   its `waitingFor` reason into DETAIL. An unrecognised value degrades to `idle`: a
