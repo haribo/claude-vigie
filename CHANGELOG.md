@@ -9,6 +9,13 @@ file is the single source of truth, not a second narrative.
 
 ## [Unreleased]
 
+### Fixed
+
+- A session started through a wrapper or a launcher is tracked like any other.
+  vigie searched the process tree for a program named `claude` and gave up quietly
+  when anything sat in between, leaving the session without the signal its
+  liveness depends on (#714).
+
 ## [0.11.0] - 2026-09-03
 
 ### Changed
