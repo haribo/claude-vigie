@@ -17,6 +17,9 @@ file is the single source of truth, not a second narrative.
 
 ### Fixed
 
+- A session you leave open is no longer announced as ended. The watcher stopped
+  looking at any session quiet for a day, and the server read that silence as a
+  closed session — while the process was still running (#660).
 - A session running a command reads `working`, not `idle`. Claude Code reports
   `shell` both when you drop to a shell prompt and while a command executes, and
   vigie read both as resting — so a build showed as doing nothing, then as a hung
