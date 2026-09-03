@@ -32,6 +32,14 @@ both are known.
   knows the session id. It walks its own `/proc` ancestor chain (`ppid` by
   `ppid`) up to the nearest process whose `comm` is `claude`, and records that
   process's `{pid, start_time}` as the session's mapping.
+
+  *Refined by [ADR-0013](0013-only-claude-code-may-report.md) § 3:* Claude Code
+  hands the hook that pid in `CLAUDE_PID`, so the walk is the fallback rather than
+  the first move. It searched for a process the environment already named, and it
+  fails quietly — a wrapper or a re-exec breaks the chain, nothing is written, and
+  the session has no mapping at all (#714). What the pid means here is unchanged:
+  the `start_time` still comes from `/proc`, because a pid alone does not identify
+  a process.
 - **Store.** Mappings live at `~/.local/state/vigie/sessions/<id>.json`.
   The path is derived purely from `HOME` — **not** `XDG_STATE_HOME` — so the
   hook's environment and the watcher's systemd environment always resolve to the
