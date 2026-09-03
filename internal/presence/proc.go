@@ -16,11 +16,56 @@ const maxDepth = 20
 // a test cannot arrange that on the real one. Nothing outside tests assigns it.
 var procRoot = "/proc"
 
-// ResolveClaude walks the ancestor chain from the current process up to the
-// nearest "claude" process and returns its mapping. It is meant to be called
-// from a hook (a descendant of claude); it errors if no claude ancestor is
-// found (e.g. when not run under Claude Code, or off Linux).
+// claudePIDEnv is the Claude Code pid, handed to every process it spawns. Reading
+// it is decision 3 of ADR-0013, and it replaces a search with a lookup.
+const claudePIDEnv = "CLAUDE_PID"
+
+// ResolveClaude returns the mapping for the Claude Code process this hook belongs
+// to: the pid Claude Code handed over, or — failing that — the nearest `claude`
+// ancestor.
+//
+// The environment comes first because the walk below is fragile in a way a
+// variable is not. It succeeds only while the hook is a descendant of a process
+// literally named `claude`, within maxDepth levels; a wrapper, a shim or a re-exec
+// breaks it. And it breaks quietly: nothing is written, the session gets no
+// mapping, and liveness falls back to the transcript heuristic — the path #660
+// came from (#714).
+//
+// The walk stays as the fallback, for a Claude Code that stops setting the
+// variable and for anywhere `/proc` is not what it is on Linux.
 func ResolveClaude() (Mapping, error) {
+	if m, ok := claudeFromEnv(); ok {
+		return m, nil
+	}
+	return claudeByWalk()
+}
+
+// claudeFromEnv reads the handed-over pid, and verifies it before trusting it.
+//
+// The start time still comes from /proc: the mapping is {pid, procStart} so that
+// pid reuse cannot resurrect a dead session (ADR-0006), and reading the pid from
+// the environment changes nothing about that. The name is checked too — a variable
+// naming some other live process would map the session to something it does not
+// run, and the session would read `ended` the moment that process exited.
+//
+// Anything unusable falls through rather than failing: a stale value in a
+// long-lived shell must cost nothing more than the walk it would have taken.
+func claudeFromEnv() (Mapping, bool) {
+	v := os.Getenv(claudePIDEnv) //nolint:forbidigo // Claude Code's own handle, not vigie config
+	pid, err := strconv.Atoi(v)
+	if err != nil || pid <= 0 {
+		return Mapping{}, false
+	}
+	comm, _, start, err := readStat(pid)
+	if err != nil || comm != "claude" {
+		return Mapping{}, false
+	}
+	return Mapping{PID: pid, StartTime: start}, true
+}
+
+// claudeByWalk climbs the ancestor chain to the nearest "claude" process. It
+// errors if none is found (e.g. when not run under Claude Code, or off Linux).
+func claudeByWalk() (Mapping, error) {
 	pid := os.Getpid()
 	for i := 0; i < maxDepth; i++ {
 		comm, ppid, start, err := readStat(pid)
