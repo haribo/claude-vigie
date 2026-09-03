@@ -9,6 +9,8 @@ file is the single source of truth, not a second narrative.
 
 ## [Unreleased]
 
+## [0.11.0] - 2026-09-03
+
 ### Changed
 
 - vigie reports Claude Code sessions and only those. Another CLI reading
@@ -618,7 +620,8 @@ across machines — it reads and reports session state; it never drives a sessio
 - The API binds `127.0.0.1` by default; every `/api/*` route is behind a
   constant-time shared-token check; request bodies are size-capped.
 
-[Unreleased]: https://github.com/haribo/claude-vigie/compare/v0.10.0...HEAD
+[Unreleased]: https://github.com/haribo/claude-vigie/compare/v0.11.0...HEAD
+[0.11.0]: https://github.com/haribo/claude-vigie/compare/v0.10.0...v0.11.0
 [0.10.0]: https://github.com/haribo/claude-vigie/compare/v0.9.1...v0.10.0
 [0.9.1]: https://github.com/haribo/claude-vigie/compare/v0.9.0...v0.9.1
 [0.9.0]: https://github.com/haribo/claude-vigie/compare/v0.8.0...v0.9.0
