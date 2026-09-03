@@ -32,6 +32,12 @@ func runTUI(args []string) int {
 		return 1
 	}
 
+	// After the strict checks, and never blocking: reports this machine refused
+	// for not coming from Claude Code (ADR-0013). A refusal is silent by
+	// construction — a hook always exits 0 — so this is where it reaches the
+	// operator, before the alt-screen swallows the terminal.
+	warnAboutRefusedReports()
+
 	if err := tui.Run(cfg); err != nil {
 		fmt.Fprintf(os.Stderr, "tui: %v\n", err)
 		return 1

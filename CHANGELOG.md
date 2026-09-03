@@ -9,6 +9,13 @@ file is the single source of truth, not a second narrative.
 
 ## [Unreleased]
 
+### Changed
+
+- vigie reports Claude Code sessions and only those. Another CLI reading
+  `~/.claude/settings.json` ran the same hooks, and its sessions arrived as rows
+  with a hash for a name that never ended; those reports are now refused, and the
+  terminal says so at launch if any were (#709).
+
 ### Removed
 
 - The `stalled` status is gone; a session waiting on a command now reads
