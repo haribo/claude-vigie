@@ -298,9 +298,22 @@ func (s *scanner) scan(root, machine string, maxAge time.Duration, now time.Time
 		if err != nil {
 			continue
 		}
+		// The window bounds how much disk history is re-read on every scan; it must
+		// not decide whether a session is alive. A session Claude Code still lists
+		// is one whose process is running — the registry carries its pid — and
+		// skipping it left the server with nothing to report, which it reads on a
+		// watched machine as `ended`. A session open on the operator's screen was
+		// announced as over (#660).
+		//
+		// The exception is bounded by the registry, so the extra parses are bounded
+		// by live Claude processes rather than by the hundreds of transcripts a
+		// working machine accumulates. The id is the file's own name, so this costs
+		// no parse to decide.
 		age := now.Sub(fi.ModTime())
 		if age > maxAge {
-			continue
+			if _, listed := reg[strings.TrimSuffix(filepath.Base(p), ".jsonl")]; !listed {
+				continue
+			}
 		}
 		info, err := s.parse(p, fi, fresh)
 		if err != nil {
@@ -322,10 +335,15 @@ func (s *scanner) scan(root, machine string, maxAge time.Duration, now time.Time
 		// this session last really do something". A live Claude appends
 		// untimestamped metadata (last-prompt, bridge-session) roughly hourly,
 		// bumping mtime without any activity; LastActivity ignores those lines, so
-		// SEEN and the age-based status stay truthful. The mtime still gates the
-		// scan window above (the hourly churn keeps a live session in range, so it
-		// stays visible as idle — never expired while its process lives). Fall back
-		// to mtime when no dated line exists yet (a brand-new transcript).
+		// SEEN and the age-based status stay truthful. Fall back to mtime when no
+		// dated line exists yet (a brand-new transcript).
+		//
+		// This comment used to add that the churn kept a live session inside the
+		// scan window, "never expired while its process lives". That was the
+		// argument for letting the window gate liveness, and it does not hold: the
+		// metadata lines above are written when something *happens* — a prompt, a
+		// mode change, a bridge sync — so a session nobody touches writes none.
+		// The window no longer decides, the registry does (#660).
 		lastActivity := fi.ModTime()
 		if t, err := time.Parse(time.RFC3339, info.LastActivity); err == nil {
 			lastActivity = t
