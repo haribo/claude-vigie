@@ -11,6 +11,9 @@ file is the single source of truth, not a second narrative.
 
 ### Fixed
 
+- A turn stopped with Ctrl-C while Claude was thinking now shows `interrupted`.
+  It read as still reasoning instead, and stayed that way until the next prompt
+  (#721).
 - The dashboard shows a status it does not recognise as it is, instead of drawing
   it as `idle`. A session stored under a status this build has retired was shown
   resting (#719).

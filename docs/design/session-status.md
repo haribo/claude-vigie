@@ -183,6 +183,13 @@ list, typically an older Claude Code:
 - last assistant block is a `thinking` block → `thinking` (reasoning before any
   text/tool output); a later text/tool line clears it. A heuristic: at rest a
   finished turn ends with text/tool, so this reads true only mid-turn.
+
+  **A turn the operator killed is excluded.** Both signals survive an interrupt —
+  the last block Claude wrote *was* a thinking block — and nothing clears the
+  thinking one but a new assistant line, which a killed turn never writes. Without
+  the exclusion the session reads `thinking` for good, and the `interrupted`
+  marker, which attaches only to a resting session, is never seen. Interrupting
+  during a long silent reasoning pass is the case the marker exists for (#721).
 - a `tool_use` with no matching `tool_result` (paired by id) keeps the session
   `working`: Claude is waiting on that command, whether it is a foreground call or
   a backgrounded Bash (`run_in_background`).
