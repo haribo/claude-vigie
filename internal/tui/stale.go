@@ -50,14 +50,3 @@ func (m model) staleNote(sources ...string) string {
 	}
 	return ""
 }
-
-// staleMark is the compact form, for the bottom strip where a whole line would
-// not fit.
-func (m model) staleMark(sources ...string) string {
-	for _, s := range sources {
-		if m.refreshFailed[s] {
-			return warnStyle.Render(" ⚠")
-		}
-	}
-	return ""
-}
