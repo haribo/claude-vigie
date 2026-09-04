@@ -9,6 +9,12 @@ file is the single source of truth, not a second narrative.
 
 ## [Unreleased]
 
+### Fixed
+
+- The dashboard shows a status it does not recognise as it is, instead of drawing
+  it as `idle`. A session stored under a status this build has retired was shown
+  resting (#719).
+
 ## [0.11.0] - 2026-09-03
 
 ### Changed
