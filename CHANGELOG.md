@@ -11,6 +11,9 @@ file is the single source of truth, not a second narrative.
 
 ### Fixed
 
+- `vigied token` no longer prints a token the running daemon is not using. A
+  daemon given its token through the environment left an earlier one in the
+  database, and the command handed it over as though it were live (#720).
 - A session that comes back no longer keeps the time it ended. Only reopening it
   cleared that, so a session resumed by typing carried a timestamp saying when it
   had stopped (#722).
