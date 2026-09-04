@@ -67,3 +67,34 @@ func TestSessionStartReopensWhatTheWatcherEnded(t *testing.T) {
 		t.Errorf("status = %q, want idle — a hook inside the session outranks an inference from outside", got.Status)
 	}
 }
+
+// #722. The end time is stamped when a session ends and was cleared only by a
+// `SessionStart`. But that is not the only way a session comes back: typing a
+// prompt does it too, and so does a watcher report finding the process alive.
+// The value is served to every client, so a session demonstrably running carried
+// a timestamp saying when it stopped.
+//
+// #664 fixed the status and the one event that clearly contradicts it. It did not
+// ask what else contradicts it.
+func TestTheEndTimeGoesWheneverTheSessionComesBack(t *testing.T) {
+	ended := func(t *testing.T) store.Session {
+		t.Helper()
+		s := hookReport(store.Session{}, true, "SessionStart", "t1")
+		s = hookReport(s, false, "SessionEnd", "t2")
+		if s.Status != "ended" || s.EndedAt != "t2" {
+			t.Fatalf("setup: status %q, ended_at %q", s.Status, s.EndedAt)
+		}
+		return s
+	}
+
+	// A prompt: the session is working again, and it did not stop at t2 after all.
+	if got := hookReport(ended(t), false, "UserPromptSubmit", "t3"); got.Status != "working" || got.EndedAt != "" {
+		t.Errorf("after a prompt: status %q, ended_at %q — want working and no end time", got.Status, got.EndedAt)
+	}
+
+	// And an end time is kept for as long as the session is over: a report that
+	// leaves it ended must not erase when it ended.
+	if got := hookReport(ended(t), false, "SessionEnd", "t4"); got.EndedAt == "" {
+		t.Error("the end time was cleared on a session that is still over")
+	}
+}

@@ -318,8 +318,8 @@ func reportDetail(req api.ReportRequest) string {
 // one leaves the session with an empty DETAIL.
 var idleDetails = map[string]bool{"shell": true, "interrupted": true}
 
-// applyEndedAt records when a session ended, and un-records it when one comes
-// back.
+// applyEndedAt records when a session ended, and un-records it the moment one is
+// no longer over.
 //
 // The end time used to be written once and never cleared, so it outlived the end
 // itself: it is served to every client (`EndedAt` in the session view), and a
@@ -327,10 +327,16 @@ var idleDetails = map[string]bool{"shell": true, "interrupted": true}
 // (#664). A `SessionStart` on a live session finds it empty already, so the clear
 // costs nothing where there is nothing to clear.
 func applyEndedAt(sess store.Session, req api.ReportRequest) store.Session {
-	switch req.Event {
-	case "SessionEnd":
+	if req.Event == "SessionEnd" {
 		sess.EndedAt = req.Timestamp
-	case "SessionStart":
+	}
+	// Anything that is not over has no end time. Keying the clear on
+	// `SessionStart` alone answered one way a session comes back and missed the
+	// others — a typed prompt, a watcher finding the process alive — so a session
+	// demonstrably running still carried the timestamp of an end it had left
+	// behind (#722). The status has already been reconciled here, so this reads
+	// the outcome rather than guessing from the event that produced it.
+	if sess.Status != "ended" {
 		sess.EndedAt = ""
 	}
 	return sess
