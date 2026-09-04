@@ -207,3 +207,73 @@ func captureRun(t *testing.T, fn func() int) (string, int) {
 
 	return b.String(), code
 }
+
+// #720. #657 stopped the command inventing a token. What was left is quieter and
+// still wrong: a daemon that generated a token on a first run, and now runs with a
+// different one supplied through its environment, leaves the first in the store.
+// The command finds it and prints it. The operator hands it to a machine, and the
+// machine is refused — by a daemon holding a token the command could not see.
+func TestRunTokenRefusesAStoredTokenTheDaemonIsNotUsing(t *testing.T) {
+	t.Setenv(tokenEnv, "")
+	db := newTokenDB(t)
+	seedToken(t, db, "stored-t1")
+	// The daemon last started with a token of its own, not this one.
+	seedFingerprint(t, db, "env-t2")
+
+	out, code := captureRun(t, func() int { return runToken([]string{"-db", db}) })
+
+	if code == 0 {
+		t.Error("exit = 0 while the running daemon uses a token this command cannot read")
+	}
+	if strings.Contains(out, "stored-t1") {
+		t.Error("printed the stored token; the operator would hand over a value the daemon refuses")
+	}
+}
+
+// The ordinary case must stay ordinary: a daemon using the token it stored.
+func TestRunTokenPrintsTheStoredTokenTheDaemonUses(t *testing.T) {
+	t.Setenv(tokenEnv, "")
+	db := newTokenDB(t)
+	seedToken(t, db, "stored-t1")
+	seedFingerprint(t, db, "stored-t1")
+
+	if got := strings.TrimSpace(captureStdout(t, func() int { return runToken([]string{"-db", db}) })); got != "stored-t1" {
+		t.Errorf("printed %q, want the stored token", got)
+	}
+}
+
+// A daemon that has never run leaves no fingerprint. The stored token is then the
+// only answer there is, and refusing it would break the first-run path #657 fixed.
+func TestRunTokenPrintsTheStoredTokenWithNoFingerprint(t *testing.T) {
+	t.Setenv(tokenEnv, "")
+	db := newTokenDB(t)
+	seedToken(t, db, "stored-t1")
+
+	if got := strings.TrimSpace(captureStdout(t, func() int { return runToken([]string{"-db", db}) })); got != "stored-t1" {
+		t.Errorf("printed %q, want the stored token", got)
+	}
+}
+
+func seedToken(t *testing.T, db, token string) {
+	t.Helper()
+	st, err := store.Open(db)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = st.Close() }()
+	if err := st.SetMeta(context.Background(), "token", token); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func seedFingerprint(t *testing.T, db, token string) {
+	t.Helper()
+	st, err := store.Open(db)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = st.Close() }()
+	if err := st.SetMeta(context.Background(), tokenFingerprintKey, fingerprint(token)); err != nil {
+		t.Fatal(err)
+	}
+}

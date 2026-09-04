@@ -254,11 +254,18 @@ const tokenEnv = "VIGIE_TOKEN"
 // explicitly should beat one the daemon persisted for itself.
 func resolveToken(ctx context.Context, st *store.Store) (string, error) {
 	if env := os.Getenv(tokenEnv); env != "" {
+		// Record which token is in use, without recording the token. `vigied token`
+		// reads this to tell a live stored token from a leftover: a value generated
+		// on an earlier run stays in the store, and printing it as though the daemon
+		// used it hands the operator a secret their machines will be refused for
+		// (#720). Best-effort — failing to note it must not stop the daemon serving.
+		_ = st.SetMeta(ctx, tokenFingerprintKey, fingerprint(env))
 		return env, nil
 	}
 	if v, ok, err := st.GetMeta(ctx, "token"); err != nil {
 		return "", err
 	} else if ok {
+		_ = st.SetMeta(ctx, tokenFingerprintKey, fingerprint(v))
 		return v, nil
 	}
 
@@ -269,6 +276,7 @@ func resolveToken(ctx context.Context, st *store.Store) (string, error) {
 	if err := st.SetMeta(ctx, "token", token); err != nil {
 		return "", err
 	}
+	_ = st.SetMeta(ctx, tokenFingerprintKey, fingerprint(token))
 	fmt.Fprintf(os.Stderr, "generated vigie token: %s\n", token)
 	return token, nil
 }
