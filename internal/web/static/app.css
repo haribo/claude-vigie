@@ -27,6 +27,10 @@
 .st-waiting { --st: var(--waiting); } .st-idle { --st: var(--idle); }
 .st-error { --st: var(--error); } .st-ended { --st: var(--ended); }
 .st-stale { --st: var(--stale); }
+/* A status this build does not know: drawn in the muted neutral, never in another
+   status's colour. The label beside it is the stored value, so the row says what
+   it is rather than borrowing an identity (#719). */
+.st-unknown { --st: var(--muted); }
 
 * { box-sizing: border-box; }
 html { color-scheme: light dark; }
