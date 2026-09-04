@@ -9,7 +9,7 @@ vigie, status is **detected**, never operator-set
 
 ---
 
-## 1. The nine statuses
+## 1. The eight statuses
 
 Every session shows exactly one status. What each tells the operator:
 
@@ -36,7 +36,7 @@ human right now.
 Every status is drawn as a coloured pill in both clients. **A status colour states
 how much attention the session requires, and nothing else.**
 
-The nine colours were picked one at a time, as each status was added, and the rule
+The colours were picked one at a time, as each status was added, and the rule
 above was never written — so three of them spent three vivid, unrelated hues on
 three ways of saying *running, leave it alone*. In front of twenty sessions the
 operator could not answer the one question they opened vigie for by looking; they
@@ -53,7 +53,7 @@ Four families, four colours:
 | **Over** — nothing more will happen | `stale`, `ended` | `#94a3b8` | `#64748b` |
 
 The calling family keeps three colours because they are three different asks:
-answer a prompt, unstick a tool, look at an outage. The other families ask for
+answer a prompt, look at an outage. The other families ask for
 nothing, so they need no distinction between their members.
 
 **`stale` and `ended` share the grey deliberately.** Under the rule they are one
@@ -75,7 +75,7 @@ terminal and in the browser alike. Nothing here is knowable by colour only.
 
 An operator who cannot separate the hues reads the words — which is what everyone
 did before this rule existed. They lose the acceleration, not the answer. Giving
-nine statuses nine shapes would slow the column down for everyone in order to
+eight statuses eight shapes would slow the column down for everyone in order to
 speed it up for some.
 
 This is the opposite call from the state pill, which encodes its level in shape as
