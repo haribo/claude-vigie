@@ -11,6 +11,9 @@ file is the single source of truth, not a second narrative.
 
 ### Fixed
 
+- A session that comes back no longer keeps the time it ended. Only reopening it
+  cleared that, so a session resumed by typing carried a timestamp saying when it
+  had stopped (#722).
 - A turn stopped with Ctrl-C while Claude was thinking now shows `interrupted`.
   It read as still reasoning instead, and stayed that way until the next prompt
   (#721).
