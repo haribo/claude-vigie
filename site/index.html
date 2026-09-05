@@ -18,8 +18,9 @@
     --ground: #100d08; --panel: #17130c; --panel-2: #1f1a11; --line: #322817;
     --ink: #f0e9d8; --muted: #a49877; --faint: #6f6650;
     --amber: #d9663f; --amber-deep: #b8502e; --amber-pale: #f0a883;
-    --s-working: #d9663f; --s-compacting: #22d3ee; --s-waiting: #fbbf24;
-    --s-idle: #64748b; --s-ended: #545056;
+    /* status colours: one per attention family, from test/fixtures/status-colors.json (#738) */
+    --s-working: #4ade80; --s-waiting: #fbbf24; --s-error: #f87171;
+    --s-idle: #60a5fa; --s-ended: #64748b;
     /* diagram (how-it-works.svg) chrome — flips with theme */
     --dg-node: #17130c; --dg-ink: #f0e9d8; --dg-muted: #a49877; --dg-line: #322817;
     --scope-glow: rgba(217,102,63,0.5);
@@ -31,6 +32,8 @@
       --ground: #f4eee1; --panel: #fbf7ee; --panel-2: #f3ecdc; --line: #e2d6bd;
       --ink: #221c12; --muted: #6b5f47; --faint: #9a8c6e;
       --amber: #c2410c; --amber-deep: #9a3412; --amber-pale: #b8502e;
+      --s-working: #16a34a; --s-waiting: #b45309; --s-error: #dc2626;
+      --s-idle: #2563eb; --s-ended: #94a3b8;
       --dg-node: #fbf7ee; --dg-ink: #221c12; --dg-muted: #6b5f47; --dg-line: #d8cfc0;
       --scope-glow: rgba(194,65,12,0.4);
       --shadow: 0 1px 0 rgba(255,255,255,0.6), 0 22px 50px -30px rgba(120,80,20,0.4);
@@ -39,12 +42,16 @@
   :root[data-theme="dark"] {
     --ground: #100d08; --panel: #17130c; --panel-2: #1f1a11; --line: #322817;
     --ink: #f0e9d8; --muted: #a49877; --faint: #6f6650; --amber: #d9663f; --amber-deep: #b8502e; --amber-pale: #f0a883;
+    --s-working: #4ade80; --s-waiting: #fbbf24; --s-error: #f87171;
+    --s-idle: #60a5fa; --s-ended: #64748b;
     --dg-node: #17130c; --dg-ink: #f0e9d8; --dg-muted: #a49877; --dg-line: #322817;
     --scope-glow: rgba(217,102,63,0.5); --shadow: 0 1px 0 rgba(255,255,255,0.03), 0 22px 50px -28px rgba(0,0,0,0.85);
   }
   :root[data-theme="light"] {
     --ground: #f4eee1; --panel: #fbf7ee; --panel-2: #f3ecdc; --line: #e2d6bd;
     --ink: #221c12; --muted: #6b5f47; --faint: #9a8c6e; --amber: #c2410c; --amber-deep: #9a3412; --amber-pale: #b8502e;
+    --s-working: #16a34a; --s-waiting: #b45309; --s-error: #dc2626;
+    --s-idle: #2563eb; --s-ended: #94a3b8;
     --dg-node: #fbf7ee; --dg-ink: #221c12; --dg-muted: #6b5f47; --dg-line: #d8cfc0;
     --scope-glow: rgba(194,65,12,0.4); --shadow: 0 1px 0 rgba(255,255,255,0.6), 0 22px 50px -30px rgba(120,80,20,0.4);
   }
@@ -120,7 +127,7 @@
   .pill { display: inline-flex; align-items: center; gap: 6px; padding: 3px 9px 3px 8px; border-radius: 999px; font-size: 0.72rem; font-weight: 600; font-family: var(--font-mono); }
   .pill i { width: 7px; height: 7px; border-radius: 50%; }
   .pill.working { color: var(--s-working); background: color-mix(in srgb, var(--s-working) 14%, transparent); } .pill.working i { background: var(--s-working); }
-  .pill.compacting { color: var(--s-compacting); background: color-mix(in srgb, var(--s-compacting) 14%, transparent); } .pill.compacting i { background: var(--s-compacting); }
+  .pill.error { color: var(--s-error); background: color-mix(in srgb, var(--s-error) 14%, transparent); } .pill.error i { background: var(--s-error); }
   .pill.waiting { color: var(--s-waiting); background: color-mix(in srgb, var(--s-waiting) 15%, transparent); } .pill.waiting i { background: var(--s-waiting); }
   .pill.idle { color: var(--s-idle); background: color-mix(in srgb, var(--s-idle) 16%, transparent); } .pill.idle i { background: var(--s-idle); }
   .pill.ended { color: var(--s-ended); background: color-mix(in srgb, var(--s-ended) 22%, transparent); } .pill.ended i { background: var(--s-ended); }
@@ -235,11 +242,11 @@
         </div>
         <div class="does">
           <h3>Status at a glance</h3>
-          <p>Who's working, waiting on you, or quietly done.</p>
+          <p>Who's working, who needs you, and who's quietly done.</p>
           <div class="legend">
             <span class="pill working"><i></i>working</span>
             <span class="pill waiting"><i></i>waiting</span>
-            <span class="pill compacting"><i></i>compacting</span>
+            <span class="pill error"><i></i>error</span>
             <span class="pill idle"><i></i>idle</span>
             <span class="pill ended"><i></i>ended</span>
           </div>
