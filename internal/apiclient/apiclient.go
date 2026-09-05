@@ -28,7 +28,10 @@ import (
 
 // httpClient carries a timeout — http.DefaultClient has none, so a hung daemon
 // would hang the caller forever.
-var httpClient = &http.Client{Timeout: 10 * time.Second}
+var httpClient = &http.Client{
+	Timeout:   10 * time.Second,
+	Transport: TuneForDeadConnections(http.DefaultTransport.(*http.Transport).Clone()),
+}
 
 // requestTimeout bounds a single request, inside the client's own ceiling.
 const requestTimeout = 5 * time.Second
@@ -67,4 +70,30 @@ func Get[T any](cfg *config.Config, path, resource string) (T, error) {
 		return zero, fmt.Errorf("decoding %s: %w", resource, err)
 	}
 	return v, nil
+}
+
+// TuneForDeadConnections makes an HTTP/2 connection that has stopped answering
+// detectable in seconds rather than in the kernel's own time.
+//
+// A long-lived client keeps one connection hot and multiplexes every request onto
+// it. Suspending the machine drops the peer and NAT state with no reset, so on
+// resume the connection looks open and carries nothing: a request's deadline
+// resets its *stream*, never the connection, and the caller falls silent until the
+// kernel stops retransmitting — about fifteen minutes, observed three times on a
+// watcher (#732). HTTP/1.1 heals on the first request; multiplexing is what turns
+// one dead socket into a quarter of an hour.
+//
+// The health check is the answer the protocol already has: after this long idle,
+// send a ping; if no answer comes in time, drop the connection so the next request
+// dials a new one. Both values sit inside the watcher's 5 s cadence, so an outage
+// is noticed within a beat, and far above any round trip a working link produces.
+//
+// It applies to the long-lived callers — the watcher and the TUI. A hook is a
+// fresh process with a fresh connection and was never exposed.
+func TuneForDeadConnections(t *http.Transport) *http.Transport {
+	t.HTTP2 = &http.HTTP2Config{
+		SendPingTimeout: 3 * time.Second,
+		PingTimeout:     3 * time.Second,
+	}
+	return t
 }

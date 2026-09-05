@@ -28,6 +28,7 @@ import (
 	"time"
 
 	"github.com/haribo/claude-vigie/internal/api"
+	"github.com/haribo/claude-vigie/internal/apiclient"
 	"github.com/haribo/claude-vigie/internal/clock"
 	"github.com/haribo/claude-vigie/internal/config"
 	"github.com/haribo/claude-vigie/internal/reachability"
@@ -36,7 +37,10 @@ import (
 
 // httpClient carries a timeout (http.DefaultClient has none); each request also
 // sets a context deadline.
-var httpClient = &http.Client{Timeout: 10 * time.Second}
+var httpClient = &http.Client{
+	Timeout:   10 * time.Second,
+	Transport: apiclient.TuneForDeadConnections(http.DefaultTransport.(*http.Transport).Clone()),
+}
 
 func post(cfg *config.Config, req api.ReportRequest) error {
 	return postJSON(cfg, "/api/report", req, nil)
