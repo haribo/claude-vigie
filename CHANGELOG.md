@@ -17,6 +17,9 @@ file is the single source of truth, not a second narrative.
 
 ### Fixed
 
+- A machine no longer disappears from the fleet for a quarter of an hour after
+  waking from suspend. The watcher kept sending on a connection that had died with
+  the machine's network state, and nothing noticed until the kernel gave up (#732).
 - The state modal reads `just now · cannot refresh` for a usage snapshot that has
   only just failed, instead of `just now old` (#727).
 - `vigied token` no longer prints a token the running daemon is not using. A
