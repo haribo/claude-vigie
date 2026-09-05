@@ -79,15 +79,10 @@ func (s *Server) handleReport(w http.ResponseWriter, r *http.Request) {
 	if req.Event == "watch" {
 		s.recordWatchHeartbeat(ctx, req)
 	} else {
-		// A hook event closes the previous status interval; roll up its
-		// duration before recording the transition.
-		s.rollupStatusInterval(ctx, sess, req)
-		if err := s.store.AppendEvent(ctx, store.Event{
-			SessionID: sess.ID, Event: req.Event, Status: sess.Status, CreatedAt: req.Timestamp,
-		}); err != nil {
-			// The session is already updated; the event log is best-effort.
-			s.log.Error("appending event", "error", err)
-		}
+		// A hook event closes the previous status interval. The event log is the
+		// mark that interval is measured from, so recording the transition and
+		// counting its duration are one write, not two (#737).
+		s.closeStatusInterval(ctx, sess, req)
 	}
 
 	s.maybeSample(ctx, sess.ID, req.Timestamp, sess.Usage.OutputTokens)
@@ -135,21 +130,30 @@ func (s *Server) rollupTokens(ctx context.Context, _, sess store.Session, req ap
 	metricOutputTokens.WithLabelValues(modelLabel(sess.Model)).Add(float64(delta)) // bounded: see modelFamilies (#528)
 }
 
-// rollupStatusInterval closes the interval since the session's previous event by
-// adding its duration to that status's daily bucket. Only hook events carry
-// status transitions, so the watcher's polls never reach here. Best-effort.
-func (s *Server) rollupStatusInterval(ctx context.Context, sess store.Session, req api.ReportRequest) {
-	last, ok, err := s.store.LastEvent(ctx, sess.ID)
-	if err != nil || !ok {
-		return
-	}
-	secs := secondsBetween(last.CreatedAt, req.Timestamp)
-	if secs <= 0 {
-		return
-	}
-	// Attribute the whole interval to its start day (no midnight split in v1).
-	if err := s.store.AddDailyStatusSeconds(ctx, dayOf(last.CreatedAt, s.now()), sess.Model, last.Status, secs); err != nil {
-		s.log.Error("rolling up daily status", "error", err)
+// closeStatusInterval records the transition and, in the same write, adds the
+// interval since the session's previous event to that status's daily bucket. Only
+// hook events carry status transitions, so the watcher's polls never reach here.
+//
+// Best-effort as a whole, and that is now the point: the log entry is the mark the
+// next interval measures from, so it must never advance over seconds that did not
+// land, nor seconds land over a mark that did not move (#737). A failure drops
+// both, and the next hook counts the interval once.
+func (s *Server) closeStatusInterval(ctx context.Context, sess store.Session, req api.ReportRequest) {
+	e := store.Event{SessionID: sess.ID, Event: req.Event, Status: sess.Status, CreatedAt: req.Timestamp}
+	err := s.store.AppendEventClosingInterval(ctx, e, func(last store.Event, ok bool) store.StatusInterval {
+		if !ok {
+			return store.StatusInterval{} // first event: nothing to close
+		}
+		// Attribute the whole interval to its start day (no midnight split in v1).
+		return store.StatusInterval{
+			Day:    dayOf(last.CreatedAt, s.now()),
+			Model:  sess.Model,
+			Status: last.Status,
+			Secs:   secondsBetween(last.CreatedAt, req.Timestamp),
+		}
+	})
+	if err != nil {
+		s.log.Error("closing status interval", "error", err)
 	}
 }
 

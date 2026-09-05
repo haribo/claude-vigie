@@ -24,6 +24,12 @@ type execer interface {
 	ExecContext(ctx context.Context, query string, args ...any) (sql.Result, error)
 }
 
+// querier is what both a *sql.DB and a *sql.Tx satisfy for reads, so a query has
+// one home whether it runs on its own or inside a transaction.
+type querier interface {
+	QueryRowContext(ctx context.Context, query string, args ...any) *sql.Row
+}
+
 // addDailyTokens adds a positive output-token delta to the (day, model) bucket.
 // Non-positive deltas are ignored.
 func addDailyTokens(ctx context.Context, db execer, day, model string, delta int64) error {
@@ -44,6 +50,12 @@ func addDailyTokens(ctx context.Context, db execer, day, model string, delta int
 // (day, model). Statuses without a time bucket (e.g. ended) and non-positive
 // durations are ignored.
 func (s *Store) AddDailyStatusSeconds(ctx context.Context, day, model, status string, secs int64) error {
+	return addDailyStatusSeconds(ctx, s.db, day, model, status, secs)
+}
+
+// addDailyStatusSeconds is the statement itself, so it has one home whether it
+// runs on its own or inside `AppendEventClosingInterval`'s transaction (#737).
+func addDailyStatusSeconds(ctx context.Context, db execer, day, model, status string, secs int64) error {
 	if secs <= 0 {
 		return nil
 	}
@@ -62,7 +74,7 @@ func (s *Store) AddDailyStatusSeconds(ctx context.Context, day, model, status st
 	default:
 		return nil
 	}
-	if _, err := s.db.ExecContext(ctx, query, day, model, secs); err != nil {
+	if _, err := db.ExecContext(ctx, query, day, model, secs); err != nil {
 		return fmt.Errorf("adding daily %s seconds: %w", status, err)
 	}
 	return nil

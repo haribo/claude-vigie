@@ -23,8 +23,7 @@ type Store interface {
 	GetSession(ctx context.Context, id string) (store.Session, error)
 	ApplySession(ctx context.Context, id string, merge func(store.Session, bool) store.Session) (store.Session, error)
 	ListSessions(ctx context.Context) ([]store.Session, error)
-	AppendEvent(ctx context.Context, e store.Event) error
-	LastEvent(ctx context.Context, sessionID string) (store.Event, bool, error)
+	AppendEventClosingInterval(ctx context.Context, e store.Event, bucket func(last store.Event, ok bool) store.StatusInterval) error
 	AddSample(ctx context.Context, sessionID, at string, outputTokens int64) error
 	RollUpTokens(ctx context.Context, sessionID string, total int64, day, model string) (int64, error)
 	AddDailyStatusSeconds(ctx context.Context, day, model, status string, secs int64) error
