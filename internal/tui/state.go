@@ -236,7 +236,7 @@ func (m model) usageRow() stateRow {
 	if age < 10*time.Minute && !m.refreshFailed[srcUsage] {
 		return stateRow{"usage snapshot", levelOK, "fresh"}
 	}
-	detail := humanAge(age) + " old"
+	detail := agePhrase(age)
 	if m.refreshFailed[srcUsage] || m.linkDown() {
 		detail += " · cannot refresh"
 	}
@@ -281,6 +281,20 @@ func renderState(rows []stateRow, width int) string {
 	title := headerStyle.Render("State")
 	closeHint := dimStyle.Render(stateKey + " or esc to close")
 	return clampWidth(title+"\n"+box+"\n"+closeHint, width)
+}
+
+// agePhrase is how old something is, as a fragment the row can read straight out:
+// "just now", "12m old", "3h old".
+//
+// The two forms are not interchangeable, which is what went wrong: the caller
+// appended " old" to whatever humanAge returned, and the under-a-minute case is a
+// phrase rather than a quantity — so a snapshot that had just failed to refresh
+// read "just now old" (#727).
+func agePhrase(d time.Duration) string {
+	if d < time.Minute {
+		return "just now"
+	}
+	return humanAge(d) + " old"
 }
 
 // humanAge renders a duration the way the modal reads it: minutes up to an hour,

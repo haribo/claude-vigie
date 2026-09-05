@@ -525,7 +525,13 @@ func superseded(id string, regByProc map[procID]string) bool {
 // status and picks the matching "doing" message: thinking, then compacting
 // (#342), then the tool-based background/subagent rules (#256/#344).
 func refineStatus(base, activity, id string, info *transcript.Info, activityAge time.Duration, now time.Time) (string, string) {
-	base = withThinking(base, info.Thinking)
+	// A turn the operator killed is not a turn still reasoning. Both signals
+	// survive an interrupt — the last block Claude produced was a thinking block,
+	// and nothing clears that but a new assistant line, which a killed turn never
+	// writes. Refining first would make the session `thinking` for good, and the
+	// `interrupted` marker only ever attaches to a resting session, so it would
+	// never be seen (#721).
+	base = withThinking(base, info.Thinking && !info.Interrupted)
 	base = withCompacting(base, compactingNow(id, info, now)) // opaque `working` during compaction → `compacting`
 	prevBase := base
 	base = refineWithTools(base, info, activityAge) // an outstanding tool call keeps the session working

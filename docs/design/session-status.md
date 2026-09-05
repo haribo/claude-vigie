@@ -9,7 +9,7 @@ vigie, status is **detected**, never operator-set
 
 ---
 
-## 1. The nine statuses
+## 1. The eight statuses
 
 Every session shows exactly one status. What each tells the operator:
 
@@ -36,7 +36,7 @@ human right now.
 Every status is drawn as a coloured pill in both clients. **A status colour states
 how much attention the session requires, and nothing else.**
 
-The nine colours were picked one at a time, as each status was added, and the rule
+The colours were picked one at a time, as each status was added, and the rule
 above was never written — so three of them spent three vivid, unrelated hues on
 three ways of saying *running, leave it alone*. In front of twenty sessions the
 operator could not answer the one question they opened vigie for by looking; they
@@ -53,7 +53,7 @@ Four families, four colours:
 | **Over** — nothing more will happen | `stale`, `ended` | `#94a3b8` | `#64748b` |
 
 The calling family keeps three colours because they are three different asks:
-answer a prompt, unstick a tool, look at an outage. The other families ask for
+answer a prompt, look at an outage. The other families ask for
 nothing, so they need no distinction between their members.
 
 **`stale` and `ended` share the grey deliberately.** Under the rule they are one
@@ -75,7 +75,7 @@ terminal and in the browser alike. Nothing here is knowable by colour only.
 
 An operator who cannot separate the hues reads the words — which is what everyone
 did before this rule existed. They lose the acceleration, not the answer. Giving
-nine statuses nine shapes would slow the column down for everyone in order to
+eight statuses eight shapes would slow the column down for everyone in order to
 speed it up for some.
 
 This is the opposite call from the state pill, which encodes its level in shape as
@@ -123,9 +123,29 @@ hooks aren't installed). It derives status from three signals — Claude Code's 
 **session registry**, whether the session's **process is alive**, and whether its
 **transcript is changing**.
 
+**The watcher answers in four steps, in this order.** The first that applies wins.
+Every question about why a session shows what it shows is answered by finding
+which step it stopped at:
+
+1. **The registry lists it, and its process is gone** → `ended`. A confidently
+   dead process, never a `/proc` that merely could not be read
+   ([ADR-0013](../adr/0013-only-claude-code-may-report.md) is about who may
+   report; #663 is about this distinction).
+2. **The registry lists it** → the registry's own status decides (below).
+3. **It left the registry, replaced in place on the same process** — the `/clear`
+   case → `ended` (#367).
+4. **Otherwise** → the transcript heuristic (below).
+
+**Then, whichever step answered, the transcript refinements run.** They never
+change a step's verdict into a different session state; they add what only the
+transcript can see: `thinking`, `compacting`, `interrupted`, a subagent still
+running, and a command still outstanding. This section used to say the heuristic
+"is not consulted at all" on the registry path, which was false — and it cost
+#661, where a build reported by the registry as `shell` was passed to the tool
+rule and came back as a hung tool.
+
 **The registry wins where it covers the session** (#254). Claude Code maintains
-it for its live sessions, so it states what the transcript can only be read for,
-and the heuristic below is not consulted at all:
+it for its live sessions, so it states what the transcript can only be read for:
 
 - `busy` → `working`; `idle` or `shell` → `idle`; `waiting` → `waiting`, carrying
   its `waitingFor` reason into DETAIL. An unrecognised value degrades to `idle`: a
@@ -163,6 +183,13 @@ list, typically an older Claude Code:
 - last assistant block is a `thinking` block → `thinking` (reasoning before any
   text/tool output); a later text/tool line clears it. A heuristic: at rest a
   finished turn ends with text/tool, so this reads true only mid-turn.
+
+  **A turn the operator killed is excluded.** Both signals survive an interrupt —
+  the last block Claude wrote *was* a thinking block — and nothing clears the
+  thinking one but a new assistant line, which a killed turn never writes. Without
+  the exclusion the session reads `thinking` for good, and the `interrupted`
+  marker, which attaches only to a resting session, is never seen. Interrupting
+  during a long silent reasoning pass is the case the marker exists for (#721).
 - a `tool_use` with no matching `tool_result` (paired by id) keeps the session
   `working`: Claude is waiting on that command, whether it is a foreground call or
   a backgrounded Bash (`run_in_background`).

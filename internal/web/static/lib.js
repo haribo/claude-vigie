@@ -252,6 +252,19 @@ export function hiddenByIdle(s, afterMs, nowMs) {
 // name it: a Go test used to pull the literal out of app.js with a regular
 // expression, because a module-private constant is reachable no other way. Both
 // sides now read test/fixtures/status-vocabulary.json (#633).
+// statusClass is the style a status is drawn with. A status this build does not
+// know falls back to a neutral class — never to another status's.
+//
+// The two used to be one value: an unrecognised status was replaced by `idle`,
+// class *and* label, so a row stored as something else was shown resting. That is
+// live whenever the vocabulary changes — `stalled` was retired in 0.11.0 and rows
+// written before it still carry the word — and ADR-0012 asked that such a row
+// degrade, not be relabelled. The terminal prints what it was given; so does the
+// GNOME indicator; this client was the outlier (#719).
+export function statusClass(status) {
+  return STATUSES.includes(status) ? status : "unknown";
+}
+
 export const STATUSES = ["working", "thinking", "compacting", "waiting", "idle", "error", "stale", "ended"];
 
 // How the sessions table sorts, and what it opens on.

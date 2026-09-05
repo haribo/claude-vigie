@@ -214,6 +214,15 @@ worst level and pulses on every tab, and the modal says strictly more — for th
 watcher, `1 of 2 not reporting (orion)` where the banner said nothing at all
 about which machine.
 
+**The bottom bar's stale mark went the same way** (#726). A failed usage refresh
+appended a bare `⚠` beside the gauges — the last of the six scattered indicators
+§ 1 inventoried, and the one #651 never ruled on, because that issue named only
+the banners. It meets the criterion above exactly: the modal has a row for the
+usage snapshot, and that row says how old the snapshot is and that it cannot
+refresh, where the mark said only that something was wrong. The locality argument
+— a mark beside the figure it invalidates — is the one already rejected for the
+banners.
+
 The `staleNote` banners on **Stats**, **Settings** and **Machines** stay, and the
 distinction is not taste. The modal has a row for the server, the sessions and the
 watcher; it has none for those three panels. Removing their notes would not remove

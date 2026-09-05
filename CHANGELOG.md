@@ -9,6 +9,34 @@ file is the single source of truth, not a second narrative.
 
 ## [Unreleased]
 
+## [0.12.0] - 2026-09-05
+
+### Changed
+
+- The Sessions bottom bar no longer marks the usage gauges when their refresh
+  fails. The state pill already says so on every tab, and the state modal says how
+  old the snapshot is and that it cannot refresh (#726).
+
+### Fixed
+
+- A machine no longer disappears from the fleet for a quarter of an hour after
+  waking from suspend. The watcher kept sending on a connection that had died with
+  the machine's network state, and nothing noticed until the kernel gave up (#732).
+- The state modal reads `just now · cannot refresh` for a usage snapshot that has
+  only just failed, instead of `just now old` (#727).
+- `vigied token` no longer prints a token the running daemon is not using. A
+  daemon given its token through the environment left an earlier one in the
+  database, and the command handed it over as though it were live (#720).
+- A session that comes back no longer keeps the time it ended. Only reopening it
+  cleared that, so a session resumed by typing carried a timestamp saying when it
+  had stopped (#722).
+- A turn stopped with Ctrl-C while Claude was thinking now shows `interrupted`.
+  It read as still reasoning instead, and stayed that way until the next prompt
+  (#721).
+- The dashboard shows a status it does not recognise as it is, instead of drawing
+  it as `idle`. A session stored under a status this build has retired was shown
+  resting (#719).
+
 ## [0.11.0] - 2026-09-03
 
 ### Changed
@@ -620,7 +648,8 @@ across machines — it reads and reports session state; it never drives a sessio
 - The API binds `127.0.0.1` by default; every `/api/*` route is behind a
   constant-time shared-token check; request bodies are size-capped.
 
-[Unreleased]: https://github.com/haribo/claude-vigie/compare/v0.11.0...HEAD
+[Unreleased]: https://github.com/haribo/claude-vigie/compare/v0.12.0...HEAD
+[0.12.0]: https://github.com/haribo/claude-vigie/compare/v0.11.0...v0.12.0
 [0.11.0]: https://github.com/haribo/claude-vigie/compare/v0.10.0...v0.11.0
 [0.10.0]: https://github.com/haribo/claude-vigie/compare/v0.9.1...v0.10.0
 [0.9.1]: https://github.com/haribo/claude-vigie/compare/v0.9.0...v0.9.1

@@ -12,7 +12,7 @@ import {
   readWatcher, fleetAlarm, fleetAlarmDetail, watcherCell,
   matchesFilter, GROUP_MODES, groupSessions, contextKnown, contextPct, contextCell, migrateV1Columns,
   IDLE_PRESETS_MS, idleLabel, hiddenByIdle, STATUSES, SORT_COMPARATORS, DEFAULT_SORT,
-  boardState, emptyMessage, attentionIds, enteredAttention, nextAttention,
+  boardState, emptyMessage, attentionIds, enteredAttention, nextAttention, statusClass,
 } from "./lib.js";
 
 // Both keys were named for the old brand. They hold live state — a signed-in
@@ -162,7 +162,7 @@ const COLS = [
   { key: "rc", label: "RC", cmp: SORT_COMPARATORS.rc,
     cell: (s) => `<td>${s.remote_control ? '<span class="rc-on" title="Remote control on">◉</span>' : '<span class="rc-off" title="Remote control off">○</span>'}</td>` },
   { key: "status", label: "Status", cmp: SORT_COMPARATORS.status,
-    cell: (s) => { const st = STATUSES.includes(s.status) ? s.status : "idle"; return `<td><span class="pill st-${st}${hasCall(s) ? " call" : ""}"><span class="dot"></span>${st}</span></td>`; } },
+    cell: (s) => `<td><span class="pill st-${statusClass(s.status)}${hasCall(s) ? " call" : ""}"><span class="dot"></span>${esc(s.status)}</span></td>` },
   // An unrecognised mode is surfaced raw, never relabelled "manual": a new mode
   // must not read as the safe default (#304).
   { key: "mode", label: "Mode", cmp: SORT_COMPARATORS.mode,
@@ -273,7 +273,7 @@ function renderSessions() {
     return `<th class="${cls}" ${c.nosort ? "" : `data-sort="${c.key}"`}>${c.label}${arrow}</th>`;
   }).join("");
   const row = (s) => {
-    const st = STATUSES.includes(s.status) ? s.status : "idle";
+    const st = statusClass(s.status);
     // A call reuses the attention mechanism — the left border in --st — and adds
     // a faint tint of the same colour. No new colour anywhere (ADR-0010).
     // The set is consulted, never restated: it is shared with the TUI and the
@@ -524,7 +524,7 @@ function field(k, v, cls = "") { return `<div class="field"><span class="k">${es
 function openDetail(id) {
   const s = byId.get(id); if (!s) return;
   detailId = id;
-  const st = STATUSES.includes(s.status) ? s.status : "idle";
+  const st = statusClass(s.status);
   const u = s.usage || {};
   const waiting = s.status === "waiting";
   const ctx = [
@@ -548,7 +548,7 @@ function openDetail(id) {
         <div class="fact"><span class="k">Seen</span><span class="v">${relAge(s.last_seen_at)}</span></div>
         <div class="fact"><span class="k">Remote ctl</span><span class="v">${s.remote_control ? "on" : "off"}</span></div>
       </div></div>
-      <div class="h-right"><span class="pill st-${st}${hasCall(s) ? " call" : ""}"><span class="dot"></span>${st}</span></div></div>
+      <div class="h-right"><span class="pill st-${st}${hasCall(s) ? " call" : ""}"><span class="dot"></span>${esc(s.status)}</span></div></div>
     <div class="d-grid">
       <div class="card"><h3>Context</h3>${ctx}<h3>Timeline</h3>${times}</div>
       <div class="card"><h3>Tokens</h3>

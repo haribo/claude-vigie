@@ -85,19 +85,26 @@ func TestSettingsPanelCoversItsOwnSources(t *testing.T) {
 	}
 }
 
-// The bottom strip has no room for a sentence, so it carries a mark instead —
-// but it must carry something.
-func TestTheUsageStripIsMarkedWhenItIsStale(t *testing.T) {
-	m := stubModel()
-	m.width = 120
-	if m.staleMark(srcUsage, srcPlatform) != "" {
-		t.Fatal("a healthy strip is marked")
-	}
-
-	m = failingModel(t, srcUsage)
+// The bottom bar used to append a bare warning glyph beside the usage gauges when
+// their refresh failed. It went with #726: the state pill turns amber on every
+// tab and the state modal's usage row says strictly more — how old the snapshot
+// is, and that it cannot refresh. This test used to assert the glyph appeared;
+// what it asserts now is that the fact still reaches the operator, and no longer
+// twice.
+//
+// The criterion is #651's: a Sessions-tab warning goes when the modal has a row
+// for its source, and stays when it does not — which is why the notes on Stats,
+// Settings and Machines are untouched.
+func TestAFailingUsageRefreshIsSaidOnceNotTwice(t *testing.T) {
+	m := failingModel(t, srcUsage)
 	m = m.applyDataMsg(m.fetchUsageCmd()())
-	if m.staleMark(srcUsage, srcPlatform) == "" {
-		t.Error("a failing usage refresh leaves the strip unmarked")
+	m.width = 120
+
+	if strings.Contains(m.bottomBar(), "⚠") {
+		t.Error("the bottom bar still marks the gauges; the modal already carries it")
+	}
+	if m.stateLevel() == levelOK {
+		t.Error("the state pill reads healthy while the usage snapshot cannot refresh")
 	}
 }
 

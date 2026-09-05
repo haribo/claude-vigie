@@ -182,6 +182,12 @@ agents, and it hands each of them the key to the room.
   A token supplied this way is **not** written to the database, so `vigied token`
   run from a shell that does not carry the variable has nothing to print and says
   so. It reads; it never generates one of its own (#657).
+
+  The daemon does record a *hash* of whichever token it started with. That is what
+  lets the command tell a live stored token from a leftover: a token generated on
+  an earlier run stays in the database, and printing it as though it were in use
+  would hand you a secret your machines are refused for. When the two disagree, the
+  command refuses rather than answering (#720).
 - **Setting it safely matters as much as the name.** `Environment=VIGIE_TOKEN=…`
   in a unit file is readable by anyone who can read that file and shows up in
   `systemctl show`. Use `EnvironmentFile=` on a `0600` file, or `LoadCredential=`.

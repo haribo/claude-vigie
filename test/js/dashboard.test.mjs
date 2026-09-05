@@ -16,7 +16,7 @@ import {
   GROUP_MODES, groupKeyOf, groupSessions, IDLE_PRESETS_MS, idleLabel, hiddenByIdle,
   contextCell, contextKnown, contextPct, migrateV1Columns, V1_COLUMN_KEYS, STATUSES,
   SORT_COMPARATORS, DEFAULT_SORT, boardState, emptyMessage,
-  attentionIds, enteredAttention, nextAttention,
+  attentionIds, enteredAttention, nextAttention, statusClass,
 } from "../../internal/web/static/lib.js";
 
 // Every shared case list is read the same way; the interesting part is what each
@@ -686,4 +686,17 @@ test("opening the dashboard is silent, and each entry notifies once", () => {
 
   // A raised call counts as calling even with no attention status (ADR-0010).
   assert.deepEqual(enteredAttention([s("c", false, "2026-09-01T10:00:00Z")], new Set(), true).map((x) => x.id), ["c"]);
+});
+
+// #719. An unrecognised status used to be replaced by `idle` — class *and* label
+// — so a row stored as something else was drawn as a resting session. Live
+// whenever the vocabulary changes: `stalled` was retired in 0.11.0 and rows
+// written before it still carry the word.
+test("an unknown status is styled as unknown, never as another status", () => {
+  assert.equal(statusClass("working"), "working");
+  assert.equal(statusClass("stale"), "stale");
+  assert.equal(statusClass("stalled"), "unknown", "a retired status must not borrow idle's identity");
+  assert.equal(statusClass("something-new"), "unknown");
+  assert.equal(statusClass(""), "unknown");
+  assert.equal(statusClass(undefined), "unknown");
 });
