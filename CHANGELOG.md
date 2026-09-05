@@ -17,6 +17,8 @@ file is the single source of truth, not a second narrative.
 
 ### Fixed
 
+- The state modal reads `just now · cannot refresh` for a usage snapshot that has
+  only just failed, instead of `just now old` (#727).
 - `vigied token` no longer prints a token the running daemon is not using. A
   daemon given its token through the environment left an earlier one in the
   database, and the command handed it over as though it were live (#720).
