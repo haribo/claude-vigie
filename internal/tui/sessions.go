@@ -57,6 +57,18 @@ func (v sessionsView) matchesFilter(s api.SessionView) bool {
 	return fuzzyMatch(v.filter, sessionHaystack(s))
 }
 
+// visibleContains reports whether a session id survived the filter and is on
+// screen. `n` asks before it clears anything, so a filter that hides nothing is
+// never disturbed (#736).
+func visibleContains(vis []api.SessionView, id string) bool {
+	for _, s := range vis {
+		if s.ID == id {
+			return true
+		}
+	}
+	return false
+}
+
 // cursorForSelection returns the cursor index that keeps selectedID under the
 // cursor after a reorder, clamping if the session is gone or none is pinned.
 func (v sessionsView) cursorForSelection(vis []api.SessionView) int {
@@ -238,6 +250,26 @@ func (m model) handleSessionsKey(msg tea.KeyMsg) model {
 		// navigation: looking is done in the session, not acknowledged in vigie (ADR-0007)
 		if id := nextAttention(m.sessions); id != "" {
 			m.sess.selectedID = id
+			// The caller is chosen from the whole fleet, and the cursor indexes the
+			// filtered list. A filter hiding the caller therefore left the cursor
+			// where it was and opened the detail panel on whatever row it pointed at
+			// — the operator read another session's prompt, branch and last message
+			// believing they belonged to the one calling, with nothing saying the
+			// jump had missed (#736).
+			//
+			// The key's promise outranks a filter typed earlier, so the filter goes.
+			// Only when it is what hides the caller: a jump to a session already on
+			// screen leaves the operator's filter where they put it.
+			//
+			// The filter is the only thing that can hide a caller. The other hiding
+			// rule is by age, and a session in the attention set is being reported —
+			// the server calls it stale after 60 s without one, well inside the
+			// shortest age the operator can choose (15 min), and a stale session is
+			// not in the set.
+			if !visibleContains(m.visibleSessions(), id) {
+				m.sess.filter = ""
+				m.sess.filtering = false
+			}
 			m.sess.cursor = m.sess.cursorForSelection(m.visibleSessions())
 			m.sess.detail = true
 			m.sess.detailOffset = 0
