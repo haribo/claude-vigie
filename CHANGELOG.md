@@ -11,6 +11,11 @@ file is the single source of truth, not a second narrative.
 
 ### Fixed
 
+- A day's working, waiting and idle time can no longer be counted twice. The
+  event log is the mark each interval is measured from, and it was written after
+  the seconds and allowed to fail — so a failed write left the mark behind and the
+  next event remeasured a span already counted, permanently (#737).
+
 - `n` opens the session that is calling, even when a filter hides it. It jumped
   to the caller and then opened the detail panel on whatever row the cursor
   happened to be on, so the operator read another session's prompt, branch and
