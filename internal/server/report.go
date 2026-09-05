@@ -330,18 +330,30 @@ var idleDetails = map[string]bool{"shell": true, "interrupted": true}
 // resumed session carried the timestamp of an end it had already left behind
 // (#664). A `SessionStart` on a live session finds it empty already, so the clear
 // costs nothing where there is nothing to clear.
+//
+// Both arms read the reconciled status rather than the event that produced it.
+// Keying the clear on `SessionStart` answered one way a session comes back and
+// missed the others — a typed prompt, a watcher finding the process alive — so a
+// session demonstrably running still carried the timestamp of an end it had left
+// behind (#722). Keying the stamp on `SessionEnd` had the same shape and the
+// opposite cost: a session that went with its process — machine shut down,
+// terminal closed, Claude killed — reached `ended` with nobody to announce it and
+// carried no time at all, which is the case an operator most needs one for
+// (#739). `Last seen` does not answer in its place: it advances on every report,
+// and the watcher keeps reporting a dead session for as long as its transcript is
+// inside the scan window.
+//
+// Stamped once, on the report that establishes the end. The watcher goes on
+// re-reporting it every couple of seconds and none of those may move it, or the
+// field says "just now" for as long as the transcript is scanned — which is
+// exactly what makes `Last seen` no use here.
 func applyEndedAt(sess store.Session, req api.ReportRequest) store.Session {
-	if req.Event == "SessionEnd" {
-		sess.EndedAt = req.Timestamp
-	}
-	// Anything that is not over has no end time. Keying the clear on
-	// `SessionStart` alone answered one way a session comes back and missed the
-	// others — a typed prompt, a watcher finding the process alive — so a session
-	// demonstrably running still carried the timestamp of an end it had left
-	// behind (#722). The status has already been reconciled here, so this reads
-	// the outcome rather than guessing from the event that produced it.
 	if sess.Status != "ended" {
 		sess.EndedAt = ""
+		return sess
+	}
+	if sess.EndedAt == "" {
+		sess.EndedAt = req.Timestamp
 	}
 	return sess
 }

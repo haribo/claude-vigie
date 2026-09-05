@@ -11,6 +11,11 @@ file is the single source of truth, not a second narrative.
 
 ### Fixed
 
+- A session that ended with its process now shows when it ended. Only a clean end
+  announced by Claude Code stamped a time, so the case where nobody was there to
+  close the session — machine shut down, terminal closed, Claude killed — reached
+  `ended` carrying none (#739).
+
 - A day's working, waiting and idle time can no longer be counted twice. The
   event log is the mark each interval is measured from, and it was written after
   the seconds and allowed to fail — so a failed write left the mark behind and the
