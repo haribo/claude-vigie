@@ -63,7 +63,11 @@ func preflightWatcher(cfg *config.Config) error {
 		// A stale heartbeat is a server round-trip failing, not proof of a dead
 		// watcher: cross-check a local liveness signal before blaming it (#371).
 		if localWatcherRunning() {
-			return fmt.Errorf("this machine's watcher is running but the server has no recent heartbeat from it — the server may be unreachable or the watcher just started; check vigied and connectivity, then retry")
+			// Not "the server may be unreachable": the preflight reached it two
+			// calls ago to get here. Saying otherwise sent the operator checking a
+			// daemon that was answering, while the watcher's own connection was the
+			// thing that had died (#732).
+			return fmt.Errorf("this machine's watcher is running but the server has no recent heartbeat from it — the watcher may have just started, or its connection to the server may be stale after a suspend; it recovers on its own within a few seconds, then retry")
 		}
 		return fmt.Errorf("this machine has vigie hooks but its watcher is not running — start it (`vigie watch`, or restart the vigie-watch service)")
 	}
