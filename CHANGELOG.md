@@ -11,6 +11,11 @@ file is the single source of truth, not a second narrative.
 
 ### Fixed
 
+- The site's status legend shows the colours the product actually uses, and
+  includes `error`. It painted `working` orange where vigie paints it green and
+  `idle` grey where vigie paints it blue, so the page taught a colour rule vigie
+  does not follow (#738).
+
 - A session that ended with its process now shows when it ended. Only a clean end
   announced by Claude Code stamped a time, so the case where nobody was there to
   close the session — machine shut down, terminal closed, Claude killed — reached
