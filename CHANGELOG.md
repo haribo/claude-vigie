@@ -9,6 +9,12 @@ file is the single source of truth, not a second narrative.
 
 ## [Unreleased]
 
+### Changed
+
+- The Sessions bottom bar no longer marks the usage gauges when their refresh
+  fails. The state pill already says so on every tab, and the state modal says how
+  old the snapshot is and that it cannot refresh (#726).
+
 ### Fixed
 
 - `vigied token` no longer prints a token the running daemon is not using. A

@@ -463,20 +463,20 @@ func scrollIndicator(start, end, total, width int) string {
 // separate summary row, whose left half restated the STATUS column and whose
 // right half is what survives here (#492).
 func (m model) bottomBar() string {
-	right, mark := m.viewState()+dimStyle.Render(" · ")+helpHint(), m.staleMark(srcUsage)
+	right := m.viewState() + dimStyle.Render(" · ") + helpHint()
 	if m.width <= 0 {
 		// No width yet (before the first WindowSizeMsg): nothing to budget.
-		return joinLR(usageStrip(m.usage, 0)+mark, right, 0)
+		return joinLR(usageStrip(m.usage, 0), right, 0)
 	}
 	// The 3 columns are joinLR's minimum gap between the two halves.
-	avail := m.width - lipgloss.Width(right) - 3 - lipgloss.Width(mark)
+	avail := m.width - lipgloss.Width(right) - 3
 	if avail <= 0 {
 		// Narrower than the view state itself. Keep it: `hidden N` is the only
 		// thing on screen saying the list is filtered, and the gauges are figures
 		// the Stats tab carries in full.
 		return clampWidth(right, m.width)
 	}
-	return joinLR(usageStrip(m.usage, avail)+mark, right, m.width)
+	return joinLR(usageStrip(m.usage, avail), right, m.width)
 }
 
 // joinLR places left and right on one line, right-aligned to width when known.
