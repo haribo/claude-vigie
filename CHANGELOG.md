@@ -9,6 +9,13 @@ file is the single source of truth, not a second narrative.
 
 ## [Unreleased]
 
+### Fixed
+
+- `n` opens the session that is calling, even when a filter hides it. It jumped
+  to the caller and then opened the detail panel on whatever row the cursor
+  happened to be on, so the operator read another session's prompt, branch and
+  last message believing they belonged to the one waiting on them (#736).
+
 ## [0.12.0] - 2026-09-05
 
 ### Changed
