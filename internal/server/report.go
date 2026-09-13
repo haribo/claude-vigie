@@ -439,11 +439,36 @@ var watcherObserves = map[string]bool{"error": true, "ended": true}
 // transcript. So an inferred status may only clear waiting once the transcript
 // has actually moved past when waiting was posted — i.e. the report's timestamp
 // (the transcript mtime) is newer than StatusChangedAt.
+//
+// The rule is about what the watcher *deduces*, and it used to be applied to
+// everything the watcher said — including what Claude Code had stated outright.
+// That is the same confusion #803 fixed one status along, and it cost more here:
+// the operator answers a permission prompt, the tool runs, and nothing reports it.
+// No `PreToolUse` hook is installed, `PostToolUse` fires only once the tool is
+// done, and the transcript stays frozen on the `tool_use` line for the whole run —
+// no dated line at all in 770 of 1193 long tool calls measured on the local
+// corpus. The registry is the only observer left, it says `busy`, and this
+// function held it off as a guess. The board read `waiting` for the length of the
+// command: an attention state on a session that needs nobody, counted by the GNOME
+// badge, which recomputes from the current statuses rather than firing on a
+// transition (#816).
+//
+// So a *declared* status clears the hold. That is not a weakening of the guard,
+// because the ambiguity the guard exists for is not present: Claude Code's
+// registry carries a `waiting` value of its own, with the question in
+// `waitingFor`, so a declared `busy` is a positive statement that the operator is
+// not the blocker — where a *deduced* `working` is only the absence of writes.
+//
+// That last sentence was an inference from the registry's documented enum until
+// `tools/capture` (#817) recorded a live permission prompt and the registry said
+// `waiting` for it. It matters which of the two it is: had the registry said
+// `busy` while the prompt was up, this line would be the #508 regression rather
+// than the #816 fix, and the guard as it stood would have been right.
 func holdsWaiting(sess store.Session, req api.ReportRequest) bool {
 	if sess.Status != "waiting" || sess.StatusSource != "hook" || sess.StatusChangedAt == "" {
 		return false
 	}
-	if watcherObserves[req.Status] {
+	if req.StatusDeclared || watcherObserves[req.Status] {
 		return false
 	}
 	return !timeAfter(req.Timestamp, sess.StatusChangedAt)
