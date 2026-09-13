@@ -145,7 +145,16 @@ next to it.
 
 - **The recorder is a maintained tool, not a one-off script.** Content captured
   once and hand-edited afterwards is an authored fixture again — more convincing,
-  and therefore worse, because it will be believed when it lies.
+  and therefore worse, because it will be believed when it lies. It was a throwaway
+  script first, in a scratch directory, and it was gone within the day along with
+  the only copy of a fix's patch — which settled the question rather than argued it.
+
+- **It lives in `tools/`, and not as a mode of the watcher.** A `--record` flag on
+  the watcher looks cheaper, since the watcher already reads these files every few
+  seconds. It is not: it would put capture and redaction code inside the binary
+  every Claude session executes, and
+  [ADR-0003](0003-split-client-and-daemon-binaries.md) keeps that one minimal. The
+  recorder is a development tool and ships in nothing.
 - **Coverage becomes a function of what has been observed.** A state no machine has
   produced has no fixture, and the suite must say so rather than imply a coverage
   it does not have.
