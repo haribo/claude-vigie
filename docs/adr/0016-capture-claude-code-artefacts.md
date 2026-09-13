@@ -77,13 +77,26 @@ system. It is never authored, and never hand-edited afterwards.**
    package from linking `internal/server`, as a CI failure rather than a review
    note (`.golangci.yml`, [ADR-0003](0003-split-client-and-daemon-binaries.md)).
 
-4. **The vocabulary is guarded, twice.** A test fails loudly when the registry
-   carries a value the code does not know: today `mapRegistryStatus`
-   (`internal/watch/registry.go:87-98`) folds anything unrecognised into `idle`,
-   silently, so a status renamed upstream would show the whole fleet at rest with
-   the suite green. And a second test **allow-lists** what a recorded fixture may
-   contain — synthetic ids, synthetic paths, known status words, ISO timestamps —
-   failing on anything outside it.
+4. **The vocabulary is guarded, twice — and only one of the two is a test.**
+
+   **At runtime, the watcher says so.** `mapRegistryStatus` reads a word it does
+   not know as `idle`, which is the right display answer because `idle` claims the
+   least — but doing it silently would show every working session at rest, on every
+   machine, with the suite green and nothing naming the cause. **No test can catch
+   that**: a test only ever sees words someone wrote down, and a rename upstream is
+   by definition a word nobody has. So the detection is instrumentation — announced
+   once per unknown word, on the channel the watcher already uses for drift and
+   heartbeat notices — and the tests guard the *instrument*: that it fires, that it
+   is not deafening, that the word is capped and escaped on its way out, and that
+   the mapping and the check are **one list rather than two**. That last one is not
+   incidental: two lists that have to agree, with one of them updated, is exactly
+   how #816 was created (#821).
+
+   **In the fixtures, a test allow-lists** what a recorded fixture may contain —
+   synthetic ids, synthetic paths, known status words, ISO timestamps — and fails
+   on anything outside it. This one waits for step 2: an allow-list over an empty
+   set of fixtures passes by measuring nothing, which is the failure this
+   repository has already paid for twice.
 
 ## Why not scrub
 
