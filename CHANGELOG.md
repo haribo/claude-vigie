@@ -9,6 +9,20 @@ file is the single source of truth, not a second narrative.
 
 ## [Unreleased]
 
+### Changed
+
+- The watcher now says so when Claude Code reports a session status this build
+  does not know, instead of quietly showing those sessions as `idle`. A status
+  renamed in a Claude Code release used to put the whole fleet at rest with
+  nothing anywhere naming the cause (#822).
+
+### Fixed
+
+- A session you have already answered no longer reads `waiting` while its command
+  runs. Approving a permission prompt left the board showing the session as
+  blocked on you until the command finished, and the indicator counted it among
+  those needing attention (#816).
+
 ## [0.14.1] - 2026-09-09
 
 ### Fixed
