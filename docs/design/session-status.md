@@ -365,13 +365,27 @@ busy while it had been waiting for its operator since the outage (#803). The
 authority was never the hook's by nature; it was the hook's because it was the one
 that had seen something.
 
-**A `waiting` is only cleared once the transcript moves.** To the watcher, "a
-tool is running" and "a permission prompt is blocking" look identical — a turn
-stopped on a tool call with a frozen transcript. So **any** status it infers from
-that silence — `working`, `thinking`, `compacting` — may not clear a
-hook `waiting` until the transcript has actually changed past when waiting was
-posted (the report's timestamp is the transcript mtime). `error` and `ended` are
-positive observations and still win.
+**A `waiting` the watcher only *inferred* is cleared once the transcript moves.**
+To the watcher, "a tool is running" and "a permission prompt is blocking" look
+identical — a turn stopped on a tool call with a frozen transcript. So **any**
+status it infers from that silence — `working`, `thinking`, `compacting` — may not
+clear a hook `waiting` until the transcript has actually changed past when waiting
+was posted (the report's timestamp is the transcript mtime). `error` and `ended`
+are positive observations and still win.
+
+The scope is in the heading because it was once only in the body, and the rule
+read as covering every watcher report. It does not: a *declared* status clears a
+hook `waiting` like it clears any other hook-owned status, under the paragraph
+above. The two rules overlapped in silence, and the code implemented one in
+`reconcileWatch` and the other in `holdsWaiting` — so a session whose permission
+prompt the operator had already answered went on reading `waiting` for as long as
+the tool ran, since nothing else reports in that window and the transcript is
+frozen by definition (#816).
+
+The distinction is not a technicality here either. Claude Code's registry has a
+`waiting` of its own, carrying the question in `waitingFor`, so a declared `busy`
+is a statement that the operator is not the blocker — where a deduced `working` is
+only the absence of writes.
 
 The rule is stated as a *deny* list, and the code implements it as one: it was
 once an allow list naming three statuses, so a status added afterwards fell
