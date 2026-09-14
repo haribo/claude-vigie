@@ -86,6 +86,10 @@ type line struct {
 	Status  string `json:"status,omitempty"`  // Claude Code's own word, a closed set
 	Ask     string `json:"ask,omitempty"`     // `waitingFor`, reduced to its shape
 	AskRaw  bool   `json:"ask_unknown,omitempty"`
+	// AskSkel is the class skeleton of an ask whose shape was not recognized, and
+	// only then: a known shape has nothing left to learn, so the exposure exists
+	// exactly where it buys something (see skeleton in redact.go).
+	AskSkel string `json:"ask_skeleton,omitempty"`
 	AskLen  int    `json:"ask_len,omitempty"` // rune length of the original
 	AgeMs   *int64 `json:"transcript_age_ms,omitempty"`
 }
@@ -171,6 +175,9 @@ func (r *recorder) rowFor(o options, rec entry, t time.Time) line {
 		Ask:     shape,
 		AskRaw:  !known,
 		AskLen:  n,
+	}
+	if !known && rec.WaitingFor != "" {
+		l.AskSkel = skeleton(rec.WaitingFor)
 	}
 	if rec.PID > 0 && rec.ProcStart > 0 {
 		l.Proc = r.procs.of(fmt.Sprintf("%d/%d", rec.PID, rec.ProcStart))
