@@ -51,9 +51,23 @@ rather than inventing an end.
 ### The price, stated
 
 For backgrounded commands the price is concrete and measured: about **one in
-eight** carries no `<task-notification>` anywhere in its transcript (161 of 1079
-across the local corpus, 9–16% a month, steady rather than historical). Each of
-those leaves its session reading `working` until the session itself ends.
+sixty-five** carries no `<task-notification>` anywhere in its transcript (12 of
+789 across the local corpus). Each of those leaves its session reading `working`
+until the session itself ends.
+
+**This figure replaces a much worse one, and the correction matters more than the
+number.** It read *one in eight* — 161 of 1079 — and that was measured through a
+parsing gap rather than off the wire: Claude Code delivers the notification two
+ways, and vigie read only one of them, so a notification it never looked at
+counted as a notification that was never sent (#818). Re-measured with the same
+instrument over the same corpus, the sessions left latched fell from 17 of 87 to
+4 of 87 once the second carrier was read.
+
+The decision is untouched — no timer may decide what vigie cannot observe, and
+that holds whether the residual is 16% or 1.5%. What was wrong was the *bill*:
+nine tenths of the price this section asked the reader to accept was a defect, and
+an accepted cost that is mostly a bug is the kind of sentence that stops anyone
+from going to look. Any future figure here is re-measured, never carried forward.
 
 Three things make that acceptable, and if any stopped being true this ADR would
 have to be reopened:
