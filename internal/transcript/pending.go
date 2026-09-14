@@ -99,6 +99,12 @@ func (p *pendingTools) clearBackgroundNotifications(raw json.RawMessage) {
 	if json.Unmarshal(raw, &s) != nil {
 		return
 	}
+	p.clearBackgroundNotificationsIn(s)
+}
+
+// clearBackgroundNotificationsIn is the scan itself, over text from whichever line
+// carried it — see clearNotificationsIn for why there are two carriers (#818).
+func (p *pendingTools) clearBackgroundNotificationsIn(s string) {
 	for _, blk := range notifBlockRe.FindAllStringSubmatch(s, -1) {
 		body := blk[1]
 		if !terminalRe.MatchString(body) {

@@ -113,6 +113,22 @@ type line struct {
 	IsMeta         bool    `json:"isMeta"`      // a user line Claude Code injected, not one the operator typed (#483)
 	APIErrorStatus int     `json:"apiErrorStatus"`
 	Message        message `json:"message"`
+	Attachment     attach  `json:"attachment"`
+}
+
+// attach is Claude Code's *second* carrier for a `<task-notification>`. When a
+// backgrounded command or an async subagent finishes while a turn is still
+// running, the notification is queued rather than written as a `user` line: the
+// same text arrives here, in `prompt`, on a line of type `attachment` (#818).
+//
+// `commandMode` is what names the content — `task-notification` for a close,
+// `prompt` for an operator message Claude Code queued — so it is what the parser
+// keys on. `type` names the queue mechanism (`queued_command`) rather than what is
+// inside, which makes it the weaker of the two to gate on.
+type attach struct {
+	Type        string `json:"type"`
+	CommandMode string `json:"commandMode"`
+	Prompt      string `json:"prompt"`
 }
 
 // Parse reads the whole transcript at path and returns the extracted Info. Token
