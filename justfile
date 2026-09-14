@@ -250,3 +250,18 @@ code-vuln:
 [doc("Regenerate the README animation from its template")]
 docs-animation:
     go run ./tools/animation
+
+# Record what Claude Code writes about its own sessions, so a fixture can be
+# observed rather than invented (ADR-0016). Leave it running: it catches a
+# permission prompt or a compaction when one happens, instead of asking anyone to
+# perform one. Nothing sensitive is written — see tools/capture/redact.go.
+#
+#   just capture out=/tmp/capture.jsonl
+#   just capture out=/tmp/capture.jsonl args="--until-waiting"
+#
+# Keep `out` outside the repository: a raw recording is an input to a fixture, not
+# a fixture.
+[group("dev")]
+[doc("Record Claude Code's session artefacts to a file (ADR-0016)")]
+capture out args="":
+    go run ./tools/capture --out={{out}} {{args}}

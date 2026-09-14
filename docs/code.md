@@ -18,7 +18,10 @@ After modifying Go code:
   cases are tagged `#190`/`#201`/`#233`), so the guard stays traceable.
 - **Sequence and interleaving bugs need a replay test** over the real path, not
   just unit tests of each layer in isolation (see `reconcile_timeline_test.go`,
-  #203) — that is where the reconciliation bugs actually lived.
+  #203) — that is where the reconciliation bugs actually lived. A replay is only
+  as true as what it replays, so fixtures describing Claude Code's own artefacts
+  are recorded rather than typed
+  ([ADR-0016](adr/0016-capture-claude-code-artefacts.md)).
 - Prefer table-driven cases; the coverage gate (#223) is a floor, not the goal.
 
 ## Comments

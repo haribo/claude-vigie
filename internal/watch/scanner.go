@@ -47,6 +47,16 @@ type lineageEntry struct {
 // transcript takes seconds to parse and the watcher scans frequently.
 type scanner struct {
 	cache map[string]cacheEntry
+	// warnedStatus remembers which unknown registry status words have already been
+	// announced, so each is said once for the life of the watcher rather than on
+	// every scan. The scan runs every couple of seconds; a per-scan line would
+	// bury the notice in its own repetition, which is why the drift and heartbeat
+	// notices in watch.go are written as transitions too.
+	warnedStatus map[string]bool
+	// errw is where operator notices go. A seam rather than os.Stderr inline, so a
+	// test can read what the operator would have been told without swapping
+	// process-wide state (docs/code.md).
+	errw io.Writer
 	// lineage carries each live process's last known model/effort across scans,
 	// keyed by process identity, so a `/clear`'d session inherits them instead of
 	// showing "-" until its first turn. Pruned to live processes each scan (#367).
@@ -54,7 +64,10 @@ type scanner struct {
 }
 
 func newScanner() *scanner {
-	return &scanner{cache: map[string]cacheEntry{}, lineage: map[procID]lineageEntry{}}
+	return &scanner{
+		cache: map[string]cacheEntry{}, lineage: map[procID]lineageEntry{},
+		warnedStatus: map[string]bool{}, errw: os.Stderr,
+	}
 }
 
 // Scan performs a single cache-less scan (used in tests and one-offs).
@@ -72,6 +85,7 @@ func (s *scanner) scan(root, machine string, maxAge time.Duration, now time.Time
 
 	osUser := systemUser()
 	reg := readRegistry()         // Claude Code's authoritative status source (#254)
+	s.noteUnknownStatuses(reg)    // say so before reading an unknown word as idle (#817)
 	regByProc := indexByProc(reg) // process identity → its current session id (#367)
 	var reports []api.ReportRequest
 	fresh := make(map[string]cacheEntry, len(s.cache))
@@ -300,4 +314,23 @@ func outputTokens(r api.ReportRequest) int64 {
 		return 0
 	}
 	return r.Usage.OutputTokens
+}
+
+// noteUnknownStatuses tells the operator about each registry status word this
+// build does not know, once per word.
+//
+// The word comes from another program, so it is capped and quoted on the way out:
+// %q escapes control characters, and the cap stops a schema that stopped being an
+// enum from writing a paragraph into the log. The same care a desktop
+// notification gets, for the same reason (#529).
+func (s *scanner) noteUnknownStatuses(reg map[string]sessionRecord) {
+	for _, word := range unknownRegistryStatuses(reg) {
+		if s.warnedStatus[word] {
+			continue
+		}
+		s.warnedStatus[word] = true
+		fmt.Fprintf(s.errw, "watch: claude code reported the session status %q, "+
+			"which this build does not know; sessions carrying it are shown as idle "+
+			"— this machine may need an upgrade\n", capText(word, 40))
+	}
 }

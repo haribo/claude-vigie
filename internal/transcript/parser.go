@@ -50,6 +50,11 @@ func (p *Parser) Advance(r io.Reader) error {
 	}
 }
 
+// taskNotification is the `attachment.commandMode` that marks a queued
+// `<task-notification>`, as opposed to `prompt`, which marks a queued operator
+// message and closes nothing.
+const taskNotification = "task-notification"
+
 func (p *Parser) foldLine(raw []byte) {
 	var l line
 	if json.Unmarshal(raw, &l) != nil {
@@ -84,6 +89,29 @@ func (p *Parser) foldLine(raw []byte) {
 			p.agents.closeTurn()
 		}
 		p.info.Interrupted = isInterruptLine(l.Message.Content) // synthetic interrupt marker, else a real prompt clears it (#351)
+	case "attachment":
+		// The second delivery of a `<task-notification>`. When the command ends
+		// while a turn is still running — the normal case for something launched to
+		// outlive the turn — Claude Code queues the notification instead of writing
+		// it as a `user` line, and the text arrives in `attachment.prompt`. The
+		// switch had no case for it, so the line reached `applyMeta` and nothing
+		// else, and the command stayed open for the rest of the session with no
+		// prompt able to clear it (#810, #812). Measured: 114 of 789 launches in the
+		// local corpus have their terminal notification only here (#818).
+		//
+		// Routed to the closers and **never** to `closeTurn`. A prompt retires every
+		// older unresolved tool call on the grounds that the session moved on
+		// (#483); an attachment proves nothing of the sort — it is Claude Code
+		// queueing its own message mid-turn — and reading it as one would retire a
+		// foreground command still running, which is #810's defect on a second
+		// carrier.
+		//
+		// The `queue-operation` lines around it carry the same text again. Leaving
+		// them unread is what keeps one close per notification.
+		if l.Attachment.CommandMode == taskNotification {
+			p.agents.clearNotificationsIn(l.Attachment.Prompt)
+			p.pending.clearBackgroundNotificationsIn(l.Attachment.Prompt)
+		}
 	case "system":
 		if l.Subtype == "compact_boundary" && l.Timestamp != "" {
 			p.info.LastCompactBoundary = l.Timestamp // a compaction finished (#342)

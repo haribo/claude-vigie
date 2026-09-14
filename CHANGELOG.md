@@ -9,6 +9,27 @@ file is the single source of truth, not a second narrative.
 
 ## [Unreleased]
 
+## [0.14.2] - 2026-09-14
+
+### Changed
+
+- The watcher now says so when Claude Code reports a session status this build
+  does not know, instead of quietly showing those sessions as `idle`. A status
+  renamed in a Claude Code release used to put the whole fleet at rest with
+  nothing anywhere naming the cause (#822).
+
+### Fixed
+
+- A session no longer stays `working` after its background command finished. When
+  the command ended while Claude was still working, Claude Code delivered the
+  "it is done" notice in a form vigie did not read, and the session kept reading
+  busy until it closed — about one session in five on the board (#818).
+
+- A session you have already answered no longer reads `waiting` while its command
+  runs. Approving a permission prompt left the board showing the session as
+  blocked on you until the command finished, and the indicator counted it among
+  those needing attention (#816).
+
 ## [0.14.1] - 2026-09-09
 
 ### Fixed
@@ -783,7 +804,8 @@ across machines — it reads and reports session state; it never drives a sessio
 - The API binds `127.0.0.1` by default; every `/api/*` route is behind a
   constant-time shared-token check; request bodies are size-capped.
 
-[Unreleased]: https://github.com/haribo/claude-vigie/compare/v0.14.1...HEAD
+[Unreleased]: https://github.com/haribo/claude-vigie/compare/v0.14.2...HEAD
+[0.14.2]: https://github.com/haribo/claude-vigie/compare/v0.14.1...v0.14.2
 [0.14.1]: https://github.com/haribo/claude-vigie/compare/v0.14.0...v0.14.1
 [0.14.0]: https://github.com/haribo/claude-vigie/compare/v0.13.2...v0.14.0
 [0.13.2]: https://github.com/haribo/claude-vigie/compare/v0.13.1...v0.13.2
