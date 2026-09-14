@@ -18,6 +18,11 @@ file is the single source of truth, not a second narrative.
 
 ### Fixed
 
+- A session no longer stays `working` after its background command finished. When
+  the command ended while Claude was still working, Claude Code delivered the
+  "it is done" notice in a form vigie did not read, and the session kept reading
+  busy until it closed — about one session in five on the board (#818).
+
 - A session you have already answered no longer reads `waiting` while its command
   runs. Approving a permission prompt left the board showing the session as
   blocked on you until the command finished, and the indicator counted it among

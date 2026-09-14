@@ -82,6 +82,14 @@ func (p *pendingAgents) clearNotifications(raw json.RawMessage) (carried bool) {
 	if json.Unmarshal(raw, &s) != nil {
 		return false // content is not a string → no injected notification
 	}
+	return p.clearNotificationsIn(s)
+}
+
+// clearNotificationsIn is the scan itself, over text from whichever line carried
+// it. A `user` line holds the notification as its whole content; an `attachment`
+// line holds it in `attachment.prompt`, which is how Claude Code delivers it when
+// the command ends while a turn is still running (#818).
+func (p *pendingAgents) clearNotificationsIn(s string) (carried bool) {
 	for _, blk := range notifBlockRe.FindAllStringSubmatch(s, -1) {
 		carried = true
 		body := blk[1]
