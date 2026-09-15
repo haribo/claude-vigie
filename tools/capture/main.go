@@ -168,16 +168,12 @@ func (r *recorder) sweep(o options, t time.Time) (sawWaiting bool) {
 // rowFor turns a registry record into the row that may be written: aliases for the
 // identifiers, a shape for the question, an interval for the transcript.
 func (r *recorder) rowFor(o options, rec entry, t time.Time) line {
-	shape, known, n := redactAsk(rec.WaitingFor)
+	form, n := describeAsk(rec.WaitingFor)
 	l := line{
 		Session: r.sessions.of(rec.SessionID),
 		Status:  rec.Status,
-		Ask:     shape,
-		AskRaw:  !known,
+		AskSkel: form,
 		AskLen:  n,
-	}
-	if !known && rec.WaitingFor != "" {
-		l.AskSkel = skeleton(rec.WaitingFor)
 	}
 	if rec.PID > 0 && rec.ProcStart > 0 {
 		l.Proc = r.procs.of(fmt.Sprintf("%d/%d", rec.PID, rec.ProcStart))

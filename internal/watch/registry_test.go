@@ -23,7 +23,13 @@ func writeSession(t *testing.T, home, name, body string) {
 func TestReadRegistry(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("HOME", home)
-	writeSession(t, home, "1.json", `{"sessionId":"s1","status":"waiting","waitingFor":"Allow Bash?","pid":4242,"procStart":"98765","name":"my-conv","cwd":"/work","bridgeSessionId":"session_x"}`)
+	// `waitingFor` carries **two lower-case words**, no bracket and no question
+	// mark. That is observed, not assumed: this fixture read `"Allow Bash?"` from
+	// the day it was written until `tools/capture` recorded a live permission
+	// prompt and reported the form `aaaaaa aaaa` (#817). Only the *shape* is
+	// observed — the words below are a placeholder, and the assertions turn on the
+	// value round-tripping rather than on what it says.
+	writeSession(t, home, "1.json", `{"sessionId":"s1","status":"waiting","waitingFor":"permit tool","pid":4242,"procStart":"98765","name":"my-conv","cwd":"/work","bridgeSessionId":"session_x"}`)
 	writeSession(t, home, "2.json", `{"sessionId":"s2","status":"idle"}`) // sparse record
 	writeSession(t, home, "skip.txt", `{"sessionId":"nope"}`)             // wrong extension
 	writeSession(t, home, "bad.json", `not json`)                         // malformed
@@ -33,7 +39,7 @@ func TestReadRegistry(t *testing.T) {
 		t.Fatalf("readRegistry returned %d records, want 2", len(m))
 	}
 	r := m["s1"]
-	if r.Status != "waiting" || r.WaitingFor != "Allow Bash?" {
+	if r.Status != "waiting" || r.WaitingFor != "permit tool" {
 		t.Errorf("s1 status fields = %+v", r)
 	}
 	if r.PID != 4242 || r.ProcStart != 98765 {
@@ -71,7 +77,7 @@ func TestScanRegistryWaitingWins(t *testing.T) {
 	pid := os.Getpid()
 	// A live session the registry reports as waiting on a permission.
 	writeSession(t, home, "live.json",
-		`{"sessionId":"s-reg","status":"waiting","waitingFor":"Allow Bash(git push)?","pid":`+
+		`{"sessionId":"s-reg","status":"waiting","waitingFor":"permit tool","pid":`+
 			strconv.Itoa(pid)+`,"procStart":"`+strconv.FormatUint(ps, 10)+`"}`)
 
 	root := t.TempDir()
@@ -101,7 +107,7 @@ func TestScanRegistryWaitingWins(t *testing.T) {
 	if got.status != "waiting" {
 		t.Errorf("status = %q, want waiting (registry wins over the transcript's tool_use)", got.status)
 	}
-	if got.activity != "Allow Bash(git push)?" {
+	if got.activity != "permit tool" {
 		t.Errorf("activity = %q, want the waitingFor reason", got.activity)
 	}
 }

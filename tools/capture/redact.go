@@ -1,7 +1,6 @@
 package main
 
 import (
-	"regexp"
 	"strconv"
 	"strings"
 )
@@ -12,34 +11,26 @@ import (
 // turns "scrub before committing" into "never write it", and this is where that
 // is either true or false.
 
-// askShape matches the *opening* of the registry's `waitingFor`: the tool being
-// asked about, and whether an argument follows. Deliberately anchored at the
-// start and deliberately not trying to parse the rest — the rest is the part that
-// carries a command line, a URL or a path.
-var askShape = regexp.MustCompile(`^Allow ([A-Za-z][A-Za-z0-9_.-]*)(\()?`)
-
-// redactAsk reduces `waitingFor` to its shape, and reports whether it recognized
-// one. The argument is never returned in any form.
+// describeAsk reports what may be written about the registry's `waitingFor`: the
+// form of the question, and how long it was. Never a character of it.
 //
-// **Unrecognized input fails closed.** The observed corpus for this field is two
-// strings in a hand-written test fixture, which is precisely the kind of belief
-// ADR-0016 exists to stop trusting: the real format may differ, and it may differ
-// per tool. So anything that does not match returns no shape at all, and only the
-// length survives — enough to learn that the format is not what we assumed,
-// without learning what it said.
-func redactAsk(s string) (shape string, known bool, runes int) {
-	runes = len([]rune(s))
+// **There used to be a pattern here, and observation retired it.** It matched
+// `Allow <Tool>(…)?` and returned that shape with the argument stripped, on the
+// strength of `internal/watch/registry_test.go`, which had asserted
+// `"waitingFor":"Allow Bash?"` since it was written. The first live permission
+// prompt this recorder caught reported a form that matches none of it — two
+// lower-case words, no bracket, no question mark (#817). The pattern could never
+// have fired, and the argument-stripping it performed was structure invented to
+// fit an invented fixture.
+//
+// A format that is only words has nothing to strip, so the skeleton is not a
+// fallback here — it is the answer, and the only one that does not require reading
+// the question.
+func describeAsk(s string) (form string, runes int) {
 	if s == "" {
-		return "", true, 0
+		return "", 0
 	}
-	m := askShape.FindStringSubmatch(s)
-	if m == nil {
-		return "", false, runes
-	}
-	if m[2] == "(" {
-		return "Allow " + m[1] + "(…)?", true, runes
-	}
-	return "Allow " + m[1] + "?", true, runes
+	return skeleton(s), len([]rune(s))
 }
 
 // aliaser hands out stable synthetic names within one recording, so a capture
