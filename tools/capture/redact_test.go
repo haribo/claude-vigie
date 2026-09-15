@@ -27,35 +27,29 @@ var secrets = []string{
 	"acme-corp",
 }
 
-func TestNothingSensitiveSurvivesRedaction(t *testing.T) {
+func TestNothingSensitiveSurvivesTheAskDescription(t *testing.T) {
+	// Inputs shaped like what the registry might hold, including the one form that
+	// was actually observed — two lower-case words — and the forms a hand-written
+	// fixture once claimed it had.
 	inputs := []string{
+		"permit tool",
 		"Allow Bash(git push origin main)?",
 		"Allow Read(/home/someone/.ssh/id_ed25519)?",
-		"Allow WebFetch(https://internal.example.test/api)?",
 		"Allow Bash(curl -H 'Authorization: Bearer sk-live-01H9XYZ' https://internal.example.test)?",
 		"Continue working on acme-corp with the key sk-live-01H9XYZ?",
-		"Do you want to proceed with rm -rf /home/someone?",
 		"", // absence is a fact worth keeping, and must not crash
 	}
 	leaks := 0
 	for _, in := range inputs {
-		shape, _, _ := redactAsk(in)
-		for _, s := range secrets {
-			if strings.Contains(shape, s) {
-				t.Errorf("redactAsk(%q) leaked %q → %q", in, s, shape)
+		form, n := describeAsk(in)
+		for _, sec := range secrets {
+			if strings.Contains(form, sec) {
+				t.Errorf("describeAsk(%q) leaked %q → %q", in, sec, form)
 				leaks++
 			}
 		}
-		// Stronger than the list: nothing inside the parentheses may survive at
-		// all, named or not. A future secret is not in `secrets`.
-		if i := strings.IndexByte(in, '('); i >= 0 && shape != "" {
-			inner := in[i+1:]
-			if j := strings.LastIndexByte(inner, ')'); j > 0 {
-				if arg := inner[:j]; arg != "" && strings.Contains(shape, arg) {
-					t.Errorf("redactAsk(%q) kept its argument → %q", in, shape)
-					leaks++
-				}
-			}
+		if n != len([]rune(in)) {
+			t.Errorf("describeAsk(%q) reported length %d, want %d", in, n, len([]rune(in)))
 		}
 	}
 	if leaks > 0 {
@@ -63,33 +57,27 @@ func TestNothingSensitiveSurvivesRedaction(t *testing.T) {
 	}
 }
 
-// An unrecognized format must fail closed. The observed corpus for `waitingFor`
-// is two strings in a hand-written fixture, so the real format may well differ —
-// and the recorder has to teach us *that* without teaching us the content.
-func TestAnUnknownFormatYieldsNoShapeAtAll(t *testing.T) {
-	in := "Do you want to proceed with rm -rf /home/someone?"
-	shape, known, n := redactAsk(in)
-	if known {
-		t.Errorf("claimed to recognize %q", in)
+// What replaced two tests, and why they are gone rather than updated.
+//
+// `TestRecognisedShapes` pinned `Allow Bash(git push)?` → `Allow Bash(…)?`, and
+// `TestAnUnknownFormatYieldsNoShapeAtAll` pinned the fail-closed arm beside it.
+// Both described a parser for a format that does not exist: the first live prompt
+// the recorder caught reported two lower-case words, no bracket and no question
+// mark (#817). A test asserting the behavior of invented structure is not a guard,
+// it is the invention restated — so the structure went and the tests went with it.
+//
+// What remains true is that an ask leaves as a form and a length. That is asserted
+// above, and the skeleton's own invariant covers the rest.
+func TestAnAskLeavesAsAFormAndALength(t *testing.T) {
+	form, n := describeAsk("permit tool")
+	if form != "aaaaaa aaaa" {
+		t.Errorf("form = %q, want the class skeleton", form)
 	}
-	if shape != "" {
-		t.Errorf("shape = %q, want empty — an unparsed string may not be echoed", shape)
+	if n != 11 {
+		t.Errorf("length = %d, want 11", n)
 	}
-	if n != len([]rune(in)) {
-		t.Errorf("length = %d, want %d — the length is what is left to learn from", n, len([]rune(in)))
-	}
-}
-
-func TestRecognisedShapes(t *testing.T) {
-	for _, c := range []struct{ in, want string }{
-		{"Allow Bash?", "Allow Bash?"},
-		{"Allow Bash(git push)?", "Allow Bash(…)?"},
-		{"Allow WebFetch(https://x)?", "Allow WebFetch(…)?"},
-		{"", ""},
-	} {
-		if got, known, _ := redactAsk(c.in); got != c.want || !known {
-			t.Errorf("redactAsk(%q) = %q (known=%v), want %q", c.in, got, known, c.want)
-		}
+	if form, n := describeAsk(""); form != "" || n != 0 {
+		t.Errorf("an absent ask described as %q/%d, want empty — absence is a fact to keep", form, n)
 	}
 }
 
