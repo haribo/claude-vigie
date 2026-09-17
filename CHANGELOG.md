@@ -9,6 +9,13 @@ file is the single source of truth, not a second narrative.
 
 ## [Unreleased]
 
+### Added
+
+- The usage strip shows the weekly limit that applies to a single model, when one
+  is in force. Claude enforces it alongside the 5-hour and 7-day windows, and it
+  can be the highest of the three — the board read comfortable while the limit that
+  would stop the work was nearly full (#840).
+
 ## [0.14.3] - 2026-09-17
 
 ### Fixed

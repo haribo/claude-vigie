@@ -189,11 +189,28 @@ type UsageReport struct {
 	FiveHourReset string  `json:"five_hour_reset,omitempty"`
 	SevenDayPct   float64 `json:"seven_day_pct"`
 	SevenDayReset string  `json:"seven_day_reset,omitempty"`
-	FetchedAt     string  `json:"fetched_at,omitempty"`
+	// Scoped is the weekly limit that applies to one model, when there is one.
+	// A pointer because absent and zero are different facts: no model-scoped limit
+	// is in force, versus one in force and untouched. Clients draw nothing for the
+	// first (#840).
+	Scoped    *ScopedLimit `json:"scoped,omitempty"`
+	FetchedAt string       `json:"fetched_at,omitempty"`
 	// Holder is the machine that fetched this snapshot. The server checks it
 	// against the usage lease, so only the machine that acquired the right to
 	// fetch can write the figure the whole fleet reads (#515).
 	Holder string `json:"holder,omitempty"`
+}
+
+// ScopedLimit is a usage limit that applies to one model rather than to the whole
+// plan. It shares the seven-day window, so it is rendered beside that gauge.
+//
+// The label is the model's display name as the endpoint gives it: the scope's
+// model `id` is null in every payload observed, and a name vigie invented would be
+// a second vocabulary to keep in step with Claude's.
+type ScopedLimit struct {
+	Label string  `json:"label"`
+	Pct   float64 `json:"pct"`
+	Reset string  `json:"reset,omitempty"`
 }
 
 // WatcherStatus reports when the server last received a watch report, so the
