@@ -50,10 +50,32 @@ rather than inventing an end.
 
 ### The price, stated
 
-For backgrounded commands the price is concrete and measured: about **one in
-sixty-five** carries no `<task-notification>` anywhere in its transcript (12 of
-789 across the local corpus). Each of those leaves its session reading `working`
-until the session itself ends.
+For work that outlives its call the price is concrete and measured, and it is
+stated **twice, because one denominator flatters it.** Measured on the local corpus
+of 94 transcripts, 2026-09-17:
+
+| | |
+|---|---|
+| per launch | 19 of 856 — about **one in forty-five** |
+| per session that launches any | 8 of 21 — about **one in two and a half** |
+
+Both describe the same residual and they do not read the same way. A launch is not
+what an operator looks at; a row is. The per-session figure is the one that should
+decide whether this price stays acceptable, and until #835 only the flattering one
+was written down.
+
+**What "open" does and does not prove.** A launch with no notification leaves its
+session reading `working` until the session ends — but an open launch is not proof
+of a lost signal, because the work may genuinely still be running. Since #834 that
+is the normal case: a persistent `Monitor` emits nothing until something stops it.
+Of the 8 sessions above, **4 had been inactive for more than two hours**, so for
+those the work is certainly over and the status is certainly stale; for the other
+four the transcript cannot say.
+
+**Every figure here carries its corpus and its date, and none is ever carried
+forward.** The numbers this section held before were 12 of 789, and they went out of
+date within days — the corpus grew, and #834 widened what counts as background work.
+A bare number with no provenance is what let the previous one survive being wrong.
 
 **This figure replaces a much worse one, and the correction matters more than the
 number.** It read *one in eight* — 161 of 1079 — and that was measured through a
@@ -99,8 +121,10 @@ have to be reopened:
 
 - A prompt no longer closes a backgrounded command (#810). It closes foreground
   calls and subagents, where the premise — *the session moved on* — holds.
-- The one-in-eight case above is accepted rather than mitigated, and
-  `session-status.md` § 2 says so where an operator would look.
+- The residual above is accepted rather than mitigated, and `session-status.md` § 2
+  says so where an operator would look. It is stated without a figure on purpose:
+  this consequence outlives any measurement, and naming one here is how *one in
+  eight* survived two corrections of the section it pointed at.
 - A future proposal to cap something must show which of the two categories it is
   in: bounding a mechanism whose silence is unexpected, or concluding from
   silence that is expected. The second is refused here.
