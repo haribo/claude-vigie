@@ -52,12 +52,24 @@ rather than inventing an end.
 
 For work that outlives its call the price is concrete and measured, and it is
 stated **twice, because one denominator flatters it.** Measured on the local corpus
-of 94 transcripts, 2026-09-17:
+of 95 transcripts, 2026-09-17:
 
 | | |
 |---|---|
-| per launch | 19 of 856 — about **one in forty-five** |
+| per launch | 19 of 866 — about **one in forty-six** |
 | per session that launches any | 8 of 21 — about **one in two and a half** |
+
+**Re-run it rather than trust it: `just residual`.** Until #843 these numbers came
+from throwaway scripts that reimplemented the closing rules and no longer exist, so
+no reader could re-derive the claim and disagree with it — which is how the figure
+stayed wrong three times, each correction surfacing by accident during an unrelated
+investigation. The tool reads the parser's own counts, so it follows the rules
+instead of restating them, and it prints the corpus and the date every time.
+
+**The attribution below is disputed and the count is not.** #842 finds that most of
+these open launches are a stop the session declared in its transcript, which vigie
+does not read — not a signal that never came. The figures here are re-measured with
+that fix in place, by the same command.
 
 Both describe the same residual and they do not read the same way. A launch is not
 what an operator looks at; a row is. The per-session figure is the one that should
@@ -89,7 +101,7 @@ The decision is untouched — no timer may decide what vigie cannot observe, and
 that holds whether the residual is 16% or 1.5%. What was wrong was the *bill*:
 nine tenths of the price this section asked the reader to accept was a defect, and
 an accepted cost that is mostly a bug is the kind of sentence that stops anyone
-from going to look. Any future figure here is re-measured, never carried forward.
+from going to look.
 
 Three things make that acceptable, and if any stopped being true this ADR would
 have to be reopened:

@@ -277,9 +277,9 @@ list, typically an older Claude Code:
 
   So a lost notification leaves the session reading `working` until the session
   itself ends. **What that costs depends on what it is counted against, and only
-  one of the two answers used to be written here:** about one launch in forty-five,
-  but about one session in two and a half among those that launch any (19 of 856,
-  8 of 21, local corpus of 2026-09-17). A launch is not what an operator looks at;
+  one of the two answers used to be written here:** about one launch in forty-six,
+  but about one session in two and a half among those that launch any (19 of 866,
+  8 of 21, local corpus of 2026-09-17, from `just residual`). A launch is not what an operator looks at;
   a row is, so the second figure is the one this paragraph is really about (#835).
   Being open is not proof the signal was lost, either — the work may still be
   running, which since #834 is the normal case for a persistent `Monitor`.
