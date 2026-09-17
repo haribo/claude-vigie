@@ -126,6 +126,7 @@ func (p *Parser) Info() *Info {
 	info := p.info
 	info.Title = p.titles.resolve()
 	info.PendingTool, info.BackgroundActive = p.pending.resolve()
+	info.BackgroundLaunches, info.BackgroundOpen = p.pending.backgroundCounts()
 	info.AgentsActive, info.AgentActivity = p.agents.resolve()
 	return &info
 }

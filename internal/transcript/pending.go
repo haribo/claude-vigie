@@ -8,6 +8,12 @@ import "encoding/json"
 type pendingTools struct {
 	meta  map[string]toolMeta
 	order []string // tool_use ids in first-seen order, for "most recent pending"
+	// bgLaunched counts every background launch seen, closed ones included, because
+	// `meta` only holds what is still open. It exists so the residual can be
+	// measured against what was launched rather than re-derived by a second reader
+	// of the transcript: a figure ADR-0015 rests on has been wrong three times, and
+	// each time it came from a throwaway script reimplementing these rules (#843).
+	bgLaunched int
 }
 
 type toolMeta struct {
@@ -41,7 +47,11 @@ func (p *pendingTools) addToolUses(raw json.RawMessage) {
 		if _, ok := p.meta[b.ID]; !ok {
 			p.order = append(p.order, b.ID)
 		}
-		p.meta[b.ID] = toolMeta{name: b.Name, background: isBackgroundWork(b.Input)}
+		bg := isBackgroundWork(b.Input)
+		if bg {
+			p.bgLaunched++
+		}
+		p.meta[b.ID] = toolMeta{name: b.Name, background: bg}
 	}
 }
 
@@ -166,6 +176,18 @@ func (p *pendingTools) closeTurn() {
 // resolve returns the most recent unresolved foreground tool's name (for the
 // DETAIL message) and whether any unresolved tool is a background task
 // (which keeps the session working).
+// backgroundCounts returns how many background launches this transcript carried and
+// how many are still open at this point. Both are read from the same bookkeeping the
+// status rules use, so a measurement cannot drift from the behavior it describes.
+func (p *pendingTools) backgroundCounts() (launched, open int) {
+	for _, m := range p.meta {
+		if m.background {
+			open++
+		}
+	}
+	return p.bgLaunched, open
+}
+
 func (p *pendingTools) resolve() (pendingTool string, backgroundActive bool) {
 	for _, m := range p.meta {
 		if m.background {

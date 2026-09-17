@@ -51,6 +51,12 @@ type Info struct {
 	// recent tool_use block), else "" — the watcher's fallback for the "doing"
 	// column when the PostToolUse hook did not report it.
 	Activity string
+	// BackgroundLaunches and BackgroundOpen count the work that outlives its call:
+	// how much this transcript started, and how much of it never reported an end.
+	// The second is the residual ADR-0015 asks the reader to accept, and it is
+	// exposed so a tool can measure it from the rules themselves (#843).
+	BackgroundLaunches int
+	BackgroundOpen     int
 	// PendingTool is the name of the most recent foreground tool_use with no
 	// matching tool_result — a tool genuinely still awaiting a result. Empty when
 	// every tool_use has been answered. Used to tell a session waiting on a command
