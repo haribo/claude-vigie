@@ -1,0 +1,29 @@
+# Secret scanning for CI (#828). The default ruleset, plus the narrowest allowlist
+# that silences the two values in this repository which have to *look* like
+# credentials to do their job.
+#
+# **Each entry pins a value, never a file.** The issue asked for `paths` alongside
+# `regexes`, on the grounds that pinning both keeps the entry narrow. It does the
+# opposite: within one `[[allowlists]]` entry the two are combined with **OR**, so a
+# `paths` line silences every finding in that file. Measured against a tree holding
+# these two files plus one realistic secret appended to each, the default ruleset
+# reports four findings; with `paths` it reports none, and with `regexes` alone it
+# reports exactly the two real ones. `matchCondition = "AND"` does not change it in
+# 8.30.1.
+#
+# Allowlisting a value repository-wide rather than a file is also the better
+# boundary: what is benign here is the value. `sk-live-01H9XYZ` is a unique fake
+# token and `vigie_columns` a localStorage key prefix — neither becomes dangerous by
+# appearing somewhere else, while any *other* secret in those two files stays caught,
+# and `internal/web/static/app.js` is the dashboard client, a plausible place to
+# paste one by accident.
+[extend]
+useDefault = true
+
+[[allowlists]]
+description = "localStorage key names, not credentials"
+regexes = ['''^vigie_columns''']
+
+[[allowlists]]
+description = "fixture asserting the redaction of a fake key; the value is the test input"
+regexes = ['''^sk-live-01H9XYZ$''']

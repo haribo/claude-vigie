@@ -41,7 +41,7 @@ func (p *pendingTools) addToolUses(raw json.RawMessage) {
 		if _, ok := p.meta[b.ID]; !ok {
 			p.order = append(p.order, b.ID)
 		}
-		p.meta[b.ID] = toolMeta{name: b.Name, background: isBackground(b.Name, b.Input)}
+		p.meta[b.ID] = toolMeta{name: b.Name, background: isBackgroundWork(b.Input)}
 	}
 }
 
@@ -181,14 +181,31 @@ func (p *pendingTools) resolve() (pendingTool string, backgroundActive bool) {
 	return "", backgroundActive
 }
 
+// isBackgroundWork reports whether a tool call starts work that outlives it — the
+// call is answered at once and the work carries on, so the tool_use/tool_result
+// pairing resolves while the session is still occupied (#748).
+//
+// **It reads what the input declares, never what the tool is called.** It used to
+// require the name `Bash`, and a persistent `Monitor` — answered just as fast, and
+// running until something stops it — opened nothing, so a session watching one read
+// `idle` and the board offered it as free (#834). Swapping one name for a list of
+// two would be the hand-kept list #821 is about: a tool added later would fall
+// straight through it, which is how `stalled` slipped past the allow list in #256.
+//
+// A field is the right key because it is the tool *stating* the property. The
+// counterpart matters as much: a `Monitor` that is **not** persistent answers when
+// its condition is met — 0 to 63 s measured — so the ordinary pairing already holds
+// the session, and opening it here on top would be a second claim on the same work.
 // isBackground reports whether a tool call is a backgrounded Bash.
-func isBackground(name string, input json.RawMessage) bool {
-	if name != "Bash" {
-		return false
-	}
+func isBackgroundWork(input json.RawMessage) bool {
 	var in struct {
+		// A Bash launched with run_in_background. Answered in 1.8–3.3 s across 1079
+		// launches while the command runs on (#748).
 		RunInBackground bool `json:"run_in_background"`
+		// A Monitor declared persistent: it runs "until TaskStop or session end" and
+		// is answered in 1.3–2.7 s, the same shape one tool along (#834).
+		Persistent bool `json:"persistent"`
 	}
 	_ = json.Unmarshal(input, &in)
-	return in.RunInBackground
+	return in.RunInBackground || in.Persistent
 }

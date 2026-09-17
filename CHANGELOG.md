@@ -9,6 +9,15 @@ file is the single source of truth, not a second narrative.
 
 ## [Unreleased]
 
+## [0.14.3] - 2026-09-17
+
+### Fixed
+
+- A session watching a persistent `Monitor` no longer reads `idle` while the
+  monitor is still running, so the board stops offering it as free. vigie
+  recognised only one kind of background work — a `Bash` launched with
+  `run_in_background` — and now reads what the call itself declares (#834).
+
 ## [0.14.2] - 2026-09-14
 
 ### Changed
@@ -804,7 +813,8 @@ across machines — it reads and reports session state; it never drives a sessio
 - The API binds `127.0.0.1` by default; every `/api/*` route is behind a
   constant-time shared-token check; request bodies are size-capped.
 
-[Unreleased]: https://github.com/haribo/claude-vigie/compare/v0.14.2...HEAD
+[Unreleased]: https://github.com/haribo/claude-vigie/compare/v0.14.3...HEAD
+[0.14.3]: https://github.com/haribo/claude-vigie/compare/v0.14.2...v0.14.3
 [0.14.2]: https://github.com/haribo/claude-vigie/compare/v0.14.1...v0.14.2
 [0.14.1]: https://github.com/haribo/claude-vigie/compare/v0.14.0...v0.14.1
 [0.14.0]: https://github.com/haribo/claude-vigie/compare/v0.13.2...v0.14.0
