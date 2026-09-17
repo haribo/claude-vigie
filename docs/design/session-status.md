@@ -257,7 +257,8 @@ list, typically an older Claude Code:
   deliberately left unread, so one notification is one close.
 
   **No liveness cap, deliberately.** A notification is genuinely lost about one time
-  in sixty-five (12 of 789 launches), and
+  in forty-five (19 of 856 launches; see below for what that costs per *session*,
+  which is the figure that matters), and
   the obvious guard is the subagents' 30-minute window. It is the wrong guard here
   twice over. It keys on transcript *silence*, and silence is what a background
   command produces by definition — so it would release exactly the sessions this
@@ -275,10 +276,20 @@ list, typically an older Claude Code:
   to outlive the turn.
 
   So a lost notification leaves the session reading `working` until the session
-  itself ends — about one in sixty-five of them. This paragraph said *one in eight*
-  until #818: that figure was measured through the blind spot above, so a
-  notification vigie never looked at was counted as one Claude Code never sent.
-  Nine tenths of the price stated here was a defect. That is accepted, not mitigated
+  itself ends. **What that costs depends on what it is counted against, and only
+  one of the two answers used to be written here:** about one launch in forty-five,
+  but about one session in two and a half among those that launch any (19 of 856,
+  8 of 21, local corpus of 2026-09-17). A launch is not what an operator looks at;
+  a row is, so the second figure is the one this paragraph is really about (#835).
+  Being open is not proof the signal was lost, either — the work may still be
+  running, which since #834 is the normal case for a persistent `Monitor`.
+
+  This paragraph said *one in eight* until #818: that figure was measured through
+  the blind spot above, so a notification vigie never looked at was counted as one
+  Claude Code never sent. Nine tenths of the price stated here was a defect, and the
+  figure that replaced it went out of date within days — which is why every number
+  here now carries its corpus and its date, and none is carried forward.
+  That is accepted, not mitigated
   ([ADR-0015](../adr/0015-no-timer-decides-what-vigie-cannot-observe.md)), and it
   is tolerable for three reasons that would each have to be checked again if they
   stopped holding: it dies with the session, since a process found gone reads
