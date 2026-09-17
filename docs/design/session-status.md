@@ -212,7 +212,7 @@ list, typically an older Claude Code:
 - a `tool_use` with no matching `tool_result` (paired by id) keeps the session
   `working`: Claude is waiting on that command.
 
-  **A backgrounded Bash (`run_in_background`) is not held this way, and never
+  **A call that starts work outliving it is not held this way, and never
   was.** Claude Code answers it at once — measured across 1079 launches in the
   local corpus, the `tool_result` lands 1.8–3.3 s after the `tool_use`, carrying
   `Command running in background with ID: …`, and not one was still unanswered
@@ -221,7 +221,22 @@ list, typically an older Claude Code:
   build reported `idle` (#748). This paragraph used to claim the opposite; it
   described a model that predates the immediate answer.
 
-  A backgrounded Bash is tracked the way an async subagent is: opened at its
+  **The rule is not about Bash, and naming one tool is what made it wrong once.**
+  What it covers is a call whose *input declares* that the work outlives it:
+  `run_in_background` on a Bash, `persistent` on a `Monitor`. Both are answered at
+  once — 1.8–3.3 s and 1.3–2.7 s measured — and both carry on afterwards, so the
+  pairing resolves on a session that is still occupied. Keyed on the tool's name
+  instead, a persistent `Monitor` opened nothing and a session watching one read
+  `idle` while it ran (#834). The key is the declared field, never a list of names:
+  a list is what a tool added later falls straight through, which is how `stalled`
+  slipped past one in #256.
+
+  The counterpart is part of the rule. A `Monitor` that is **not** persistent
+  answers when its condition is met — 0 to 63 s measured — so the ordinary pairing
+  above already holds the session, and opening it here as well would be a second
+  claim on the same work.
+
+  Such a call is tracked the way an async subagent is: opened at its
   `tool_use`, and closed by the `<task-notification>` naming it. Claude Code emits
   the same notification shape for both, keyed on the same `<tool-use-id>`, so this
   is one rule on a second type rather than a second mechanism. **Three statuses

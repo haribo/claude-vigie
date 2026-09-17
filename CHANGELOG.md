@@ -9,6 +9,13 @@ file is the single source of truth, not a second narrative.
 
 ## [Unreleased]
 
+### Fixed
+
+- A session watching a persistent `Monitor` no longer reads `idle` while the
+  monitor is still running, so the board stops offering it as free. vigie
+  recognised only one kind of background work — a `Bash` launched with
+  `run_in_background` — and now reads what the call itself declares (#834).
+
 ## [0.14.2] - 2026-09-14
 
 ### Changed
