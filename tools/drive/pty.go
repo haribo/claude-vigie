@@ -19,8 +19,15 @@ type session struct {
 	screen *os.File // everything the session painted, for reading afterwards
 }
 
-// startSession launches `claude` on a fresh pty in dir, writing the raw screen to
+// startSession launches a program on a fresh pty in dir, writing the raw screen to
 // screenPath.
+//
+// The binary is a parameter so the pty plumbing can be exercised against something
+// trivial. That is not a testing convenience bolted on: everything below — the
+// master/slave pair, the winsize, the drain, the keystrokes — is independent of
+// which program is on the other end, and a harness whose own mechanics are never
+// run until it is spending tokens on a real session is the thing this tool exists
+// to stop.
 //
 // **Two things make a child session invisible, and both are load-bearing.**
 //
@@ -34,7 +41,7 @@ type session struct {
 // The others go with it: a session that believes it is a child also declines to
 // own the terminal in ways that are not worth enumerating. Clearing all four is
 // what makes this a session like the operator's.
-func startSession(dir, screenPath string, extraArgs []string) (*session, error) {
+func startSession(bin string, args []string, dir, screenPath string) (*session, error) {
 	master, err := os.OpenFile("/dev/ptmx", os.O_RDWR, 0)
 	if err != nil {
 		return nil, fmt.Errorf("opening /dev/ptmx: %w", err)
@@ -66,7 +73,7 @@ func startSession(dir, screenPath string, extraArgs []string) (*session, error) 
 		return nil, fmt.Errorf("creating the screen log: %w", err)
 	}
 
-	cmd := exec.Command("claude", append([]string{"--permission-mode", "bypassPermissions"}, extraArgs...)...) //nolint:gosec // fixed binary, caller-chosen flags
+	cmd := exec.Command(bin, args...) //nolint:gosec // caller-chosen program, not user input
 	cmd.Dir = dir
 	cmd.Stdin, cmd.Stdout, cmd.Stderr = slave, slave, slave
 	cmd.Env = childEnv()
@@ -74,7 +81,7 @@ func startSession(dir, screenPath string, extraArgs []string) (*session, error) 
 	if err := cmd.Start(); err != nil {
 		_ = master.Close()
 		_ = screen.Close()
-		return nil, fmt.Errorf("starting claude: %w", err)
+		return nil, fmt.Errorf("starting %s: %w", bin, err)
 	}
 
 	s := &session{cmd: cmd, master: master, screen: screen}

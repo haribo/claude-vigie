@@ -4,11 +4,17 @@ package main
 
 import (
 	"bytes"
+	"encoding/json"
+	"io"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/haribo/claude-vigie/internal/config"
 )
 
 func writeRecord(t *testing.T, home, file, sessionID, status string) {
@@ -197,4 +203,198 @@ func contains(list []string, want string) bool {
 		}
 	}
 	return false
+}
+
+// The pty plumbing itself, run against a trivial program. A terminal echoes what
+// is typed at it, so `cat` proves the whole chain at once: the master/slave pair
+// is wired, the session has a controlling terminal, keystrokes reach it, and the
+// drain writes what came back. None of that depends on Claude Code being the
+// program on the other end — and a harness whose own mechanics are first exercised
+// while spending tokens is what this tool exists to stop.
+func TestThePtyCarriesKeystrokesAndRecordsTheScreen(t *testing.T) {
+	screen := filepath.Join(t.TempDir(), "screen.log")
+
+	s, err := startSession("cat", nil, t.TempDir(), screen)
+	if err != nil {
+		t.Fatalf("starting a session on a pty: %v", err)
+	}
+	defer s.close()
+
+	if err := s.send("hello\r"); err != nil {
+		t.Fatalf("send: %v", err)
+	}
+	waitFor(t, func() bool {
+		b, err := os.ReadFile(screen) //nolint:gosec // a path this test made
+		return err == nil && strings.Contains(string(b), "hello")
+	})
+}
+
+// A program that is not there must fail at the launch, not leave a half-open pty
+// and a run that measures nothing.
+func TestAMissingProgramIsReportedAtTheLaunch(t *testing.T) {
+	screen := filepath.Join(t.TempDir(), "screen.log")
+
+	_, err := startSession("definitely-not-a-program", nil, t.TempDir(), screen)
+
+	if err == nil {
+		t.Fatal("starting a missing program succeeded")
+	}
+	if !strings.Contains(err.Error(), "definitely-not-a-program") {
+		t.Errorf("err = %v, want it to name the program that could not start", err)
+	}
+}
+
+// boardStatus asks the daemon what the operator sees, so it reads the same
+// endpoint every other client does — and says so plainly when the session is not
+// on the board, rather than passing an empty status off as `idle`.
+func TestTheBoardIsReadThroughItsOwnEndpoint(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/api/sessions" {
+			http.NotFound(w, r)
+			return
+		}
+		_, _ = io.WriteString(w, `[{"id":"s-1","name":"one","machine":"m","project_dir":"/x","project":"x","status":"working","detail_text":"shell","mode_label":"-","mode_detail":"-"}]`)
+	}))
+	defer srv.Close()
+	cfg := &config.Config{ServerURL: srv.URL, Token: "t"}
+
+	status, detail := boardStatus(cfg, "s-1")
+	if status != "working" || detail != "shell" {
+		t.Errorf("(%q, %q), want (working, shell)", status, detail)
+	}
+
+	if status, _ := boardStatus(cfg, "s-absent"); status != "absent" {
+		t.Errorf("status = %q for a session the board does not carry, want absent", status)
+	}
+}
+
+// An unreachable daemon is reported as such. Reading it as `idle` would invent the
+// very disagreement this tool is here to detect.
+func TestAnUnreachableBoardIsNotReadAsIdle(t *testing.T) {
+	cfg := &config.Config{ServerURL: "http://127.0.0.1:1", Token: "t"}
+
+	if status, _ := boardStatus(cfg, "s-1"); status != "unreachable" {
+		t.Errorf("status = %q with no daemon, want unreachable", status)
+	}
+}
+
+// The JSON form is what a script or an issue attachment consumes; it carries the
+// same provenance the table does.
+func TestTheJSONFormCarriesTheRunAndItsProvenance(t *testing.T) {
+	var buf bytes.Buffer
+	obs := []observation{{Elapsed: 10, Registry: "shell", Status: "idle", Detail: "shell"}}
+
+	if err := render(&buf, scenarios[0], "s-1", obs, true, time.Date(2026, 9, 18, 0, 0, 0, 0, time.UTC)); err != nil {
+		t.Fatal(err)
+	}
+
+	var got struct {
+		Scenario     string        `json:"scenario"`
+		Session      string        `json:"session"`
+		MeasuredAt   string        `json:"measured_at"`
+		Observations []observation `json:"observations"`
+	}
+	if err := json.Unmarshal(buf.Bytes(), &got); err != nil {
+		t.Fatalf("the JSON form does not parse: %v", err)
+	}
+	if got.Scenario != scenarios[0].name || got.Session != "s-1" || got.MeasuredAt == "" {
+		t.Errorf("run = %+v, want it to name the scenario, the session and when it was measured", got)
+	}
+	if len(got.Observations) != 1 || got.Observations[0].Registry != "shell" {
+		t.Errorf("observations = %+v, want the row as measured", got.Observations)
+	}
+}
+
+// Every scenario is reachable by the name it advertises: a scenario listed in the
+// usage and not resolvable is a run someone cannot start.
+func TestEveryListedScenarioResolves(t *testing.T) {
+	for _, name := range names() {
+		if _, ok := scenarioNamed(name); !ok {
+			t.Errorf("scenario %q is listed but does not resolve", name)
+		}
+	}
+	if _, ok := scenarioNamed("nope"); ok {
+		t.Error("an unknown name resolved to a scenario")
+	}
+}
+
+func TestADashStandsInForWhatWasNotObserved(t *testing.T) {
+	if got := orDash(""); got != "-" {
+		t.Errorf("orDash(\"\") = %q, want -", got)
+	}
+	if got := orDash("shell"); got != "shell" {
+		t.Errorf("orDash(\"shell\") = %q, want shell", got)
+	}
+	if got := short("0123456789"); got != "01234567" {
+		t.Errorf("short = %q, want the first eight characters", got)
+	}
+	if got := short("abc"); got != "abc" {
+		t.Errorf("short = %q, want a short id left alone", got)
+	}
+}
+
+// quickWaits collapses the terminal-driving pauses: a test checks the sequence,
+// not how long Claude Code takes to paint a prompt.
+var quickWaits = waits{confirm: 12 * time.Millisecond, boot: 30 * time.Millisecond, key: time.Millisecond}
+
+// waitFor polls until cond holds, so a test does not depend on how fast a process
+// gets scheduled.
+func waitFor(t *testing.T, cond func() bool) {
+	t.Helper()
+	deadline := time.Now().Add(5 * time.Second)
+	for time.Now().Before(deadline) {
+		if cond() {
+			return
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+	t.Fatal("condition never held")
+}
+
+// The drive loop, run end to end against a program that is not Claude Code and so
+// writes no registry record. It must stop there and say why, because that is the
+// one failure a reader will actually hit: an inherited CLAUDE_CODE_CHILD_SESSION,
+// or `claude -p`, both of which produce a session that runs and cannot be seen.
+// Reported as "no data" it looks like a bug in the harness — which is how the
+// first version of this was read (#853).
+func TestASessionThatWritesNoRecordStopsAndSaysWhy(t *testing.T) {
+	home := t.TempDir()
+
+	_, _, err := drive(scenarios[0], driveOpts{
+		home: home, cfg: &config.Config{}, dir: t.TempDir(), screens: t.TempDir(),
+		bin: "cat", seconds: 0, every: 1, now: time.Now, waits: quickWaits,
+	})
+
+	if err == nil {
+		t.Fatal("a session with no registry record was driven to the end")
+	}
+	if !strings.Contains(err.Error(), "CLAUDE_CODE_CHILD_SESSION") {
+		t.Errorf("err = %v, want it to name what turns the record off", err)
+	}
+}
+
+// With a record in place the loop samples to the end and returns the session it
+// measured. `cat` stands in for the session: what is exercised here is the loop,
+// not Claude Code.
+func TestTheLoopSamplesUntilItsHorizon(t *testing.T) {
+	home := t.TempDir()
+	go func() {
+		time.Sleep(10 * time.Millisecond)
+		writeRecord(t, home, "new.json", "s-driven", "shell")
+	}()
+
+	obs, sid, err := drive(scenarios[4], driveOpts{
+		home: home, cfg: &config.Config{ServerURL: "http://127.0.0.1:1"}, dir: t.TempDir(),
+		screens: t.TempDir(), bin: "cat", seconds: 0, every: 1, now: time.Now, waits: quickWaits,
+	})
+
+	if err != nil {
+		t.Fatalf("drive: %v", err)
+	}
+	if sid != "s-driven" {
+		t.Errorf("session = %q, want the one that appeared in the registry", sid)
+	}
+	if len(obs) == 0 || obs[0].Registry != "shell" {
+		t.Errorf("observations = %+v, want Claude Code's own word on the first row", obs)
+	}
 }

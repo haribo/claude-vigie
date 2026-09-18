@@ -148,6 +148,7 @@ func run(args []string, out io.Writer, now func() time.Time) error {
 	}
 	obs, sid, err := drive(sc, driveOpts{
 		home: home, cfg: cfg, dir: workDir, screens: *screens,
+		bin: "claude", binArgs: []string{"--permission-mode", "bypassPermissions"},
 		seconds: *seconds, every: *every, now: now,
 	})
 	if err != nil {
@@ -166,9 +167,18 @@ func names() []string {
 }
 
 type driveOpts struct {
-	home    string
-	cfg     *config.Config
-	dir     string
+	home string
+	cfg  *config.Config
+	dir  string
+	// bin and binArgs are the program to put on the pty. They exist so the drive
+	// loop can be run end to end against something trivial; the default is a real
+	// Claude Code, and nothing else is ever measured.
+	bin     string
+	binArgs []string
+	// waits are the pauses in driving a terminal. Zero means the defaults; a test
+	// drives the loop with them collapsed, because what it checks is the sequence,
+	// not how long Claude Code takes to paint a prompt.
+	waits   waits
 	screens string // where the raw screen log goes — never the working directory
 	seconds int
 	every   int
@@ -179,19 +189,33 @@ type driveOpts struct {
 // confirmWait how long the bypass-permissions screen is given to appear. Both are
 // pauses in a script driving a terminal, not evidence about a session: nothing is
 // derived from them, so ADR-0015 is not in play.
-const (
-	confirmWait = 6 * time.Second
-	bootWait    = 12 * time.Second
-	keyPause    = 1500 * time.Millisecond
-)
+type waits struct {
+	confirm time.Duration // before answering the bypass-permissions screen
+	boot    time.Duration // before the prompt accepts typing
+	key     time.Duration // between one keystroke group and the next
+}
+
+func (w waits) orDefaults() waits {
+	if w.confirm == 0 {
+		w.confirm = 6 * time.Second
+	}
+	if w.boot == 0 {
+		w.boot = 12 * time.Second
+	}
+	if w.key == 0 {
+		w.key = 1500 * time.Millisecond
+	}
+	return w
+}
 
 func drive(sc scenario, o driveOpts) ([]observation, string, error) {
+	w := o.waits.orDefaults()
 	before := registryFiles(o.home)
 	// Out of the way by default: this runs from a checkout, and a tool that drops
 	// a log beside the source it was run from is a tool that gets committed by
 	// accident.
 	screen := filepath.Join(o.screens, "drive-screen-"+sc.name+".log")
-	s, err := startSession(o.dir, screen, nil)
+	s, err := startSession(o.bin, o.binArgs, o.dir, screen)
 	if err != nil {
 		return nil, "", err
 	}
@@ -199,15 +223,15 @@ func drive(sc scenario, o driveOpts) ([]observation, string, error) {
 
 	// The bypass-permissions screen blocks startup until someone answers it: the
 	// cursor starts on "No, exit", so this is Down then Enter.
-	time.Sleep(confirmWait)
+	time.Sleep(w.confirm)
 	if err := s.send("\x1b[B"); err != nil {
 		return nil, "", err
 	}
-	time.Sleep(500 * time.Millisecond)
+	time.Sleep(w.confirm / 12)
 	if err := s.send("\r"); err != nil {
 		return nil, "", err
 	}
-	time.Sleep(bootWait)
+	time.Sleep(w.boot)
 
 	sid := newSessionID(o.home, before)
 	if sid == "" {
@@ -219,7 +243,7 @@ func drive(sc scenario, o driveOpts) ([]observation, string, error) {
 		if err := s.send(k); err != nil {
 			return nil, sid, err
 		}
-		time.Sleep(keyPause)
+		time.Sleep(w.key)
 	}
 	if err := s.send("\r"); err != nil {
 		return nil, sid, err
