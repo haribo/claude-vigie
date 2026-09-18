@@ -265,3 +265,19 @@ docs-animation:
 [doc("Record Claude Code's session artefacts to a file (ADR-0016)")]
 capture out args="":
     go run ./tools/capture --out={{out}} {{args}}
+
+# Measure the residual ADR-0015 asks the reader to accept: background work whose
+# end vigie never observes. That figure has been wrong three times and every
+# correction arrived by accident, because nothing in the tree measured it — see
+# ADR-0015 § "The price, stated" and issue #843.
+#
+#   just residual
+#   just residual args="--json"
+#
+# It reads the local transcript corpus, so its numbers describe one machine on one
+# day, and it prints both. Re-run it whenever the closing rules change; it reads
+# the parser's own counts, so it follows them without being updated.
+[group("dev")]
+[doc("Measure the open-background-work residual over the local corpus")]
+residual args="":
+    go run ./tools/residual {{args}}

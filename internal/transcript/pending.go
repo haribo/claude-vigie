@@ -1,6 +1,9 @@
 package transcript
 
-import "encoding/json"
+import (
+	"encoding/json"
+	"regexp"
+)
 
 // pendingTools tracks tool_use blocks awaiting a tool_result across a transcript,
 // so the watcher can tell a session waiting on a command from a finished
@@ -8,6 +11,24 @@ import "encoding/json"
 type pendingTools struct {
 	meta  map[string]toolMeta
 	order []string // tool_use ids in first-seen order, for "most recent pending"
+	// bgLaunched counts every background launch seen, closed ones included, because
+	// `meta` only holds what is still open. It exists so the residual can be
+	// measured against what was launched rather than re-derived by a second reader
+	// of the transcript: a figure ADR-0015 rests on has been wrong three times, and
+	// each time it came from a throwaway script reimplementing these rules (#843).
+	bgLaunched int
+	// byTask maps a background task's own id to the tool_use that started it. Only
+	// the launch's result names that id — `Command running in background with ID: …`
+	// for a Bash, `Monitor started (task …` for a Monitor — so the pairing has to be
+	// built as the transcript is read, and it is what lets a later stop name which
+	// launch it ended (#842).
+	byTask map[string]string
+	// pendingStops holds TaskStop calls whose outcome has not landed yet, keyed by
+	// the call's own tool_use id. A stop is read on its *result*, never on the
+	// request: a stop that failed leaves the work running, and closing on the ask
+	// would put the session at rest while its command runs — #810's defect, one
+	// signal along.
+	pendingStops map[string]string
 }
 
 type toolMeta struct {
@@ -16,7 +37,10 @@ type toolMeta struct {
 }
 
 func newPendingTools() *pendingTools {
-	return &pendingTools{meta: map[string]toolMeta{}}
+	return &pendingTools{
+		meta:   map[string]toolMeta{},
+		byTask: map[string]string{}, pendingStops: map[string]string{},
+	}
 }
 
 // addToolUses records the tool_use blocks of an assistant message. A Bash with
@@ -41,7 +65,16 @@ func (p *pendingTools) addToolUses(raw json.RawMessage) {
 		if _, ok := p.meta[b.ID]; !ok {
 			p.order = append(p.order, b.ID)
 		}
-		p.meta[b.ID] = toolMeta{name: b.Name, background: isBackgroundWork(b.Input)}
+		if id := stopsTask(b.Input); id != "" {
+			// The call declares which task it stops; the outcome decides whether it
+			// counts. Keyed on the field, not on the tool's name (#821, #834).
+			p.pendingStops[b.ID] = id
+		}
+		bg := isBackgroundWork(b.Input)
+		if bg {
+			p.bgLaunched++
+		}
+		p.meta[b.ID] = toolMeta{name: b.Name, background: bg}
 	}
 }
 
@@ -55,8 +88,9 @@ func (p *pendingTools) clearToolResults(raw json.RawMessage) (answered bool) {
 		return false
 	}
 	var blocks []struct {
-		Type      string `json:"type"`
-		ToolUseID string `json:"tool_use_id"`
+		Type      string          `json:"type"`
+		ToolUseID string          `json:"tool_use_id"`
+		Content   json.RawMessage `json:"content"`
 	}
 	if err := json.Unmarshal(raw, &blocks); err != nil {
 		return false
@@ -66,6 +100,12 @@ func (p *pendingTools) clearToolResults(raw json.RawMessage) (answered bool) {
 			continue
 		}
 		answered = true
+		// Two things are read out of the result's own text, and only here: the task
+		// id a launch was given, and the outcome of a stop. Neither is in any input,
+		// so the pairing between a stop and the launch it ends exists nowhere else.
+		txt := resultText(b.Content)
+		p.noteLaunchID(b.ToolUseID, txt)
+		p.closeStopped(b.ToolUseID, txt)
 		// A backgrounded Bash is answered while it is still running. Claude Code
 		// writes `Command running in background with ID: …` back within seconds —
 		// 1.8 to 3.3 across 1079 launches in the local corpus — so this result says
@@ -73,9 +113,10 @@ func (p *pendingTools) clearToolResults(raw json.RawMessage) (answered bool) {
 		// pairing mid-command, the turn read finished, and a session waiting on a CI
 		// watch or a long build reported `idle` (#748).
 		//
-		// It is closed by its <task-notification>, like an async subagent, or by the
-		// operator's next prompt. Not by a timer: see closeTurn and
-		// docs/design/session-status.md § 2.
+		// Two things close it, and a prompt is not one of them (#810, closeTurn): its
+		// own terminal <task-notification>, like an async subagent, and a stop the
+		// session declared, which Claude Code answers but never notifies (#842).
+		// Neither is a timer — see docs/design/session-status.md § 2.
 		if m, ok := p.meta[b.ToolUseID]; ok && m.background {
 			continue
 		}
@@ -166,6 +207,18 @@ func (p *pendingTools) closeTurn() {
 // resolve returns the most recent unresolved foreground tool's name (for the
 // DETAIL message) and whether any unresolved tool is a background task
 // (which keeps the session working).
+// backgroundCounts returns how many background launches this transcript carried and
+// how many are still open at this point. Both are read from the same bookkeeping the
+// status rules use, so a measurement cannot drift from the behavior it describes.
+func (p *pendingTools) backgroundCounts() (launched, open int) {
+	for _, m := range p.meta {
+		if m.background {
+			open++
+		}
+	}
+	return p.bgLaunched, open
+}
+
 func (p *pendingTools) resolve() (pendingTool string, backgroundActive bool) {
 	for _, m := range p.meta {
 		if m.background {
@@ -179,6 +232,80 @@ func (p *pendingTools) resolve() (pendingTool string, backgroundActive bool) {
 		}
 	}
 	return "", backgroundActive
+}
+
+var (
+	// taskIDInResult reads the task id out of a launch's own answer. Two sentences
+	// carry it, one per tool, and only there: the launch's input never names it.
+	taskIDInResult = regexp.MustCompile(`(?:Command running in background with ID:\s*|Monitor started \(task\s*)([A-Za-z0-9]+)`)
+	// stoppedTask matches the answer Claude Code gives a stop that worked. The
+	// wording is the contract: a failed stop says something else, and must not close
+	// anything.
+	stoppedTask = regexp.MustCompile(`Successfully stopped task:\s*([A-Za-z0-9]+)`)
+)
+
+// resultText flattens a tool_result's content to the text it carries. Claude Code
+// writes it either as a plain string or as a list of blocks, and the two sentences
+// this file reads appear in both shapes.
+func resultText(raw json.RawMessage) string {
+	if len(raw) == 0 {
+		return ""
+	}
+	var s string
+	if json.Unmarshal(raw, &s) == nil {
+		return s
+	}
+	var blocks []struct {
+		Text string `json:"text"`
+	}
+	if json.Unmarshal(raw, &blocks) != nil {
+		return ""
+	}
+	var out string
+	for _, b := range blocks {
+		out += b.Text + " "
+	}
+	return out
+}
+
+// stopsTask returns the task id a call declares it will stop, or "".
+func stopsTask(input json.RawMessage) string {
+	var in struct {
+		TaskID string `json:"task_id"`
+	}
+	_ = json.Unmarshal(input, &in)
+	return in.TaskID
+}
+
+// noteLaunchID records the task id a background launch was given, so a later stop
+// can name it. Ignored for anything that is not an open background launch: a task
+// id from a Monitor that is not persistent belongs to work vigie never opened, and
+// stopping it must close nothing (#834, #842).
+func (p *pendingTools) noteLaunchID(toolUseID, text string) {
+	m, ok := p.meta[toolUseID]
+	if !ok || !m.background {
+		return
+	}
+	if id := taskIDInResult.FindStringSubmatch(text); id != nil {
+		p.byTask[id[1]] = toolUseID
+	}
+}
+
+// closeStopped closes the launch a successful stop names. Called with a stop call's
+// own result, so the outcome is what decides — see pendingStops.
+func (p *pendingTools) closeStopped(stopToolUseID, text string) {
+	declared, ok := p.pendingStops[stopToolUseID]
+	if !ok {
+		return
+	}
+	delete(p.pendingStops, stopToolUseID)
+	m := stoppedTask.FindStringSubmatch(text)
+	if m == nil || m[1] != declared {
+		return // the stop did not succeed, or reports another task
+	}
+	if launch, ok := p.byTask[declared]; ok {
+		delete(p.meta, launch)
+	}
 }
 
 // isBackgroundWork reports whether a tool call starts work that outlives it — the

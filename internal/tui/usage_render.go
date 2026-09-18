@@ -32,10 +32,31 @@ func renderUsageStrip(u api.UsageReport) string {
 	// The space goes inside the gauges, not between them: `5h` and `7d` are two
 	// elements of the same nature, already told apart by their own labels, while
 	// the bar and its figure have nothing separating them at all (#568).
-	return labelStyle.Render("usage ") +
+	weekly := u.SevenDayReset
+	strip := labelStyle.Render("usage ") +
 		compactGauge("5h", u.FiveHourPct, u.FiveHourReset) +
-		dimStyle.Render("  ") +
-		compactGauge("7d", u.SevenDayPct, u.SevenDayReset)
+		dimStyle.Render("  ")
+	if u.Scoped == nil {
+		return strip + compactGauge("7d", u.SevenDayPct, weekly)
+	}
+	// The scoped limit shares the seven-day window, so it hangs off that gauge
+	// behind a middle dot rather than standing as a third element — and the reset
+	// is written once, on the pair, instead of twice.
+	//
+	// **Once because it is one window, not because it is shorter.** If the endpoint
+	// ever reports two instants, both are printed: a single reset would then say
+	// something false about one of them. The saving is real either way — it keeps
+	// the line inside a narrow terminal, which matters because this strip is
+	// clamped and the TUI never scrolls sideways (#332, #840).
+	shared := u.Scoped.Reset == weekly
+	sevenDayReset := weekly
+	if shared {
+		sevenDayReset = ""
+	}
+	return strip +
+		compactGauge("7d", u.SevenDayPct, sevenDayReset) +
+		dimStyle.Render(" · ") +
+		compactGauge(strings.ToLower(u.Scoped.Label), u.Scoped.Pct, u.Scoped.Reset)
 }
 
 func compactGauge(label string, pct float64, reset string) string {

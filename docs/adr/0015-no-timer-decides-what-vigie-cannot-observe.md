@@ -52,12 +52,31 @@ rather than inventing an end.
 
 For work that outlives its call the price is concrete and measured, and it is
 stated **twice, because one denominator flatters it.** Measured on the local corpus
-of 94 transcripts, 2026-09-17:
+of 95 transcripts, 2026-09-17:
 
 | | |
 |---|---|
-| per launch | 19 of 856 — about **one in forty-five** |
-| per session that launches any | 8 of 21 — about **one in two and a half** |
+| per launch | 2 of 866 — about **one in four hundred** |
+| per session that launches any | 2 of 21 — about **one in ten** |
+
+**Re-run it rather than trust it: `just residual`.** Until #843 these numbers came
+from throwaway scripts that reimplemented the closing rules and no longer exist, so
+no reader could re-derive the claim and disagree with it — which is how the figure
+stayed wrong three times, each correction surfacing by accident during an unrelated
+investigation. The tool reads the parser's own counts, so it follows the rules
+instead of restating them, and it prints the corpus and the date every time.
+
+**The figures above are what is left after #842**, and the drop is the point: the
+section previously read 19 of 866, and **seventeen of those nineteen were a stop the
+session had declared in its transcript** — answered by Claude Code, never notified,
+and unread by vigie. They were counted here as signals that never came. Reading the
+stop is an observation, so this decision is untouched; what it removes is nine tenths
+of the bill, for the second time.
+
+Twice now this section has asked the reader to accept a price that was mostly a
+defect (#818, then #842), and both times the defect was found while investigating
+something else. That is the argument for `just residual` above, and for treating any
+figure here as provisional until someone has looked for the next one.
 
 Both describe the same residual and they do not read the same way. A launch is not
 what an operator looks at; a row is. The per-session figure is the one that should
@@ -68,9 +87,10 @@ was written down.
 session reading `working` until the session ends — but an open launch is not proof
 of a lost signal, because the work may genuinely still be running. Since #834 that
 is the normal case: a persistent `Monitor` emits nothing until something stops it.
-Of the 8 sessions above, **4 had been inactive for more than two hours**, so for
-those the work is certainly over and the status is certainly stale; for the other
-four the transcript cannot say.
+Of the 2 sessions left, **both had been inactive for hours**, so for those the work
+is certainly over and the status is certainly stale. They date from 2026-09-05 and
+2026-09-07, and neither carries a stop: whether a notification was lost or the work
+outlived the session, the transcript cannot say.
 
 **Every figure here carries its corpus and its date, and none is ever carried
 forward.** The numbers this section held before were 12 of 789, and they went out of
@@ -89,7 +109,7 @@ The decision is untouched — no timer may decide what vigie cannot observe, and
 that holds whether the residual is 16% or 1.5%. What was wrong was the *bill*:
 nine tenths of the price this section asked the reader to accept was a defect, and
 an accepted cost that is mostly a bug is the kind of sentence that stops anyone
-from going to look. Any future figure here is re-measured, never carried forward.
+from going to look.
 
 Three things make that acceptable, and if any stopped being true this ADR would
 have to be reopened:

@@ -9,6 +9,21 @@ file is the single source of truth, not a second narrative.
 
 ## [Unreleased]
 
+## [0.15.0] - 2026-09-18
+
+### Added
+
+- The usage strip shows the weekly limit that applies to a single model, when one
+  is in force. Claude enforces it alongside the 5-hour and 7-day windows, and it
+  can be the highest of the three — the board read comfortable while the limit that
+  would stop the work was nearly full (#840).
+
+### Fixed
+
+- A session that stops its own background command no longer stays `working`. Claude
+  Code answers the stop but sends no completion notice for it, so the row stayed
+  busy until the session ended, with no way to clear it (#842).
+
 ## [0.14.3] - 2026-09-17
 
 ### Fixed
@@ -813,7 +828,8 @@ across machines — it reads and reports session state; it never drives a sessio
 - The API binds `127.0.0.1` by default; every `/api/*` route is behind a
   constant-time shared-token check; request bodies are size-capped.
 
-[Unreleased]: https://github.com/haribo/claude-vigie/compare/v0.14.3...HEAD
+[Unreleased]: https://github.com/haribo/claude-vigie/compare/v0.15.0...HEAD
+[0.15.0]: https://github.com/haribo/claude-vigie/compare/v0.14.3...v0.15.0
 [0.14.3]: https://github.com/haribo/claude-vigie/compare/v0.14.2...v0.14.3
 [0.14.2]: https://github.com/haribo/claude-vigie/compare/v0.14.1...v0.14.2
 [0.14.1]: https://github.com/haribo/claude-vigie/compare/v0.14.0...v0.14.1

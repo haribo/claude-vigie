@@ -505,7 +505,19 @@ function renderBottom() {
   // the exception will appear — and only beside the table it describes (#548).
   const n = (activeTab === "sessions" && !detailId) ? sessions.length - preferenceVisible().length : 0;
   const hiddenHtml = n > 0 ? `<span class="hiddenn"><span class="lbl">hidden</span> ${n}</span>` : "";
-  const html = `<div class="gauges">${g("5h", u.five_hour_pct, u.five_hour_reset)}${g("7d", u.seven_day_pct, u.seven_day_reset)}</div><span class="push"></span>${hiddenHtml}${watcherHtml()}${platHtml}`;
+  // The model-scoped weekly limit, when one is in force. It shares the seven-day
+  // window, so the reset is written once on the pair — and only when the two
+  // instants actually match: if they ever diverge, printing one would state
+  // something false about the other (#840).
+  //
+  // Nothing is drawn when there is no scoped limit, and no room is kept for it. A
+  // gauge permanently at zero trains the eye to skip the place where the exception
+  // appears, which is why `hidden N` above is shown only when it has a value.
+  const sc = u.scoped;
+  const sharedReset = sc && sc.reset && sc.reset === u.seven_day_reset;
+  const weekly = g("7d", u.seven_day_pct, sharedReset ? "" : u.seven_day_reset);
+  const scoped = sc ? g(sc.label, sc.pct, sc.reset) : "";
+  const html = `<div class="gauges">${g("5h", u.five_hour_pct, u.five_hour_reset)}${weekly}${scoped}</div><span class="push"></span>${hiddenHtml}${watcherHtml()}${platHtml}`;
   if (!paint("botbar", html)) return;
   $("botbar").querySelectorAll("i[data-w]").forEach((i) => { i.style.width = i.dataset.w + "%"; });
 }
