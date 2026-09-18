@@ -9,6 +9,13 @@ file is the single source of truth, not a second narrative.
 
 ## [Unreleased]
 
+### Fixed
+
+- A session with a shell running for Claude now reads `working` instead of `idle`,
+  so the board stops offering it as free. Claude Code reports `shell` while that
+  shell runs, and vigie read the word as the operator having left for a `!` prompt
+  (#851).
+
 ## [0.15.0] - 2026-09-18
 
 ### Added

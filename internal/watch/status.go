@@ -34,28 +34,16 @@ func resolveStatus(reg map[string]sessionRecord, regByProc map[procID]string, id
 	case known:
 		base = withError(mapRegistryStatus(rec.Status), info.LastAPIError)
 		switch {
-		case rec.Status == "shell" && base == "idle" && info.PendingTool != "":
-			// `shell` names two situations Claude Code does not distinguish: the
-			// operator dropped to a shell prompt — alive, producing nothing, a real
-			// rest (#280) — and a Bash tool executing, which is work in progress.
-			// Measured on a live session, the registry sat at `shell` for 78 s of a
-			// two-minute window while a foreground command ran (#661).
-			//
-			// The transcript separates them: an unanswered `tool_use` means Claude is
-			// waiting on a command. Reading that as `idle` reported a session doing
-			// nothing while its build ran — and since `idle` is the base the tool
-			// pairing acts on, the same build was reported `stalled` after 45 s, the
-			// false positive session-status.md § 2 says the five-minute window exists
-			// to prevent.
-			//
-			// DETAIL keeps the transcript's own message: which tool is running is more
-			// use to the operator than the word `shell`.
-			//
-			// `base == "idle"` guards a live API error, which withError has already
-			// established and which outranks this.
-			base = "working"
 		case rec.Status == "shell":
-			activity = "shell" // dropped to a shell: status stays idle, DETAIL says so (#280)
+			// `shell` is work in progress: a shell is running for Claude, and the
+			// mapping already reads it as `working` (#851). All that is left here is the
+			// message, and the word `shell` is the weakest one available — which tool is
+			// running, or that the work is a backgrounded command, is more use to the
+			// operator (#280 put the word in DETAIL; #661 established the precedence).
+			// So it is the fallback, taken only when the transcript has nothing better.
+			if activity == "" && info.PendingTool == "" && !info.BackgroundActive && info.AgentsActive == 0 {
+				activity = "shell"
+			}
 		case base == "waiting" && activity == "" && rec.WaitingFor != "":
 			activity = capText(rec.WaitingFor, 80) // surface the ask in DETAIL
 		}
@@ -98,8 +86,7 @@ func refineStatus(base, activity, id string, info *transcript.Info, activityAge 
 	// never be seen (#721).
 	base = withThinking(base, info.Thinking && !info.Interrupted)
 	base = withCompacting(base, compactingNow(id, info, now)) // opaque `working` during compaction → `compacting`
-	prevBase := base
-	base = refineWithTools(base, info, activityAge) // an outstanding tool call keeps the session working
+	base = refineWithTools(base, info, activityAge)           // an outstanding tool call keeps the session working
 	switch {
 	case base == "compacting":
 		activity = "compacting context"
@@ -107,14 +94,13 @@ func refineStatus(base, activity, id string, info *transcript.Info, activityAge 
 		activity = "interrupted" // the operator killed the turn; still idle (#351)
 	case base == "working" && activity == "" && info.PendingTool != "":
 		activity = "running " + info.PendingTool
-	case prevBase == "idle" && base == "working" && info.AgentsActive > 0 && activityAge < agentWindow:
+	case base == "working" && activity == "" && info.AgentsActive > 0 && activityAge < agentWindow:
 		activity = info.AgentActivity // the work is running in a subagent
-	case prevBase == "idle" && base == "working" && info.BackgroundActive:
-		// The registry says `shell` for both an operator at a `!` prompt and a
-		// session that launched a background command, and the #280 branch has
-		// already written `shell` into DETAIL on that reading. Only the transcript
-		// separates them, and it just did — so the message follows the status
-		// rather than contradicting it (#748).
+	case base == "working" && activity == "" && info.BackgroundActive:
+		// Reached whether `working` came from the registry's `shell` or from the
+		// tool refinement: in both cases the transcript is the only thing that can
+		// say the work is a backgrounded command, and that is more use to the
+		// operator than the word `shell` (#748, #851).
 		activity = "background command"
 	}
 	return base, activity
