@@ -166,20 +166,27 @@ rule and came back as a hung tool.
 **The registry wins where it covers the session** (#254). Claude Code maintains
 it for its live sessions, so it states what the transcript can only be read for:
 
-- `busy` → `working`; `idle` or `shell` → `idle`; `waiting` → `waiting`, carrying
+- `busy` → `working`; `shell` → `working`; `idle` → `idle`; `waiting` → `waiting`, carrying
   its `waitingFor` reason into DETAIL. An unrecognised value degrades to `idle`: a
   live session is never a false `ended`. The enum is closed
   ([ADR-0008](../adr/0008-compacting-status.md));
-- **`shell` names two situations, and the transcript separates them.** Its
-  original reading is the operator dropped to a shell prompt inside Claude —
-  alive, producing nothing, a real rest (#280). But Claude Code also reports
-  `shell` while a Bash tool executes: measured on a live session, the registry sat
-  at `shell` for 78 s of a two-minute window across a foreground command. So
-  `shell` **with an unanswered `tool_use`** is `working`, and DETAIL keeps the
-  transcript's own message — which tool is running is more use than the word
-  `shell`. Reading both as `idle` showed a session doing nothing while its build
-  ran, and fed the same build to the tool pairing, which called it `stalled` after
-  45 s (#661);
+- **`shell` means a shell is running for Claude, and that is `working`.** It was
+  read the other way until #851 — as the operator dropping to a `!` prompt, alive
+  and producing nothing (#255, #280) — and measurement on real sessions inverts
+  that reading: driven through a pty on v2.1.267, an operator at a `!` prompt
+  running `sleep 90` reports **`busy`** throughout, while a `Monitor` running the
+  same command reports **`shell`**. The word marks Claude's own shell, not the
+  operator's.
+
+  **It closes itself.** The registry enters `shell` when the command starts and
+  leaves it when the command ends — measured at t=101 s for a 90 s command — so
+  nothing is inferred to end it and no `working` can latch
+  ([ADR-0017](../adr/0017-a-shell-is-work.md), ADR-0015).
+
+  DETAIL still carries the word (#280), but only as the fallback: when the
+  transcript has something better — which tool is running, or that the work is a
+  backgrounded command — that wins, because it is more use to the operator (#661,
+  #748);
 - the registry's `{PID, procStart}` says the backing process is gone → `ended`.
 
 **The transcript heuristic covers the rest** — a session the registry does not
@@ -358,8 +365,9 @@ and the watcher closes it from the transcript's `compact_boundary`
 column without touching the base status — a lighter touch than a full status when
 the state itself is unchanged:
 
-- a `shell` registry status keeps the session `idle` and sets DETAIL to `shell`
-  (dropped to a shell prompt) (#280);
+- a `shell` registry status sets DETAIL to `shell` when the transcript has nothing
+  more precise to say; the status itself is `working`, decided by the mapping
+  above rather than by this column (#280, #851);
 - a synthetic `[Request interrupted by user]` / `[Request interrupted by user for
   tool use]` `user` line — the last non-system message — keeps the base `idle`
   but sets DETAIL to `interrupted`, so a turn the operator killed mid-flight is

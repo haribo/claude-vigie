@@ -39,16 +39,16 @@ func TestAShellRunningAToolIsWorking(t *testing.T) {
 	}
 }
 
-// The original meaning is untouched: an operator at a shell prompt, with no tool
-// outstanding, is resting. Inventing `working` for someone typing at bash would
-// be the same error in the other direction.
-func TestAShellPromptWithNoToolIsStillIdle(t *testing.T) {
+// With no tool outstanding the status is the same, because `shell` itself is the
+// evidence: the registry writes it while a shell runs for Claude and leaves it the
+// moment that shell ends (#851). DETAIL falls back to the word.
+func TestAShellWithNoToolStillReadsWorking(t *testing.T) {
 	now := time.Now()
 	reg := map[string]sessionRecord{"s": {SessionID: "s", Status: "shell"}}
 	resting := &transcript.Info{}
 
 	status, detail, _, _ := resolveStatus(reg, nil, "s", resting, 10*time.Minute, now.Add(-10*time.Minute), now)
-	if status != "idle" || detail != "shell" {
-		t.Errorf("a shell prompt reads (%q, %q), want (idle, shell) — #280 is not what this changes", status, detail)
+	if status != "working" || detail != "shell" {
+		t.Errorf("a shell with no tool reads (%q, %q), want (working, shell)", status, detail)
 	}
 }

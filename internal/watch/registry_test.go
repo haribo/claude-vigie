@@ -113,7 +113,7 @@ func TestScanRegistryWaitingWins(t *testing.T) {
 }
 
 func TestMapRegistryStatus(t *testing.T) {
-	for in, want := range map[string]string{"busy": "working", "idle": "idle", "shell": "idle", "waiting": "waiting", "": "idle", "weird": "idle"} {
+	for in, want := range map[string]string{"busy": "working", "idle": "idle", "shell": "working", "waiting": "waiting", "": "idle", "weird": "idle"} {
 		if got := mapRegistryStatus(in); got != want {
 			t.Errorf("mapRegistryStatus(%q) = %q, want %q", in, got, want)
 		}
@@ -157,7 +157,7 @@ func TestScanRegistryShellShowsInDoing(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("HOME", home)
 	ps := selfProcStart(t)
-	// A live session whose registry status is "shell" (the user dropped to a shell).
+	// A live session whose registry status is "shell": a shell is running for Claude.
 	writeSession(t, home, "shell.json",
 		`{"sessionId":"s-shell","status":"shell","pid":`+strconv.Itoa(os.Getpid())+`,"procStart":"`+strconv.FormatUint(ps, 10)+`"}`)
 
@@ -176,9 +176,10 @@ func TestScanRegistryShellShowsInDoing(t *testing.T) {
 	}
 	for _, r := range reports {
 		if r.SessionID == "s-shell" {
-			// Status stays idle (a shell isn't an attention state), but DETAIL says "shell".
-			if r.Status != "idle" {
-				t.Errorf("status = %q, want idle", r.Status)
+			// A shell running for Claude is work in progress (#851); DETAIL still
+			// carries the word, which is what #280 asked for.
+			if r.Status != "working" {
+				t.Errorf("status = %q, want working (#851)", r.Status)
 			}
 			if r.Detail != "shell" {
 				t.Errorf("activity = %q, want shell (#280)", r.Detail)

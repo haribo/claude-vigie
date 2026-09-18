@@ -23,23 +23,24 @@ func TestASessionWaitingOnABackgroundCommandReadsWorking(t *testing.T) {
 	if status != "working" {
 		t.Errorf("status = %q, want working — the board offers a session that will resume by itself as free", status)
 	}
-	if detail == "shell" {
-		t.Error("DETAIL says `shell`, which is the other thing that registry state means: the operator at a prompt")
+	if detail != "background command" {
+		t.Errorf("DETAIL = %q; only the transcript can say the work is a backgrounded command, and that beats the word shell", detail)
 	}
 }
 
-// The genuine #280 case is untouched: an operator at a shell prompt, with nothing
-// running, is at rest. The registry cannot tell the two apart — the transcript is
-// what separates them.
-func TestAnOperatorAtAShellPromptIsStillIdle(t *testing.T) {
+// `shell` with nothing in the transcript is still work: measured on real sessions,
+// the operator at a `!` prompt reports `busy`, so `shell` is a shell running for
+// Claude and nothing else (#851). The word survives in DETAIL, which is all #280
+// ever asked for.
+func TestAShellWithNothingInTheTranscriptIsStillWorking(t *testing.T) {
 	t.Setenv("HOME", t.TempDir())
 	now := time.Now()
 	reg := map[string]sessionRecord{"s": {SessionID: "s", Status: "shell"}}
 
 	status, detail, _, _ := resolveStatus(reg, nil, "s", &transcript.Info{}, 5*time.Minute, now.Add(-5*time.Minute), now)
 
-	if status != "idle" || detail != "shell" {
-		t.Errorf("(%q, %q), want (idle, shell)", status, detail)
+	if status != "working" || detail != "shell" {
+		t.Errorf("(%q, %q), want (working, shell)", status, detail)
 	}
 }
 
