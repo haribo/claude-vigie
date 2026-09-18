@@ -62,11 +62,21 @@ func TestARunningNotificationLeavesTheCommandOpen(t *testing.T) {
 // at rest while it ran. A prompt says nothing about a command built to outlive
 // the turn.
 //
+// **A prompt is still not a close, and that is all this test asserts.** Its name
+// said `NothingButItsOwnReport` until #842, which was true of the closing rules and
+// stopped being so: a stop the session declares also closes a launch, and Claude
+// Code sends no notification for a task it was told to stop. The assertion below
+// never changed — what changed is that the old name promised an exclusivity the
+// rules no longer have.
+//
 // What is left is a session reading `working` for the rest of its life when a
-// notification is lost — measured at about one in eight. Bounded by the session,
-// and in the safe direction: wrongly busy costs a missed opportunity, wrongly at
-// rest costs an interruption.
-func TestNothingButItsOwnReportClosesABackgroundCommand(t *testing.T) {
+// notification is genuinely lost. The figure that used to sit here — *about one in
+// eight* — has been retired twice since (#818, then #842) and is deliberately not
+// replaced: `just residual` measures it, and a number copied into a comment is how
+// the last two survived being wrong. Bounded by the session, and in the safe
+// direction: wrongly busy costs a missed opportunity, wrongly at rest costs an
+// interruption.
+func TestAPromptDoesNotCloseABackgroundCommand(t *testing.T) {
 	prompt := `{"type":"user","message":{"content":"now do the other thing"}}`
 	info := parseLines(t, bgLaunch, bgAccepted, bgStop, prompt)
 	if !info.BackgroundActive {
