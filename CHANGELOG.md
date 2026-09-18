@@ -16,6 +16,12 @@ file is the single source of truth, not a second narrative.
   can be the highest of the three — the board read comfortable while the limit that
   would stop the work was nearly full (#840).
 
+### Fixed
+
+- A session that stops its own background command no longer stays `working`. Claude
+  Code answers the stop but sends no completion notice for it, so the row stayed
+  busy until the session ended, with no way to clear it (#842).
+
 ## [0.14.3] - 2026-09-17
 
 ### Fixed

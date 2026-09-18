@@ -237,7 +237,24 @@ list, typically an older Claude Code:
   claim on the same work.
 
   Such a call is tracked the way an async subagent is: opened at its
-  `tool_use`, and closed by the `<task-notification>` naming it. Claude Code emits
+  `tool_use`, and closed by the `<task-notification>` naming it.
+
+  **A second thing closes it: a stop the session declared.** When a session stops
+  its own background work, Claude Code answers `Successfully stopped task: <id>`
+  and emits **no** notification for it — so the only close vigie read never came,
+  and the session stayed `working` for the rest of its life with no prompt able to
+  clear it (#842). The stop is in the transcript in plain sight; reading it is an
+  observation, not a clock, so
+  [ADR-0015](../adr/0015-no-timer-decides-what-vigie-cannot-observe.md) is
+  untouched.
+
+  Two details carry the rule. The pairing runs through the **task id**, which only
+  the launch's own answer names — `Command running in background with ID: …`, or
+  `Monitor started (task …` — so it exists nowhere else and has to be built as the
+  transcript is read. And the close is decided by the stop's **result**, never by
+  the request: a stop that failed leaves the work running, and closing on the ask
+  would put a session at rest while its command runs, which is #810's defect one
+  signal along. Claude Code emits
   the same notification shape for both, keyed on the same `<tool-use-id>`, so this
   is one rule on a second type rather than a second mechanism. **Three statuses
   close it — `completed`, `failed` and `killed`** (measured: 836 / 87 / 13 of 936
@@ -257,7 +274,7 @@ list, typically an older Claude Code:
   deliberately left unread, so one notification is one close.
 
   **No liveness cap, deliberately.** A notification is genuinely lost about one time
-  in forty-five (19 of 856 launches; see below for what that costs per *session*,
+  in four hundred (2 of 866 launches; see below for what that costs per *session*,
   which is the figure that matters), and
   the obvious guard is the subagents' 30-minute window. It is the wrong guard here
   twice over. It keys on transcript *silence*, and silence is what a background
@@ -277,9 +294,9 @@ list, typically an older Claude Code:
 
   So a lost notification leaves the session reading `working` until the session
   itself ends. **What that costs depends on what it is counted against, and only
-  one of the two answers used to be written here:** about one launch in forty-six,
-  but about one session in two and a half among those that launch any (19 of 866,
-  8 of 21, local corpus of 2026-09-17, from `just residual`). A launch is not what an operator looks at;
+  one of the two answers used to be written here:** about one launch in four hundred,
+  but about one session in ten among those that launch any (2 of 866, 2 of 21,
+  local corpus of 2026-09-17, from `just residual`). A launch is not what an operator looks at;
   a row is, so the second figure is the one this paragraph is really about (#835).
   Being open is not proof the signal was lost, either — the work may still be
   running, which since #834 is the normal case for a persistent `Monitor`.
