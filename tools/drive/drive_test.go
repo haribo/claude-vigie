@@ -398,3 +398,83 @@ func TestTheLoopSamplesUntilItsHorizon(t *testing.T) {
 		t.Errorf("observations = %+v, want Claude Code's own word on the first row", obs)
 	}
 }
+
+// The launch mode belongs to the scenario, because the default that keeps every
+// other run from stopping on an approval — bypassPermissions — is exactly what
+// makes the approval impossible to observe.
+func TestTheWaitingScenarioLaunchesWhereApprovalsHappen(t *testing.T) {
+	waiting, ok := scenarioNamed("waiting")
+	if !ok {
+		t.Fatal("no waiting scenario")
+	}
+	if waiting.mode() == bypass {
+		t.Error("the waiting scenario launches with permissions bypassed; no prompt can ever appear")
+	}
+	for _, s := range scenarios {
+		if s.name == "waiting" {
+			continue
+		}
+		if s.mode() != bypass {
+			t.Errorf("scenario %q launches in %q; every other scenario needs approvals out of the way", s.name, s.mode())
+		}
+	}
+}
+
+// Closing is idempotent: the `ended` scenario closes the session mid-run and the
+// deferred close still runs after it.
+func TestClosingTwiceIsSafe(t *testing.T) {
+	s, err := startSession("cat", nil, t.TempDir(), filepath.Join(t.TempDir(), "screen.log"))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	s.close()
+	s.close()
+
+	waitFor(t, func() bool { return !s.alive() })
+}
+
+// A scenario that declares killAfter ends the session at that point, so the table
+// covers what the board does *after* the process is gone — the case an operator
+// closing a terminal produces, and where an unexplained `ended` was seen on a live
+// session during #851.
+func TestTheEndedScenarioKillsTheSessionMidRun(t *testing.T) {
+	home := t.TempDir()
+	go func() {
+		time.Sleep(10 * time.Millisecond) // the record appears once the session is up
+		writeRecord(t, home, "s.json", "s-ended", "busy")
+	}()
+	ended, ok := scenarioNamed("ended")
+	if !ok {
+		t.Fatal("no ended scenario")
+	}
+	if ended.killAfter == 0 {
+		t.Fatal("the ended scenario never ends the session")
+	}
+	ended.killAfter = 10 * time.Millisecond
+
+	obs, _, err := drive(ended, driveOpts{
+		home: home, cfg: &config.Config{ServerURL: "http://127.0.0.1:1"}, dir: t.TempDir(),
+		screens: t.TempDir(), bin: "cat", seconds: 1, every: 1, now: time.Now, waits: quickWaits,
+	})
+
+	if err != nil {
+		t.Fatalf("drive: %v", err)
+	}
+	if len(obs) < 2 {
+		t.Fatalf("observations = %d, want the run to continue past the kill", len(obs))
+	}
+}
+
+// Every scenario that exists must be runnable and described; a scenario with no
+// keys would start a session and type nothing into it.
+func TestEveryScenarioSaysWhatItProvokesAndTypesSomething(t *testing.T) {
+	for _, s := range scenarios {
+		if s.about == "" {
+			t.Errorf("scenario %q says nothing about what it provokes", s.name)
+		}
+		if len(s.keys) == 0 {
+			t.Errorf("scenario %q types nothing; it would spend a session on silence", s.name)
+		}
+	}
+}
