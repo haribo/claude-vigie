@@ -6,7 +6,9 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"sync"
 	"syscall"
+	"time"
 
 	"golang.org/x/sys/unix"
 )
@@ -17,6 +19,9 @@ type session struct {
 	cmd    *exec.Cmd
 	master *os.File
 	screen *os.File // everything the session painted, for reading afterwards
+	// once makes closing idempotent: a scenario that ends the session mid-run
+	// closes it, and the deferred close still runs afterwards.
+	once sync.Once
 }
 
 // startSession launches a program on a fresh pty in dir, writing the raw screen to
@@ -140,11 +145,40 @@ func (s *session) send(keys string) error {
 	return err
 }
 
+// close ends the session and **reaps it**. Signaling alone leaves a zombie: the
+// process is gone but its entry survives until someone waits on it, so a run that
+// ends several sessions leaves several behind — and `alive` would keep answering
+// yes, which is how this was found.
 func (s *session) close() {
-	_ = s.send("\x03") // interrupt whatever is running
-	if s.cmd.Process != nil {
-		_ = s.cmd.Process.Signal(syscall.SIGTERM)
+	s.once.Do(func() {
+		_ = s.send("\x03") // interrupt whatever is running
+		if s.cmd.Process != nil {
+			_ = s.cmd.Process.Signal(syscall.SIGTERM)
+		}
+		_ = s.master.Close() // unblocks drain, and gives the child EOF on its input
+		done := make(chan struct{})
+		go func() { _ = s.cmd.Wait(); close(done) }()
+		select {
+		case <-done:
+		case <-time.After(reapGrace):
+			if s.cmd.Process != nil {
+				_ = s.cmd.Process.Kill() // it declined to leave
+			}
+			<-done
+		}
+		_ = s.screen.Close()
+	})
+}
+
+// reapGrace is how long a session gets to exit on SIGTERM before it is killed. A
+// pause in tearing down a process, not evidence about anything.
+const reapGrace = 2 * time.Second
+
+// alive reports whether the session's process is still there. Used by the tests
+// that check a scenario ended it when it said it would.
+func (s *session) alive() bool {
+	if s.cmd.Process == nil {
+		return false
 	}
-	_ = s.master.Close()
-	_ = s.screen.Close()
+	return s.cmd.Process.Signal(syscall.Signal(0)) == nil
 }

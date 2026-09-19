@@ -57,6 +57,26 @@ type scenario struct {
 	name  string
 	about string
 	keys  []string
+	// permissionMode is what the session is launched with. It defaults to
+	// `bypassPermissions`, which is what keeps a scenario from stopping on an
+	// approval nobody is there to give — and is therefore exactly wrong for the one
+	// scenario whose subject *is* that approval.
+	permissionMode string
+	// killAfter ends the session mid-run, so what follows the end can be observed
+	// rather than only what precedes it. Zero leaves it running to the horizon.
+	killAfter time.Duration
+}
+
+// bypass is the default launch mode, and the one that shows a confirmation screen
+// at startup. A scenario that asks for another mode gets no such screen, and
+// sending the keys that answer it would type into the prompt instead.
+const bypass = "bypassPermissions"
+
+func (s scenario) mode() string {
+	if s.permissionMode == "" {
+		return bypass
+	}
+	return s.permissionMode
 }
 
 // scenarios are the cases that decide a status rule. Each names the state it is
@@ -91,7 +111,55 @@ var scenarios = []scenario{
 		about: "a session that answers and then rests — the control case",
 		keys:  []string{"Reply with the single word: ok"},
 	},
+	{
+		// The registry writing `status:"waiting"` with the question in `waitingFor`
+		// has been seen exactly once, by tools/capture (#817), and the server's
+		// `holdsWaiting` turns on it: a declared status clears a stale hook only
+		// because the registry is held to carry `waiting` of its own. That comment
+		// says as much — had the registry said `busy` during a prompt, the line would
+		// be the #508 regression rather than the #816 fix (#855).
+		name:           "waiting",
+		about:          "Claude asks the operator to approve a command and stops on the answer",
+		permissionMode: "default",
+		// A command Claude Code will not wave through. Read-only ones are
+		// auto-approved — `id -un` ran with no prompt at all on the first attempt —
+		// so this writes, which is what makes the approval appear.
+		keys: []string{"Use the Bash tool to run 'touch /tmp/drive-approval-probe'. Do not explain."},
+	},
+	{
+		// `compacting` is opened by the PreCompact hook and closed by the
+		// transcript's compact_boundary, and the 5-minute safety cap rests on an
+		// 87–168 s range measured once (#342, ADR-0008). `/compact` provokes it on
+		// demand instead of waiting for a context to fill (#855).
+		//
+		// The turns before it are not padding: `/compact` on a fresh session answers
+		// *"Not enough messages to compact"* and nothing happens. Measured.
+		name:  "compacting",
+		about: "the session compacts its context, a silent sub-state of an active turn",
+		keys: []string{
+			"Reply with the single word: one\r",
+			"Reply with the single word: two\r",
+			"Reply with the single word: three\r",
+			"/compact",
+		},
+	},
+	{
+		// The session is killed mid-run, so what the board does *after* the process
+		// is gone is on the same table as what it did before. Worth measuring beyond
+		// the happy path: during the #851 runs the board showed `ended` for about a
+		// minute on a session that was alive and busy, and nothing explains it yet.
+		name:      "ended",
+		about:     "the operator closes the terminal while the session is alive",
+		keys:      []string{"Reply with the single word: ok"},
+		killAfter: 30 * time.Second,
+	},
 }
+
+// Why there is no `error` scenario. `error` is a live Claude API failure
+// (429/529), and an API error is not ours to cause. A scenario that faked one
+// would measure our own fixture again, which is the habit this tool exists
+// against — so it is left to be caught opportunistically: run any scenario while
+// the platform is unwell and the table records it (#855).
 
 func scenarioNamed(name string) (scenario, bool) {
 	for _, s := range scenarios {
@@ -148,7 +216,7 @@ func run(args []string, out io.Writer, now func() time.Time) error {
 	}
 	obs, sid, err := drive(sc, driveOpts{
 		home: home, cfg: cfg, dir: workDir, screens: *screens,
-		bin: "claude", binArgs: []string{"--permission-mode", "bypassPermissions"},
+		bin: "claude", binArgs: []string{"--permission-mode", sc.mode()},
 		seconds: *seconds, every: *every, now: now,
 	})
 	if err != nil {
@@ -222,14 +290,17 @@ func drive(sc scenario, o driveOpts) ([]observation, string, error) {
 	defer s.close()
 
 	// The bypass-permissions screen blocks startup until someone answers it: the
-	// cursor starts on "No, exit", so this is Down then Enter.
+	// cursor starts on "No, exit", so this is Down then Enter. Only that mode shows
+	// it, and in any other these keys would be typed into the prompt instead.
 	time.Sleep(w.confirm)
-	if err := s.send("\x1b[B"); err != nil {
-		return nil, "", err
-	}
-	time.Sleep(w.confirm / 12)
-	if err := s.send("\r"); err != nil {
-		return nil, "", err
+	if sc.mode() == bypass {
+		if err := s.send("\x1b[B"); err != nil {
+			return nil, "", err
+		}
+		time.Sleep(w.confirm / 12)
+		if err := s.send("\r"); err != nil {
+			return nil, "", err
+		}
 	}
 	time.Sleep(w.boot)
 
@@ -251,10 +322,18 @@ func drive(sc scenario, o driveOpts) ([]observation, string, error) {
 
 	var obs []observation
 	start := o.now()
+	killed := sc.killAfter == 0
 	for {
 		elapsed := int(o.now().Sub(start).Seconds())
 		if elapsed > o.seconds {
 			break
+		}
+		if !killed && o.now().Sub(start) >= sc.killAfter {
+			// Deliberately the same end an operator's closed terminal gives: the
+			// process goes, and nothing tells vigie. What the board does next is the
+			// measurement.
+			s.close()
+			killed = true
 		}
 		status, detail := boardStatus(o.cfg, sid)
 		obs = append(obs, observation{
