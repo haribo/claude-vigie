@@ -55,6 +55,41 @@ in the operator's own currency, and vigie does not parse them.
 
 ---
 
+## 1bis. What a gauge's colour says
+
+**A gauge's colour states how soon the operator has to change what they are
+doing.** Green: nothing to think about. Amber: plan around it. Red: act now — pick
+a different model, or stop.
+
+**Amber from 50 %, red from 80 %**, in every client.
+
+Nothing said this until #844, and the two clients had drifted apart: the terminal
+used 50/80 while the browser had a single step at 60 % and no red at all. At 98 %
+the same limit was red in one and amber in the other — the colour that decides
+whether the operator reacts.
+
+**Why not the Ctx column's 60/85.** Ctx measures the same *kind* of thing, how
+full something is, and both clients already agree on 60/85 for it
+(`session-status.md`). Usage does not inherit those levels, because the two fills
+do not carry the same consequence:
+
+- **A context at 85 % resolves itself.** A compaction frees it in about 90–170 s
+  (ADR-0008) and the session carries on. The operator is being told what is about
+  to happen, not asked for anything.
+- **A usage limit at 85 % resolves only by waiting**, possibly for days, and
+  nothing the operator does moves it. What is left to them is a choice they have
+  to make *before* it fills — a smaller model, or stopping — and a warning that
+  arrives at the same level as Ctx's arrives too late to make it.
+
+So the earlier thresholds are the point, not an inconsistency: the same fill
+demands an earlier warning when it cannot be undone.
+
+**Severity from the endpoint is still not used** (§ 1). The colour comes from the
+percentage, which is the figure on screen; grading it from a second source would
+let the bar and its colour disagree.
+
+---
+
 ## 2. One fetcher for the whole fleet
 
 Usage is an account-wide fact, identical on every machine — so exactly one

@@ -59,6 +59,29 @@ func renderUsageStrip(u api.UsageReport) string {
 		compactGauge(strings.ToLower(u.Scoped.Label), u.Scoped.Pct, u.Scoped.Reset)
 }
 
+// Amber from 50 %, red from 80 % — the levels docs/design/usage.md § 1bis fixes
+// for every client, and the browser's `usageLevel` is the same rule in lib.js.
+//
+// Not the Ctx column's 60/85 (context.go): a context at 85 % frees itself in a
+// compaction and the session carries on, while a usage limit at 85 % clears only
+// by waiting, possibly for days. The choice the operator still has — a smaller
+// model, or stopping — has to be offered before it fills (#844).
+const (
+	usageAmberFrom = 50.0
+	usageRedFrom   = 80.0
+)
+
+func usageColor(pct float64) lipgloss.AdaptiveColor {
+	switch {
+	case pct >= usageRedFrom:
+		return cRed
+	case pct >= usageAmberFrom:
+		return cAmber
+	default:
+		return cGreen
+	}
+}
+
 func compactGauge(label string, pct float64, reset string) string {
 	const width = 10
 	filled := int(pct / 100 * float64(width))
@@ -68,13 +91,7 @@ func compactGauge(label string, pct float64, reset string) string {
 	case filled < 0:
 		filled = 0
 	}
-	color := cGreen
-	switch {
-	case pct >= 80:
-		color = cRed
-	case pct >= 50:
-		color = cAmber
-	}
+	color := usageColor(pct)
 	bar := lipgloss.NewStyle().Foreground(color).Render(strings.Repeat("▓", filled)) +
 		dimStyle.Render(strings.Repeat("░", width-filled))
 	// The reset stays tight against the percentage — it qualifies that figure, and

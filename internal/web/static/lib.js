@@ -68,6 +68,21 @@ export function relResetHint(rfc) {
   if (d) return `resets in ${d}d ${h}h`; if (h) return `resets in ${h}h ${m}m`; return `resets in ${m}m`;
 }
 
+// usageLevel is a usage gauge's color band: "" below 50 %, "warn" from 50 %,
+// "hot" from 80 % (docs/design/usage.md § 1bis).
+//
+// Not the Ctx column's 60/85, deliberately. A context at 85 % frees itself in a
+// compaction and the session carries on; a usage limit at 85 % clears only by
+// waiting, possibly for days, and nothing the operator does moves it. The choice
+// they still have — a smaller model, or stopping — has to be offered before it
+// fills, so the warning comes earlier.
+export function usageLevel(pct) {
+  const p = Number(pct) || 0;
+  if (p >= 80) return "hot";
+  if (p >= 50) return "warn";
+  return "";
+}
+
 export const totalTokens = (u) => (u.input_tokens || 0) + (u.output_tokens || 0) + (u.cache_creation_tokens || 0) + (u.cache_read_tokens || 0);
 
 export function sparkSVG(data, w = 72, h = 18) {
