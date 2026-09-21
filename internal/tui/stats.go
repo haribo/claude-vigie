@@ -158,19 +158,58 @@ func bucketStats(daily []api.DailyStat, p period) []statBucket {
 	return out
 }
 
-// statModels returns the distinct models present, sorted, for a stable legend
-// and stacking order.
-func statModels(daily []api.DailyStat) []string {
+// statModels returns the models the chart actually draws, sorted: those carrying
+// at least one token in the buckets on screen.
+//
+// It reads the rendered buckets, not the whole history, and that is the fix for
+// #845. Read from history it named every model ever seen — including, under the
+// `day` period, a bucket whose only rows were five weeks old — while the bars were
+// truncated to the period. Six legend entries, four models drawn.
+//
+// The token test is the second half. An empty-model bucket is real in the store —
+// it means "not yet known" and carries status time (docs/design/token-rollup.md)
+// — but it can never carry a token, so in a chart of tokens it is a legend entry
+// for a quantity it cannot have. `renderStackBar` already skips a zero; this
+// applies the same test one place earlier.
+func statModels(buckets []statBucket) []string {
 	seen := map[string]bool{}
 	var out []string
-	for _, d := range daily {
-		if !seen[d.Model] {
-			seen[d.Model] = true
-			out = append(out, d.Model)
+	for _, b := range buckets {
+		for mdl, v := range b.tokens {
+			if v == 0 || seen[mdl] {
+				continue
+			}
+			seen[mdl] = true
+			out = append(out, mdl)
 		}
 	}
 	sort.Strings(out)
 	return out
+}
+
+// colorForModel is a model's color, fixed by its position among every model in the
+// history rather than among the ones currently drawn.
+//
+// Otherwise a model changes color when the period changes, because filtering the
+// legend (above) shifts every index after the one removed. The palette is what an
+// operator carries from one screen to the next, so it is keyed on something the
+// period does not move.
+func colorForModel(daily []api.DailyStat, mdl string) lipgloss.AdaptiveColor {
+	seen := map[string]bool{}
+	var all []string
+	for _, d := range daily {
+		if !seen[d.Model] {
+			seen[d.Model] = true
+			all = append(all, d.Model)
+		}
+	}
+	sort.Strings(all)
+	for i, m := range all {
+		if m == mdl {
+			return modelColor(i)
+		}
+	}
+	return modelColor(0)
 }
 
 var statPalette = []lipgloss.AdaptiveColor{cAccent2, cAccent, cGreen, cAmber, cRed}
@@ -228,7 +267,7 @@ func (m model) renderStats() string {
 	}
 
 	buckets := bucketStats(daily, m.stat.period)
-	models := statModels(daily)
+	models := statModels(buckets)
 
 	var totTok, totWork, totWait, totIdle int64
 	waitSeries := make([]int, 0, len(buckets))
@@ -258,13 +297,16 @@ func (m model) renderStats() string {
 	for i, mdl := range models {
 		name := modelinfo.Short(mdl)
 		if name == "" {
+			// Unreachable while the store's guarantee holds — an unknown model implies
+			// no tokens, and a model with no tokens is not in `models`. Kept so that if
+			// it ever stops holding, the row shows rather than a blank swatch.
 			name = "—"
 		}
-		legend[i] = lipgloss.NewStyle().Foreground(modelColor(i)).Render("■ ") + dimStyle.Render(name)
+		legend[i] = lipgloss.NewStyle().Foreground(colorForModel(daily, mdl)).Render("■ ") + dimStyle.Render(name)
 	}
 	b.WriteString(strings.Join(legend, "  ") + "\n")
 	for _, bk := range buckets {
-		b.WriteString(dimStyle.Render(pad(bk.label, 8)) + renderStackBar(bk, models, maxTot) +
+		b.WriteString(dimStyle.Render(pad(bk.label, 8)) + renderStackBar(bk, models, daily, maxTot) +
 			"  " + humanizeTokens(bk.total) + "\n")
 	}
 	b.WriteString("\n")
@@ -282,14 +324,14 @@ func (m model) renderStats() string {
 
 const statBarWidth = 26
 
-func renderStackBar(bk statBucket, models []string, maxTot int64) string {
+func renderStackBar(bk statBucket, models []string, daily []api.DailyStat, maxTot int64) string {
 	barLen := int(bk.total * int64(statBarWidth) / maxTot)
 	if bk.total > 0 && barLen == 0 {
 		barLen = 1
 	}
 	var sb strings.Builder
 	used := 0
-	for i, mdl := range models {
+	for _, mdl := range models {
 		v := bk.tokens[mdl]
 		if v == 0 {
 			continue
@@ -304,7 +346,7 @@ func renderStackBar(bk statBucket, models []string, maxTot int64) string {
 		if n <= 0 {
 			continue
 		}
-		sb.WriteString(lipgloss.NewStyle().Foreground(modelColor(i)).Render(strings.Repeat("█", n)))
+		sb.WriteString(lipgloss.NewStyle().Foreground(colorForModel(daily, mdl)).Render(strings.Repeat("█", n)))
 		used += n
 	}
 	if used < statBarWidth {
