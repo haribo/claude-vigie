@@ -1,6 +1,11 @@
 # Build artifacts
 /bin/
 /dist/
+# `go build ./tools/<name>` drops its binary in the working directory, named after
+# the command — and a tool binary committed once is a tool binary committed again.
+/capture
+/drive
+/residual
 
 # Local dev environment (dev-fleet-* recipes)
 /.dev/

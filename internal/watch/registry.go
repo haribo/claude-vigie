@@ -96,7 +96,13 @@ var registryStatuses = map[string]string{
 	"waiting": "waiting",
 	"busy":    "working",
 	"idle":    "idle",
-	"shell":   "idle", // a `!` prompt: alive and producing nothing (#280)
+	// `shell` says a shell is running *for* Claude — work in progress. #255 read it
+	// as the operator at a `!` prompt and mapped it to `idle`; measured on real
+	// sessions (v2.1.267), that operator reports `busy`, and `shell` appears while a
+	// Monitor's command runs. The registry gives both edges — it enters `shell` when
+	// the command starts and leaves it when the command ends — so nothing has to be
+	// inferred to close it (#851, ADR-0015). DETAIL keeps the word (#280).
+	"shell": "working",
 }
 
 // mapRegistryStatus maps a registry status onto a vigie status, reading an

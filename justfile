@@ -281,3 +281,18 @@ capture out args="":
 [doc("Measure the open-background-work residual over the local corpus")]
 residual args="":
     go run ./tools/residual {{args}}
+
+# Drive a real Claude Code session on a pty and print what Claude Code's own
+# registry says next to what vigie shows. It answers the question no fixture can:
+# what Claude Code actually does, before a rule is written about it. `shell` was
+# read backwards for six weeks and four fixes until one run of this (#851, #853).
+#
+# A development instrument: it needs credentials, spends tokens, and is not
+# deterministic — so it is not in CI. Measure with it, then freeze what it showed
+# into test/replay.
+#
+#   just drive monitor
+#   just drive bang "-seconds 200"
+[doc("Drive a real Claude session and compare Claude Code's status with vigie's")]
+drive scenario args="":
+    go run ./tools/drive -scenario={{scenario}} {{args}}
