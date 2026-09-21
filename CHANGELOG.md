@@ -14,6 +14,9 @@ file is the single source of truth, not a second narrative.
 - The Stats tab's token chart no longer names models in its legend that it draws
   nowhere. The legend covered the whole history while the bars covered the chosen
   period, so a model last seen weeks ago was still listed (#845).
+- A usage gauge now changes colour at the same level in the terminal and the
+  browser: amber from 50 %, red from 80 %. The browser had one step and no red, so
+  a limit at 98 % looked worth planning around rather than acting on (#844).
 
 ## [0.15.1] - 2026-09-21
 

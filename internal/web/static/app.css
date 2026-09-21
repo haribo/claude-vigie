@@ -230,6 +230,9 @@ td.dim { color: var(--muted); } td.faint { color: var(--faint); }
 .gauge .track { width: 120px; height: 5px; border-radius: 3px; background: var(--surface-2); overflow: hidden; }
 .gauge .track i { display: block; height: 100%; border-radius: 3px; background: var(--working); }
 .gauge .track.warn i { background: var(--waiting); }
+/* Red from 80 %: the limit is about to stop the work, and only a different model
+   or stopping changes that (docs/design/usage.md § 1bis, #844). */
+.gauge .track.hot i { background: var(--error); }
 .gauge .pct { font-weight: 600; font-variant-numeric: tabular-nums; min-width: 34px; }
 .gauge .rst { color: var(--faint); font-size: 10.5px; }
 .botbar .push { flex: 1; }
