@@ -9,6 +9,13 @@ file is the single source of truth, not a second narrative.
 
 ## [Unreleased]
 
+### Added
+
+- `vigied stats-repair` can now fold a daily bucket into another model's
+  (`-into`) or remove it (`-delete`), not only rewrite its token figure. A bucket
+  that is not a model — Claude Code's `<synthetic>` marker — could otherwise never
+  be cleared, and its tokens never returned to the model that earned them (#846).
+
 ### Fixed
 
 - The Stats tab's token chart no longer names models in its legend that it draws
