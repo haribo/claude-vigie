@@ -177,15 +177,31 @@ Skipping the rollup instead would discard the status time for no gain.
 
 ## 7. Repairing a poisoned row
 
-Since a day cannot be recomputed, correction is a deliberate operator act:
+Since a day cannot be recomputed, correction is a deliberate operator act. Three
+operations, one at a time:
 
 ```
 vigied stats-repair -db <path> -day 2026-08-12 -model claude-opus-4-8 -output-tokens N
+vigied stats-repair -db <path> -day 2026-08-05 -model '<synthetic>' -into claude-opus-4-8
+vigied stats-repair -db <path> -day 2026-08-15 -model '<synthetic>' -delete
 ```
 
-It sets one `(day, model)` row's output tokens to a stated value, prints what it
-replaced, and touches nothing else. There is no automatic detection: a large day is
-not, by itself, wrong.
+Each acts on one `(day, model)` bucket, prints what it replaced, and touches
+nothing else. There is no automatic detection: a large day is not, by itself,
+wrong, and neither is an unfamiliar bucket name.
+
+**`-into` is the one a bucket that is not a model usually needs** (#846). Zeroing
+its tokens leaves the row, its status seconds and its entry in the chart's legend,
+and it discards output that a real model produced — 12 879 tokens on 2026-08-05 in
+the local corpus. The fold adds every figure to the destination and removes the
+source in one transaction: a fold that added and then failed to remove would
+double-count, which is the one error this table can never recover from.
+
+**`-delete` is for a bucket with nothing to return.** It throws the figures away,
+so it is right only when there is no model they belong to.
+
+**Folding a bucket into itself is refused** rather than performed. It would add
+each figure to itself, and nothing here can be recomputed to undo it.
 
 ## 8. Consequences
 
