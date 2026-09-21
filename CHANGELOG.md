@@ -9,6 +9,12 @@ file is the single source of truth, not a second narrative.
 
 ## [Unreleased]
 
+### Fixed
+
+- The Stats tab's token chart no longer names models in its legend that it draws
+  nowhere. The legend covered the whole history while the bars covered the chosen
+  period, so a model last seen weeks ago was still listed (#845).
+
 ## [0.15.1] - 2026-09-21
 
 ### Fixed
