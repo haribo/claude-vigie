@@ -47,7 +47,7 @@ A fleet is *N* client machines all reporting to one daemon.
 |-----------|--------|------------|------|
 | Server | `vigied` | `serve` | HTTP + SSE API, SQLite storage, session pruning, platform-status polling |
 | Token | `vigied` | `token` | Print the shared auth token (to connect clients). It only reads: minting one in answer to a question handed the operator a secret no running server had heard of (#657) |
-| Stats repair | `vigied` | `stats-repair` | Correct one day's output-token figure in the analytics table; daily stats are never recomputed, so a value corrupted by an earlier defect can only be set deliberately ([design](design/token-rollup.md)) |
+| Stats repair | `vigied` | `stats-repair` | Correct one `(day, model)` bucket in the analytics table: rewrite its output-token figure, fold it into another model's bucket, or remove it. Daily stats are never recomputed, so anything corrupted by an earlier defect can only be corrected deliberately ([design](design/token-rollup.md)) |
 | Configuration | `vigie` | `init` | Asks for the server URL, the token and the machine name, checks the connection, and writes the client config — nothing else. The watcher installs the hooks and the call skill ([ADR-0009](adr/0009-watcher-managed-hooks.md)) |
 | Hooks | `vigie` | `hooks` | `install` / `uninstall` the reporting hooks and the call skill by hand, for a machine that runs no watcher |
 | Reporter | `vigie` | `report` | Invoked by Claude Code hooks; sends one event per hook |
