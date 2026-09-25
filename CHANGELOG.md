@@ -9,6 +9,24 @@ file is the single source of truth, not a second narrative.
 
 ## [Unreleased]
 
+## [0.16.0] - 2026-09-24
+
+### Added
+
+- `vigied stats-repair` can now fold a daily bucket into another model's
+  (`-into`) or remove it (`-delete`), not only rewrite its token figure. A bucket
+  that is not a model — Claude Code's `<synthetic>` marker — could otherwise never
+  be cleared, and its tokens never returned to the model that earned them (#846).
+
+### Fixed
+
+- The Stats tab's token chart no longer names models in its legend that it draws
+  nowhere. The legend covered the whole history while the bars covered the chosen
+  period, so a model last seen weeks ago was still listed (#845).
+- A usage gauge now changes colour at the same level in the terminal and the
+  browser: amber from 50 %, red from 80 %. The browser had one step and no red, so
+  a limit at 98 % looked worth planning around rather than acting on (#844).
+
 ## [0.15.1] - 2026-09-21
 
 ### Fixed
@@ -837,7 +855,8 @@ across machines — it reads and reports session state; it never drives a sessio
 - The API binds `127.0.0.1` by default; every `/api/*` route is behind a
   constant-time shared-token check; request bodies are size-capped.
 
-[Unreleased]: https://github.com/haribo/claude-vigie/compare/v0.15.1...HEAD
+[Unreleased]: https://github.com/haribo/claude-vigie/compare/v0.16.0...HEAD
+[0.16.0]: https://github.com/haribo/claude-vigie/compare/v0.15.1...v0.16.0
 [0.15.1]: https://github.com/haribo/claude-vigie/compare/v0.15.0...v0.15.1
 [0.15.0]: https://github.com/haribo/claude-vigie/compare/v0.14.3...v0.15.0
 [0.14.3]: https://github.com/haribo/claude-vigie/compare/v0.14.2...v0.14.3

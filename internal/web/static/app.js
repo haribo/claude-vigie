@@ -7,7 +7,7 @@
 
 import {
   esc, dash, trim, hasCall, detailText, humanTokens, ageSec, relAge, relResetHint,
-  totalTokens, sparkSVG, migrateKeys, fullColOrder, colHidden, rank,
+  totalTokens, sparkSVG, migrateKeys, fullColOrder, colHidden, rank, usageLevel,
   adoptLegacyKey, needsAttention, attentionCount, streamIsSilent, REFRESH_MS,
   readWatcher, fleetAlarm, fleetAlarmDetail, watcherCell,
   matchesFilter, GROUP_MODES, groupSessions, contextKnown, contextPct, contextCell, migrateV1Columns,
@@ -493,7 +493,7 @@ function renderBottom() {
   $("botbar").hidden = false;
   const g = (lbl, pct, reset) => {
     const p = Math.max(0, Math.min(100, Math.round((pct || 0))));
-    return `<div class="gauge"><span class="lbl">${lbl}</span><span class="track ${p >= 60 ? "warn" : ""}"><i data-w="${p}"></i></span><span class="pct">${p}%</span><span class="rst">${reset ? esc(relResetHint(reset)) : ""}</span></div>`;
+    return `<div class="gauge"><span class="lbl">${lbl}</span><span class="track ${usageLevel(p)}"><i data-w="${p}"></i></span><span class="pct">${p}%</span><span class="rst">${reset ? esc(relResetHint(reset)) : ""}</span></div>`;
   };
   const u = usage || {};
   const [pcls, ptxt] = platformClass(platform);

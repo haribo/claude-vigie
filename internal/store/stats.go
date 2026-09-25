@@ -144,3 +144,89 @@ func (s *Store) SetDailyTokens(ctx context.Context, day, model string, tokens in
 	}
 	return before, existed, nil
 }
+
+// DeleteDailyBucket removes one (day, model) row and returns what it held.
+//
+// For a bucket that is not a model at all: Claude Code writes bracketed markers
+// like `<synthetic>` in an assistant line's `model` field for lines it generated
+// itself, and one rolled up before #433 filtered them is frozen here — the table
+// is never recomputed. Setting its tokens to zero, which is all SetDailyTokens can
+// do, leaves the row, its status seconds and its place in the chart's legend
+// (#846).
+//
+// Deliberate surgery, like its neighbors: nothing calls it on its own, because
+// deciding that a bucket is not a model is a judgement no rule here can make.
+func (s *Store) DeleteDailyBucket(ctx context.Context, day, model string) (DailyStat, bool, error) {
+	before, existed, err := readDailyBucket(ctx, s.db, day, model)
+	if err != nil || !existed {
+		return before, existed, err
+	}
+	if _, err := s.db.ExecContext(ctx,
+		`DELETE FROM stats_daily WHERE day = ? AND model = ?`, day, model); err != nil {
+		return before, true, fmt.Errorf("deleting daily bucket: %w", err)
+	}
+	return before, true, nil
+}
+
+// MoveDailyBucket folds one (day, model) bucket into another model's bucket for
+// the same day, adding its figures to whatever is already there, and removes the
+// source.
+//
+// This is what a poisoned bucket usually needs rather than deletion: the tokens in
+// it are **real output**, produced by whichever model was running — 12 879 of them
+// on 2026-08-05 in the local corpus. Deleting them would discard a true figure to
+// fix a wrong label; only the operator can say which model earned them (#846).
+//
+// One transaction: a fold that added to the destination and then failed to remove
+// the source would double-count, which is the one error this table can never
+// recover from.
+func (s *Store) MoveDailyBucket(ctx context.Context, day, from, to string) (DailyStat, bool, error) {
+	if from == to {
+		return DailyStat{}, false, fmt.Errorf("moving %q into itself would double its figures", from)
+	}
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return DailyStat{}, false, fmt.Errorf("opening a transaction: %w", err)
+	}
+	defer func() { _ = tx.Rollback() }()
+
+	before, existed, err := readDailyBucket(ctx, tx, day, from)
+	if err != nil || !existed {
+		return before, existed, err
+	}
+	if _, err := tx.ExecContext(ctx,
+		`INSERT INTO stats_daily (day, model, output_tokens, working_seconds, waiting_seconds, idle_seconds)
+		 VALUES (?, ?, ?, ?, ?, ?)
+		 ON CONFLICT(day, model) DO UPDATE SET
+		   output_tokens   = output_tokens   + excluded.output_tokens,
+		   working_seconds = working_seconds + excluded.working_seconds,
+		   waiting_seconds = waiting_seconds + excluded.waiting_seconds,
+		   idle_seconds    = idle_seconds    + excluded.idle_seconds`,
+		day, to, before.OutputTokens, before.WorkingSeconds, before.WaitingSeconds, before.IdleSeconds); err != nil {
+		return before, true, fmt.Errorf("folding into %q: %w", to, err)
+	}
+	if _, err := tx.ExecContext(ctx,
+		`DELETE FROM stats_daily WHERE day = ? AND model = ?`, day, from); err != nil {
+		return before, true, fmt.Errorf("removing %q: %w", from, err)
+	}
+	if err := tx.Commit(); err != nil {
+		return before, true, fmt.Errorf("committing the move: %w", err)
+	}
+	return before, true, nil
+}
+
+// readDailyBucket returns a bucket's figures, and whether it exists at all.
+func readDailyBucket(ctx context.Context, db querier, day, model string) (DailyStat, bool, error) {
+	d := DailyStat{Day: day, Model: model}
+	err := db.QueryRowContext(ctx,
+		`SELECT output_tokens, working_seconds, waiting_seconds, idle_seconds
+		 FROM stats_daily WHERE day = ? AND model = ?`, day, model).
+		Scan(&d.OutputTokens, &d.WorkingSeconds, &d.WaitingSeconds, &d.IdleSeconds)
+	if errors.Is(err, sql.ErrNoRows) {
+		return d, false, nil
+	}
+	if err != nil {
+		return d, false, fmt.Errorf("reading daily bucket: %w", err)
+	}
+	return d, true, nil
+}
