@@ -157,6 +157,51 @@ launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/local.vigie.watch.plist
 launchctl kickstart -k gui/$(id -u)/local.vigie.watch
 ```
 
+The server, when it runs on the same Mac —
+`~/Library/LaunchAgents/local.vigie.server.plist`. A token set through
+`VIGIE_TOKEN` is not persisted (see `resolveToken`), so the agent must carry it
+on every start, or the daemon serves on another one and every machine is refused.
+The plist then holds a secret: make it `chmod 600`, as the client config is.
+
+```xml
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key>
+  <string>local.vigie.server</string>
+  <key>ProgramArguments</key>
+  <array>
+    <string>/Users/you/.local/bin/vigied</string>
+    <string>serve</string>
+    <string>--addr</string>
+    <string>127.0.0.1:8080</string>
+    <string>--db</string>
+    <string>/Users/you/.local/share/vigie/vigie.db</string>
+  </array>
+  <key>EnvironmentVariables</key>
+  <dict>
+    <key>VIGIE_TOKEN</key>
+    <string>the token your machines are configured with</string>
+  </dict>
+  <key>RunAtLoad</key>
+  <true/>
+  <key>KeepAlive</key>
+  <true/>
+  <key>StandardErrorPath</key>
+  <string>/Users/you/Library/Logs/vigied.log</string>
+</dict>
+</plist>
+```
+
+```bash
+chmod 600 ~/Library/LaunchAgents/local.vigie.server.plist
+launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/local.vigie.server.plist
+```
+
+Load the server before the watcher. To stop either for good:
+`launchctl bootout gui/$(id -u)/local.vigie.server` (or `.watch`).
+
 A LaunchAgent lives in your login session, so — unlike a lingering systemd
 `--user` unit — it runs only while you are logged in. That matches what it
 watches: Claude Code sessions in that same login.
