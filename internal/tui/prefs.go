@@ -11,6 +11,7 @@ import (
 	"github.com/pelletier/go-toml/v2"
 
 	"github.com/haribo/claude-vigie/internal/api"
+	"github.com/haribo/claude-vigie/internal/config"
 )
 
 // prefs holds the operator's TUI display preferences.
@@ -69,7 +70,7 @@ type prefsFile struct {
 }
 
 func prefsPath() (string, error) {
-	dir, err := os.UserConfigDir()
+	dir, err := config.UserDir()
 	if err != nil {
 		return "", err
 	}
@@ -214,7 +215,7 @@ func loadPrefs() prefs {
 	if os.IsNotExist(err) {
 		// Read-fallback: honor a tui.toml written under the pre-rename
 		// ~/.config/claude-fleet directory; otherwise create a commented default.
-		if dir, dErr := os.UserConfigDir(); dErr == nil {
+		if dir, dErr := config.UserDir(); dErr == nil {
 			if d2, e2 := os.ReadFile(filepath.Join(dir, "claude-fleet", "tui.toml")); e2 == nil {
 				data = d2
 			}

@@ -30,9 +30,9 @@ type Config struct {
 	Machine string `toml:"machine" json:"machine"`
 }
 
-// dir returns the vigie config directory, honoring XDG_CONFIG_HOME on Linux.
+// dir returns the vigie config directory, honoring XDG_CONFIG_HOME.
 func dir() (string, error) {
-	d, err := os.UserConfigDir()
+	d, err := UserDir()
 	if err != nil {
 		return "", fmt.Errorf("resolving user config dir: %w", err)
 	}
@@ -42,7 +42,7 @@ func dir() (string, error) {
 // legacyDirPath returns a path under the pre-rename ~/.config/claude-fleet
 // directory, so a config written before the vigie rename is still read.
 func legacyDirPath(name string) (string, error) {
-	d, err := os.UserConfigDir()
+	d, err := UserDir()
 	if err != nil {
 		return "", fmt.Errorf("resolving user config dir: %w", err)
 	}
