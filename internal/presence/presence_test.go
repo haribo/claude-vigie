@@ -5,6 +5,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strconv"
 	"strings"
 	"testing"
@@ -92,6 +93,9 @@ func TestPathForRejectsTraversal(t *testing.T) {
 }
 
 func TestReadStatAndAlive(t *testing.T) {
+	if runtime.GOOS != "linux" {
+		t.Skip("the /proc reader; macOS is covered by proc_darwin_test.go (ADR-0018)")
+	}
 	self := os.Getpid()
 	comm, ppid, start, err := readStat(self)
 	if err != nil {

@@ -8,41 +8,48 @@ import (
 	"strings"
 )
 
-// maxDepth bounds the ancestor walk, so a broken /proc chain cannot loop.
+// maxDepth bounds the ancestor walk, so a broken process chain cannot loop.
 const maxDepth = 20
 
-// procRoot is where the process table is read from. It is a variable for one
-// reason: the interesting case of `Status` is a /proc that *cannot be read*, and
-// a test cannot arrange that on the real one. Nothing outside tests assigns it.
-var procRoot = "/proc"
+// process is what the ancestor walk and the liveness check need to know about
+// one pid. How each field is read is per platform (ADR-0006 on Linux, ADR-0018
+// on macOS); what they mean is not.
+type process struct {
+	name  string // what Claude Code is recognized by: comm on Linux, argv[0]'s base on macOS
+	ppid  int
+	start uint64 // a pid-reuse guard; its unit is the platform's, compared only on the same machine
+}
+
+// claudeName is the name the Claude Code process carries on every platform.
+const claudeName = "claude"
 
 // ResolveClaude walks the ancestor chain from the current process up to the
 // nearest "claude" process and returns its mapping. It is meant to be called
 // from a hook (a descendant of claude); it errors if no claude ancestor is
-// found (e.g. when not run under Claude Code, or off Linux).
+// found (e.g. when not run under Claude Code, or on an unsupported platform).
 func ResolveClaude() (Mapping, error) {
 	pid := os.Getpid()
 	for i := 0; i < maxDepth; i++ {
-		comm, ppid, start, err := readStat(pid)
+		p, err := inspect(pid)
 		if err != nil {
 			return Mapping{}, err
 		}
-		if comm == "claude" {
-			return Mapping{PID: pid, StartTime: start}, nil
+		if p.name == claudeName {
+			return Mapping{PID: pid, StartTime: p.start}, nil
 		}
-		if ppid <= 1 {
+		if p.ppid <= 1 {
 			break
 		}
-		pid = ppid
+		pid = p.ppid
 	}
 	return Mapping{}, errors.New("no claude ancestor process found")
 }
 
-// Liveness is what /proc can say about a mapped process. The third value is the
-// point: reading /proc can fail for reasons that say nothing about the process —
-// a hardened `hidepid`, a container or namespace that does not expose the pid —
-// and treating those as death declared a whole fleet ended at the next scan
-// (#663).
+// Liveness is what the process table can say about a mapped process. The third
+// value is the point: reading it can fail for reasons that say nothing about the
+// process — a hardened `hidepid`, a container or namespace that does not expose
+// the pid — and treating those as death declared a whole fleet ended at the next
+// scan (#663).
 //
 // ADR-0006 promises a fallback where presence is unavailable, and it holds for
 // the path that goes through capture: nothing is written, so nothing is read.
@@ -51,28 +58,28 @@ func ResolveClaude() (Mapping, error) {
 type Liveness int
 
 const (
-	// Unknown: /proc could not be read. It is not evidence of anything.
+	// Unknown: the process table could not be read. It is not evidence of anything.
 	Unknown Liveness = iota
 	// Live: present, with the start time the mapping recorded.
 	Live
-	// Gone: /proc says there is no such process — or the pid was reused, which
-	// means the mapped one is gone just the same.
+	// Gone: the process table says there is no such process — or the pid was
+	// reused, which means the mapped one is gone just the same.
 	Gone
 )
 
-// Status reports what /proc can say about the mapped process, distinguishing a
-// process that is absent from one that could not be looked at.
+// Status reports what the process table can say about the mapped process,
+// distinguishing a process that is absent from one that could not be looked at.
 func Status(m Mapping) Liveness {
-	_, _, start, err := readStat(m.PID)
+	p, err := inspect(m.PID)
 	switch {
-	case err == nil && start == m.StartTime:
+	case err == nil && p.start == m.StartTime:
 		return Live
 	case err == nil:
 		return Gone // the pid is in use by a younger process: ours ended
-	case errors.Is(err, os.ErrNotExist):
+	case absent(err):
 		return Gone
 	default:
-		return Unknown // permissions, a namespace, an unparsable file
+		return Unknown // permissions, a namespace, an unparsable record, an unsupported platform
 	}
 }
 
@@ -80,62 +87,18 @@ func Status(m Mapping) Liveness {
 // Callers that must not mistake "could not look" for "not there" ask Status.
 func Alive(m Mapping) bool { return Status(m) == Live }
 
-// commMax is the kernel's TASK_COMM_LEN-1: /proc/<pid>/stat's comm is truncated
-// to 15 bytes, so a binary name is matched against its first 15 bytes.
-const commMax = 15
-
-// WatcherRunning reports whether another process on this machine is running
-// binName's `watch` subcommand — a local liveness signal independent of the
-// server heartbeat (#371). It scans /proc for a process (other than selfPID)
-// whose comm matches binName (truncated to the kernel's 15-byte limit) and whose
-// argv contains a bare "watch" token. Linux only: it returns an error if /proc
-// cannot be read (e.g. off Linux), so callers can fall back rather than treat an
-// unreadable /proc as "not running".
-func WatcherRunning(binName string, selfPID int) (bool, error) {
-	want := binName
-	if len(want) > commMax {
-		want = want[:commMax]
-	}
-	entries, err := os.ReadDir("/proc")
-	if err != nil {
-		return false, fmt.Errorf("reading /proc: %w", err)
-	}
-	for _, e := range entries {
-		pid, err := strconv.Atoi(e.Name())
-		if err != nil || pid == selfPID {
-			continue // not a pid dir, or ourselves
-		}
-		comm, _, _, err := readStat(pid)
-		if err != nil || comm != want {
-			continue // process vanished mid-scan, or a different binary
-		}
-		if cmdlineHasArg(pid, "watch") {
-			return true, nil
-		}
-	}
-	return false, nil
-}
-
-// cmdlineHasArg reports whether /proc/<pid>/cmdline contains arg as a whole
-// NUL-separated token. A read failure (the process may exit mid-scan) is false,
-// not an error — the caller only needs a positive match.
-func cmdlineHasArg(pid int, arg string) bool {
-	data, err := os.ReadFile(fmt.Sprintf("/proc/%d/cmdline", pid))
-	if err != nil {
-		return false
-	}
-	for _, tok := range strings.Split(string(data), "\x00") {
-		if tok == arg {
-			return true
-		}
-	}
-	return false
-}
+// procRoot is where the Linux process table is read from. It is a variable for
+// one reason: the interesting case of `Status` is a /proc that *cannot be read*,
+// and a test cannot arrange that on the real one. Nothing outside tests assigns it.
+var procRoot = "/proc"
 
 // readStat parses /proc/<pid>/stat, returning the process comm (field 2), its
 // parent pid (field 4), and its start time (field 22). comm is parenthesized
 // and may itself contain spaces and parentheses, so the numeric fields are read
 // only after the final ')'.
+//
+// It is the Linux reader, but it is only file parsing and builds everywhere, so
+// the tests that exercise it against a fake /proc compile on every platform.
 func readStat(pid int) (comm string, ppid int, starttime uint64, err error) {
 	data, err := os.ReadFile(fmt.Sprintf("%s/%d/stat", procRoot, pid))
 	if err != nil {
