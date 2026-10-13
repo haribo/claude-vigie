@@ -5,7 +5,6 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
-	"strconv"
 	"strings"
 
 	"github.com/haribo/claude-vigie/internal/presence"
@@ -20,7 +19,7 @@ type sessionRecord struct {
 	Status     string // busy | shell | idle | waiting (Claude's own enum)
 	WaitingFor string // reason when Status == "waiting" (a permission/dialog)
 	PID        int
-	ProcStart  uint64 // /proc start time (clock ticks) — a pid-reuse guard
+	ProcStart  uint64 // the process start time in presence's unit — a pid-reuse guard
 }
 
 // readRegistry reads Claude Code's session registry and returns the record per
@@ -55,7 +54,7 @@ func readRegistry() map[string]sessionRecord {
 		if err := json.Unmarshal(data, &raw); err != nil || raw.SessionID == "" {
 			continue
 		}
-		ps, _ := strconv.ParseUint(raw.ProcStart, 10, 64)
+		ps := presence.ParseProcStart(raw.ProcStart)
 		m[raw.SessionID] = sessionRecord{
 			SessionID: raw.SessionID, Status: raw.Status, WaitingFor: raw.WaitingFor,
 			PID: raw.PID, ProcStart: ps,

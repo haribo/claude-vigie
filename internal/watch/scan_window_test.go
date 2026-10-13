@@ -101,7 +101,7 @@ func TestARegisteredSessionWithADeadProcessIsEnded(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("HOME", home)
 	writeSession(t, home, "dead.json",
-		`{"sessionId":"s-dead","status":"busy","pid":1073741824,"procStart":"1"}`)
+		`{"sessionId":"s-dead","status":"busy","pid":1073741824,"procStart":"`+procStartFixture(1)+`"}`)
 
 	root, proj := scanRoot(t)
 	oldTranscript(t, proj, "s-dead")
