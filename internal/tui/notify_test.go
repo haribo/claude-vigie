@@ -14,7 +14,7 @@ func withProbes(t *testing.T, display, binary bool) {
 	hasDisplay = func() bool { return display }
 	lookPath = func(string) (string, error) {
 		if binary {
-			return "/usr/bin/notify-send", nil
+			return "/usr/bin/" + notifyBinary, nil
 		}
 		return "", errors.New("not found")
 	}
@@ -72,7 +72,7 @@ func TestNotifyAvailabilityNamesTheCause(t *testing.T) {
 	}
 
 	withProbes(t, true, false)
-	if got := notifyAvailability(true); got.usable || !strings.Contains(got.label(), "notify-send") {
+	if got := notifyAvailability(true); got.usable || !strings.Contains(got.label(), notifyBinary) {
 		t.Errorf("missing binary: label = %q", got.label())
 	}
 
@@ -94,7 +94,7 @@ func TestSettingsShowsWhyNotificationsCannotWork(t *testing.T) {
 	withProbes(t, true, false)
 	m := model{prefs: defaultPrefs(), width: 110}
 	out := m.renderSettings()
-	if !strings.Contains(out, "notify-send not installed") {
+	if !strings.Contains(out, notifyBinary+" not installed") {
 		t.Errorf("the Settings tab does not say why notifications cannot work:\n%s", out)
 	}
 }

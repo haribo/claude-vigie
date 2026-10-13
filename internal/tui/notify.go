@@ -45,22 +45,22 @@ func (n notifyStatus) label() string {
 	}
 }
 
-// lookPath is a seam: tests decide whether notify-send exists.
+// lookPath is a seam: tests decide whether the notifier exists.
 var lookPath = exec.LookPath
 
 // hasDisplay is a seam over the graphical-session probe.
-var hasDisplay = func() bool { return displayEnv() != "" }
+var hasDisplay = graphicalSession
 
 // notifyAvailability probes, once, whether a notification could be delivered at
-// all: notifySend needs a graphical session and the notify-send binary, and it
+// all: notifySend needs a graphical session and the platform's notifier, and it
 // discards the outcome of both — so without this probe a machine missing either
 // behaves exactly like one where nothing happened.
 func notifyAvailability(enabled bool) notifyStatus {
 	if !hasDisplay() {
 		return notifyStatus{enabled: enabled, reason: "no graphical session"}
 	}
-	if _, err := lookPath("notify-send"); err != nil {
-		return notifyStatus{enabled: enabled, reason: "notify-send not installed"}
+	if _, err := lookPath(notifyBinary); err != nil {
+		return notifyStatus{enabled: enabled, reason: notifyBinary + " not installed"}
 	}
 	return notifyStatus{enabled: enabled, usable: true}
 }

@@ -1,7 +1,6 @@
 package tui
 
 import (
-	"os"
 	"os/exec"
 	"sort"
 
@@ -100,16 +99,6 @@ func (m model) withNotifiedTransitions(next []api.SessionView) model {
 	return m
 }
 
-// displayEnv returns the graphical session this process can reach, or "".
-//
-//nolint:forbidigo // DISPLAY/WAYLAND_DISPLAY are a platform probe, not config
-func displayEnv() string {
-	if d := os.Getenv("DISPLAY"); d != "" {
-		return d
-	}
-	return os.Getenv("WAYLAND_DISPLAY")
-}
-
 // notifyBody is what the notification says, from the reason the daemon derived
 // (`AttentionReason`).
 //
@@ -138,24 +127,22 @@ func notifyBody(s api.SessionView) string {
 }
 
 // notifyFn is the notification sink, indirected so tests can capture transitions
-// without spawning notify-send.
+// without spawning the notifier.
 var notifyFn = notifySend
 
-// notifySend delivers a best-effort desktop notification. It runs only under a
-// graphical session (never SSH/headless), never critical, never with sound, and
-// never blocks — a missing notify-send or display simply does nothing, so the
-// render loop can never fail because of it.
+// notifySend delivers a best-effort desktop notification through the platform's
+// notifier (`notifyBinary`). It runs only under a graphical session (never
+// SSH/headless), never critical, never with sound, and never blocks — a missing
+// notifier or display simply does nothing, so the render loop can never fail
+// because of it.
 func notifySend(name, body string) {
 	// Graphical-session detection, not app config, so the notifier no-ops under
 	// SSH/headless. Shared with the availability probe (#411) so what the Settings
 	// tab reports and what the notifier actually does cannot drift apart.
-	if displayEnv() == "" {
+	if !graphicalSession() {
 		return
 	}
-	// Fixed argv, no shell: name/body are notify-send's title/body text, not a
-	// command, so there is no injection surface.
-	//nolint:gosec // constant command, arguments are display text only
-	startAndReap(exec.Command("notify-send", "-u", "normal", "-a", "vigie", "vigie — "+name, body), nil)
+	startAndReap(notifyCommand("vigie — "+name, body), nil)
 }
 
 // startAndReap starts cmd and waits for it somewhere the render loop is not.
