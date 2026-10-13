@@ -42,7 +42,7 @@ meaning anything ([ADR-0013](docs/adr/0013-only-claude-code-may-report.md)).
 - **A session can call you** when its work is done.
 - **Desktop notifications** when a session starts calling for you — waiting on
   input, in error, or raising a call — and `n` to jump straight
-  to it. In the terminal (libnotify), on the GNOME top bar, and in the browser
+  to it. In the terminal (libnotify; Notification Center on macOS), on the GNOME top bar, and in the browser
   (opt-in from Settings; the browser requires an https or localhost address).
 - **Terminal and browser** — a TUI, and a read-only web dashboard served by the daemon itself. The same board of sessions in both; Stats and Settings differ on purpose, and each suits its own medium.
 - **Per-session insight** — tokens, context fill, reasoning effort, permission mode.
@@ -124,7 +124,10 @@ terminal's ([architecture](docs/architecture.md)).
 **Linux only.** Releases ship `linux/amd64` and `linux/arm64`, and session
 presence is read from `/proc` — the signal every status derives from
 ([ADR-0006](docs/adr/0006-session-presence-via-proc.md)). There is no macOS or
-Windows build.
+Windows build. macOS works from source, as an unofficial port that reads presence
+through sysctl instead
+([ADR-0018](docs/adr/0018-process-presence-on-macos.md),
+[deployment](docs/deployment.md#running-under-launchd-on-macos-optional)).
 
 vigie ships **binaries** (`vigie`, `vigied`). How you run
 and expose them — systemd, containers, TLS front — is the deployer's call; see

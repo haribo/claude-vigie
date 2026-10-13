@@ -1,3 +1,7 @@
+//go:build linux
+
+// The Linux reader against a fake /proc; macOS has its own (proc_darwin_test.go).
+
 package presence
 
 import (

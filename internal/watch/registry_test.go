@@ -29,7 +29,7 @@ func TestReadRegistry(t *testing.T) {
 	// prompt and reported the form `aaaaaa aaaa` (#817). Only the *shape* is
 	// observed — the words below are a placeholder, and the assertions turn on the
 	// value round-tripping rather than on what it says.
-	writeSession(t, home, "1.json", `{"sessionId":"s1","status":"waiting","waitingFor":"permit tool","pid":4242,"procStart":"98765","name":"my-conv","cwd":"/work","bridgeSessionId":"session_x"}`)
+	writeSession(t, home, "1.json", `{"sessionId":"s1","status":"waiting","waitingFor":"permit tool","pid":4242,"procStart":"`+procStartFixture(98765)+`","name":"my-conv","cwd":"/work","bridgeSessionId":"session_x"}`)
 	writeSession(t, home, "2.json", `{"sessionId":"s2","status":"idle"}`) // sparse record
 	writeSession(t, home, "skip.txt", `{"sessionId":"nope"}`)             // wrong extension
 	writeSession(t, home, "bad.json", `not json`)                         // malformed
@@ -195,7 +195,7 @@ func TestScanRegistryDeadIsEnded(t *testing.T) {
 	t.Setenv("HOME", home)
 	// A registry record for a process that is not running (pid 2^30, wrong start).
 	writeSession(t, home, "dead.json",
-		`{"sessionId":"s-dead","status":"busy","pid":1073741824,"procStart":"1"}`)
+		`{"sessionId":"s-dead","status":"busy","pid":1073741824,"procStart":"`+procStartFixture(1)+`"}`)
 
 	root := t.TempDir()
 	proj := filepath.Join(root, "proj")

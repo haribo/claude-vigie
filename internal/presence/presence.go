@@ -2,7 +2,8 @@
 // the watcher can reliably tell a live session (idle for any duration) from a
 // closed one — something transcript activity alone cannot do. A SessionStart
 // hook records the mapping; the watcher checks whether the process is still
-// alive. Linux only (it reads /proc). Client side.
+// alive: through /proc on Linux (ADR-0006), through sysctl on macOS (ADR-0018).
+// Client side.
 package presence
 
 import (
@@ -19,7 +20,7 @@ import (
 // has a different start time, so a dead session is never seen as alive.
 type Mapping struct {
 	PID       int    `json:"pid"`
-	StartTime uint64 `json:"start_time"` // /proc/<pid>/stat field 22 (clock ticks since boot)
+	StartTime uint64 `json:"start_time"` // Linux: /proc/<pid>/stat field 22 (clock ticks since boot); macOS: seconds since the epoch
 }
 
 // dir is the session-mapping directory, derived purely from HOME (not

@@ -115,7 +115,7 @@ the client never imports the server/store packages, so it never links them.
 | `internal/status` | both | The session status vocabulary and its sort order |
 | `internal/modelinfo` | both | What a Claude model's name implies — its context window size, and its short display form (ADR-0011) |
 | `internal/install` | client | Merges the reporting hooks into Claude Code's settings |
-| `internal/presence` | client | Session→process mapping, read back through `/proc` |
+| `internal/presence` | client | Session→process mapping, read back through `/proc` (Linux) or sysctl (macOS, ADR-0018) |
 | `internal/compaction` | client | Compaction markers dropped by the `PreCompact` hook |
 | `internal/localwatch` | client | The local mark saying a watcher is running here |
 | `internal/reachability` | client | The local mark saying the daemon did not answer, so a hook stops waiting on it |

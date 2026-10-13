@@ -2,7 +2,8 @@
 
 ## Status
 
-Accepted.
+Accepted. Amended by [ADR-0018](0018-process-presence-on-macos.md) for macOS,
+where the process table is read through sysctl; on Linux this ADR stands as is.
 
 ## Context
 
