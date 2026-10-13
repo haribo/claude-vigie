@@ -51,10 +51,10 @@ func runInit(args []string) int {
 Now start the watcher — or restart it if one is already running, since it reads
 this config only at startup:
 
-  systemctl --user restart vigie-watch    # or: vigie watch
+  %s    # or: vigie watch
 
 It installs the reporting hooks and the call skill, and keeps them current.
-`, cfgPath, cfg.ServerURL, cfg.Machine)
+`, cfgPath, cfg.ServerURL, cfg.Machine, watcherRestart)
 
 	// Last, deliberately: it is what the operator should be left looking at, and
 	// a warning printed above a success block is a warning nobody reads. The
