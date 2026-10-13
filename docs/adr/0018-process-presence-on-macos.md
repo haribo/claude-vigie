@@ -62,6 +62,21 @@ Around it:
   `~/Library/Application Support` and ignores `XDG_CONFIG_HOME`, so every path the
   docs give was false there — and every test that isolated itself through the
   variable read and wrote the operator's real config instead.
+- **Subscription usage** reads Claude Code's OAuth credentials from the login
+  Keychain through `/usr/bin/security`, not from `~/.claude/.credentials.json`,
+  which macOS does not have. The item's access list already trusts `security` —
+  checked: the read raises no dialog — so nothing is widened. A native Keychain
+  call was rejected: it needs cgo, and an unsigned binary's grant is lost at every
+  rebuild. **Two items, measured 2026-10-12:** `Claude Code-credentials`, expired
+  since April, and `Claude Code-credentials-<8 hex>`, live — the suffix being
+  sha256 of the config directory (`/…/.claude`), which Claude Code adds when
+  `CLAUDE_CONFIG_DIR` is set. vigie derives the suffix from `$HOME/.claude` rather
+  than reading the variable, which a LaunchAgent does not carry, reads both, and
+  takes the one whose `expiresAt` is later: which name is live depends on how
+  Claude Code was started, and the other stays behind. The file remains the
+  fallback when no item exists. A test binary never reads the Keychain: it
+  ignores `HOME`, so every test isolated through `HOME` would read the
+  operator's real token.
 - **Any other platform** reads `Unknown` for every process — never `Gone`, which on
   a platform that cannot look would end every session.
 

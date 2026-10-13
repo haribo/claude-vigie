@@ -99,7 +99,8 @@ machine fetches it, and the rest read the shared result:
   lease holder fetches. This keeps N machines from hammering the endpoint in
   parallel and gives the fleet a single, consistent figure.
 - **Local credentials, token stays put.** The holder reads the account's usage
-  from the local OAuth credentials on that machine. **The token never leaves the
+  from the local OAuth credentials on that machine — `~/.claude/.credentials.json`
+  on Linux, the login Keychain on macOS ([ADR-0018](../adr/0018-process-presence-on-macos.md)). **The token never leaves the
   machine** — only the resulting percentages and reset times are posted to the
   server.
 - **Backoff.** The usage endpoint is aggressively rate-limited, so the fetcher

@@ -33,16 +33,26 @@ func credentialsPath() (string, error) {
 	return filepath.Join(home, ".claude", ".credentials.json"), nil
 }
 
+// readCredentialsFile reads Claude Code's credentials file, the store on Linux
+// and the fallback on macOS.
+func readCredentialsFile() ([]byte, error) {
+	path, err := credentialsPath()
+	if err != nil {
+		return nil, err
+	}
+	data, err := os.ReadFile(path) //nolint:gosec // a fixed path under the user's home
+	if err != nil {
+		return nil, fmt.Errorf("reading credentials: %w", err)
+	}
+	return data, nil
+}
+
 // readToken reads the current OAuth access token. It is read fresh on every
 // fetch so a token refreshed by Claude Code is picked up.
 func readToken() (string, error) {
-	path, err := credentialsPath()
+	data, err := readCredentials()
 	if err != nil {
 		return "", err
-	}
-	data, err := os.ReadFile(path)
-	if err != nil {
-		return "", fmt.Errorf("reading credentials: %w", err)
 	}
 	var creds struct {
 		ClaudeAiOauth struct {
