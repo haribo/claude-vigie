@@ -31,12 +31,12 @@ func helpColumns(t tab) (left, right [][2]string) {
 			[][2]string{{"r", "refresh"}, {stateKey, "state"}, {"q", "quit"}}
 	default:
 		return [][2]string{
-				{"⇥", "next tab"}, {"↑↓", "select"}, {"⏎", "detail"},
-				{"n", "next attention"}, {"/", "filter"}, {"esc", "back"},
-			}, [][2]string{
-				{"s", "sort"}, {"S", "reverse sort"}, {"g", "group"},
-				{"r", "refresh"}, {stateKey, "state"}, {"q", "quit"},
-			}
+			{"⇥", "next tab"}, {"↑↓", "select"}, {"⏎", "detail"},
+			{"n", "next attention"}, {"/", "filter"}, {"esc", "back"},
+		}, [][2]string{
+			{"s", "sort"}, {"S", "reverse sort"}, {"g", "group"},
+			{"r", "refresh"}, {stateKey, "state"}, {"q", "quit"},
+		}
 	}
 }
 
