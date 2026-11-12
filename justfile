@@ -8,7 +8,7 @@
 #
 # Bump this with `go-version` in .github/workflows/ci.yaml. The two are one
 # decision: a local gate is worth running only if it answers the same question.
-export GOTOOLCHAIN := "go1.26.5"
+export GOTOOLCHAIN := "go1.27.4"
 
 # Default: list all commands
 default:
@@ -24,7 +24,7 @@ dev-setup:
 [group("tool")]
 tool-install:
     @mkdir -p bin
-    GOBIN=$(pwd)/bin go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.11.4
+    GOBIN=$(pwd)/bin go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.15.0
     GOBIN=$(pwd)/bin go install golang.org/x/tools/cmd/goimports@latest
     GOBIN=$(pwd)/bin go install golang.org/x/vuln/cmd/govulncheck@latest
 
@@ -220,7 +220,7 @@ code-test-race:
 # for the local pre-check, not the authority: CI resolves the newest patch release
 # itself (`check-latest`, #425) and remains what gates a merge. Bump this when CI
 # reports a stdlib advisory that the local scan misses.
-vuln-toolchain := "go1.26.6"
+vuln-toolchain := "go1.27.4"
 
 [group("code")]
 [doc("Scan for known vulnerabilities, standard library included")]
